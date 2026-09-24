@@ -11,8 +11,13 @@ https://docs.materialsproject.org/methodology/materials-methodology/dielectricit
 https://docs.materialsproject.org/methodology/materials-methodology/electronic-structure
 """
 
+import hashlib
+import json
+import math
 import re
 from copy import deepcopy
+
+from labcat.config import DEFAULT_TARGET_BAND_GAP_TOLERANCE_EV
 
 SUPPORTED_ATTRIBUTES = frozenset(
     {
@@ -485,6 +490,9 @@ def catalog() -> dict:
     }
 
 
+ATTRIBUTE_IDS = frozenset(item[0] for item in _ATTRIBUTES)
+
+
 PRESETS = (
     (
         "preset-oxide-thin-film",
@@ -568,6 +576,32 @@ PRESETS = (
 )
 
 
+_PRE_STABILITY_PRESETS = PRESETS
+
+
+STABILITY_DEFAULT_IMPORTANCE = 0.3
+
+
+PRESETS = tuple(
+    (
+        identifier,
+        {
+            **deepcopy(value),
+            "importance": {
+                **value["importance"],
+                "stability": max(
+                    STABILITY_DEFAULT_IMPORTANCE,
+                    value["importance"].get("stability", 0),
+                ),
+                "ambient_phase_stability": STABILITY_DEFAULT_IMPORTANCE,
+                "operational_stability": STABILITY_DEFAULT_IMPORTANCE,
+            },
+        },
+    )
+    for identifier, value in _PRE_STABILITY_PRESETS
+)
+
+
 _PRE_OPTICAL_PRESETS = PRESETS
 
 
@@ -587,7 +621,373 @@ PRESETS = tuple(
 )
 
 
-ATTRIBUTE_IDS = frozenset(item[0] for item in _ATTRIBUTES)
+DEFAULT_PROFILE_ID = "preset-oxide-high-k"
+
+
+INFERENCE_VERSION = "catalog-goals-v3"
+
+
+_CLASS_ALIASES = {
+    "oxide_dielectrics": ("oxide dielectric", "oxide dielectrics"),
+    "structural_ceramics": (
+        "structural ceramic",
+        "structural ceramics",
+        "ceramic",
+        "ceramics",
+    ),
+    "semiconductors": ("semiconductor", "semiconductors"),
+    "polymers": ("polymer", "polymers"),
+    "perovskites": ("perovskite", "perovskites"),
+    "perovskitoids": ("perovskitoid", "perovskitoids"),
+    "ceramic_oxides": (
+        "ceramic oxide",
+        "ceramic oxides",
+        "oxide ceramic",
+        "oxide ceramics",
+    ),
+    "metals_metal_alloys": (
+        "metal",
+        "metals",
+        "alloy",
+        "alloys",
+        "metal alloy",
+        "metal alloys",
+        "metallic",
+    ),
+    "mofs": ("mof", "mofs", "metal organic framework", "metal organic frameworks"),
+    "high_entropy_alloys": (
+        "high entropy alloy",
+        "high entropy alloys",
+        "multi principal element alloy",
+        "multi principal element alloys",
+        "compositionally complex alloy",
+        "compositionally complex alloys",
+    ),
+    "semiconductor_nanocrystals": (
+        "semiconductor nanocrystal",
+        "semiconductor nanocrystals",
+        "quantum dot",
+        "quantum dots",
+        "qd",
+        "qds",
+        "nanocrystal",
+        "nanocrystals",
+    ),
+    "organic_electronic_materials": (
+        "organic semiconductor",
+        "organic semiconductors",
+        "organic photovoltaic",
+        "organic photovoltaics",
+        "organic electronic materials",
+        "organic materials for photovoltaics",
+        "organic materials for solar cells",
+        "organic solar cell",
+        "organic solar cells",
+        "molecular semiconductor",
+        "molecular semiconductors",
+        "molecular donor acceptor",
+        "small molecule semiconductor",
+        "small molecule semiconductors",
+        "opv",
+        "opvs",
+    ),
+    "two_dimensional_materials": (
+        "2d",
+        "two dimensional",
+        "monolayer",
+        "monolayers",
+        "atomically thin",
+    ),
+    "polymer_matrix_composites": (
+        "polymer matrix composite",
+        "polymer matrix composites",
+    ),
+    "ceramic_matrix_composites": (
+        "ceramic matrix composite",
+        "ceramic matrix composites",
+    ),
+    "biomaterials": ("biomaterial", "biomaterials"),
+    "elastomers": ("elastomer", "elastomers"),
+    "liquid_crystals": ("liquid crystal", "liquid crystals"),
+    "thermosets": ("thermoset", "thermosets"),
+    "thermoplastics": ("thermoplastic", "thermoplastics"),
+}
+
+
+_APPLICATION_ALIASES = {
+    "thin_film_insulation": (
+        "thin film",
+        "thin films",
+        "thin film insulation",
+        "insulation",
+    ),
+    "high_k_screening": (
+        "high k",
+        "high k screening",
+        "high permittivity",
+        "high dielectric constant",
+        "large dielectric constant",
+    ),
+    "stiffness": (
+        "stiffness",
+        "structural stiffness",
+        "stiff",
+        "high modulus",
+        "high elastic modulus",
+        "high bulk modulus",
+        "high shear modulus",
+    ),
+    "optoelectronics": (
+        "optoelectronic",
+        "optoelectronics",
+        "photovoltaic",
+        "photovoltaics",
+        "opv",
+        "opvs",
+        "solar cell",
+        "solar cells",
+        "light emitting",
+        "photodetector",
+        "photodetectors",
+        "photodetection",
+        "solar absorber",
+        "solar absorbers",
+        "solar absorption",
+        "led",
+        "leds",
+    ),
+    "property_exploration": ("property exploration",),
+}
+
+
+_APPLICATION_TEMPLATES = {
+    "thin_film_insulation": "preset-oxide-thin-film",
+    "high_k_screening": "preset-oxide-high-k",
+    "stiffness": "preset-ceramic-stiffness",
+    "optoelectronics": "preset-semiconductor-optoelectronics",
+}
+
+
+def _composed_profile(material_class: str, application: str, profiles: list[dict]):
+    """Combine preference templates, without classifying any material as
+    a fact."""
+    template_id = _APPLICATION_TEMPLATES.get(application)
+    template = next((p for p in profiles if p["id"] == template_id), None)
+    if template is None:
+        return None
+    definitions = catalog()
+    classes = {item["id"]: item["label"] for item in definitions["material_classes"]}
+    applications = {item["id"]: item["label"] for item in definitions["applications"]}
+    fingerprint = hashlib.sha256(
+        json.dumps([material_class, application]).encode()
+    ).hexdigest()[:24]
+    composed = {
+        **deepcopy(template),
+        "id": f"inferred-{fingerprint}",
+        "name": f"{classes.get(material_class, material_class)} · "
+        f"{applications.get(application, application)}"[:120],
+        "material_class": material_class,
+        "application": application,
+        "preset": False,
+    }
+    if (
+        material_class == "organic_electronic_materials"
+        and application == "optoelectronics"
+    ):
+        # Molecular donor/acceptor preferences do not request a crystal-momentum
+        # direct-gap utility. Keep it editable without inferring that criterion.
+        composed["importance"]["direct_gap"] = 0.0
+    composed["normalized_weights"] = normalize_importance(composed["importance"])
+    return composed
+
+
+def compose_catalog_profile(material_class: str, application: str) -> dict:
+    """Build one run's catalog preferences without editing saved
+    profiles.
+
+    Call with validated semantic request labels, never labels inferred
+    from material evidence. A class/application pairing grants no source
+    capability. Unknown applications are handled by the caller as
+    property exploration.
+    """
+    definitions = catalog()
+    classes = {item["id"]: item["label"] for item in definitions["material_classes"]}
+    applications = {item["id"]: item["label"] for item in definitions["applications"]}
+    if material_class not in classes or application not in applications:
+        raise ValueError("Choose semantic preferences from the catalog.")
+    profiles = [
+        {**deepcopy(value), "id": identifier, "preset": True}
+        for identifier, value in PRESETS
+    ]
+    matched = next(
+        (
+            item
+            for item in profiles
+            if item["material_class"] == material_class
+            and item["application"] == application
+        ),
+        None,
+    )
+    selected = matched or _composed_profile(material_class, application, profiles)
+    if selected is None:
+        # Classes without a dedicated application template start with the same
+        # source-neutral exploration preferences as the catalog's other classes.
+        # No class-specific property optimum or material cohort is supplied.
+        fingerprint = hashlib.sha256(
+            json.dumps([material_class, application]).encode()
+        ).hexdigest()[:24]
+        selected = {
+            "id": f"inferred-{fingerprint}",
+            "name": f"{classes[material_class]} · {applications[application]}"[:120],
+            "material_class": material_class,
+            "application": application,
+            "importance": {
+                "evidence_quality": 0.5,
+                "element_screen": 0.5,
+            },
+            "preset": False,
+        }
+    for attribute in (
+        "stability",
+        "ambient_phase_stability",
+        "operational_stability",
+    ):
+        selected["importance"][attribute] = max(
+            STABILITY_DEFAULT_IMPORTANCE, selected["importance"].get(attribute, 0)
+        )
+    selected["normalized_weights"] = normalize_importance(selected["importance"])
+    return selected
+
+
+def application_preferences(profile: dict, prompt: str):
+    """Select photovoltaic review priorities, never an optimum or a
+    measurement.
+
+    Only per-run inferred profiles use these defaults. Explicit saved
+    profiles remain authoritative. A band gap matters for a solar
+    absorber, but without a requested target a larger gap is not
+    automatically a better match.
+    """
+    selected = deepcopy(profile)
+    if (
+        selected.get("material_class") != "perovskites"
+        or selected.get("application") != "optoelectronics"
+        or not _hint_matches(
+            prompt,
+            {"photovoltaics"},
+            {
+                "photovoltaics": (
+                    "solar cell",
+                    "solar cells",
+                    "solar absorber",
+                    "solar absorbers",
+                    "photovoltaic",
+                    "photovoltaics",
+                )
+            },
+        )
+    ):
+        return selected, []
+    importance = selected["importance"]
+    for attribute, value in (
+        ("band_gap", 0.9),
+        ("operational_stability", 0.9),
+        ("ambient_phase_stability", 0.6),
+    ):
+        importance[attribute] = max(value, importance.get(attribute, 0))
+    # Replace only generic template emphasis before explicit request goals are
+    # applied. This is never used to edit the persisted profile or source values.
+    importance["direct_gap"] = 0.2
+    importance["refractive_index"] = 0.0
+    selected["normalized_weights"] = normalize_importance(importance)
+    return selected, [
+        {
+            "attribute": attribute,
+            "status": "applied_application_preference",
+            "relation": "consider" if attribute == "band_gap" else "maximize",
+            "reason": "Photovoltaic absorber review prioritizes spectral match "
+            "and phase/operating stability. No numeric optimum or "
+            "measured material value is supplied by this preference.",
+        }
+        for attribute in (
+            "band_gap",
+            "operational_stability",
+            "ambient_phase_stability",
+        )
+    ]
+
+
+def apply_semantic_goals(profile: dict, prompt: str, goals: list[dict]):
+    """Add validated goal preferences using fixed priorities, never
+    model values.
+
+    The semantic-intake validator binds each goal to the user's positive
+    request. Numeric goals still use the existing whole-prompt parser so
+    a selected short span cannot hide contradictory targets elsewhere in
+    the request.
+    """
+    selected, adjustments = application_preferences(profile, prompt)
+    priority_weights = {"primary": 1.0, "normal": 0.5, "secondary": 0.25}
+    for goal in goals:
+        attribute = goal["attribute_id"]
+        if attribute not in ATTRIBUTE_IDS or goal["priority"] not in priority_weights:
+            raise ValueError("Choose semantic goals from the preference catalog.")
+        selected["importance"][attribute] = max(
+            selected["importance"].get(attribute, 0),
+            priority_weights[goal["priority"]],
+        )
+        adjustments.append(
+            {
+                "attribute": attribute,
+                "status": "applied_preference",
+                "priority": goal["priority"],
+                "relation": goal.get("relation", "consider"),
+                "request_span": goal["request_span"],
+                "reason": "Added the requested catalog criterion using a fixed "
+                "importance preference. No material value came from the model.",
+            }
+        )
+    if any(goal["attribute_id"] == "band_gap" for goal in goals):
+        numeric_profile, numeric_adjustments = prompt_preferences(selected, prompt)
+        adjustments.extend(
+            item
+            for item in numeric_adjustments
+            if item["attribute"] == "band_gap"
+            and (
+                item["status"] == "needs_clarification"
+                or "target_band_gap_ev" in item
+                or "minimum_band_gap_ev" in item
+            )
+        )
+        for field in (
+            "minimum_band_gap_ev",
+            "target_band_gap_ev",
+            "band_gap_tolerance_ev",
+        ):
+            if field in numeric_profile:
+                selected[field] = numeric_profile[field]
+    selected["normalized_weights"] = normalize_importance(selected["importance"])
+    return selected, adjustments
+
+
+def _preference_words(value: str) -> str:
+    return " ".join(re.findall(r"[^\W_]+", value.casefold()))
+
+
+def _request_text(prompt: str) -> str:
+    """Remove citation hints and claim-bearing sentences from preference
+    parsing."""
+    text = re.sub(r"https?://\S+", " ", prompt).casefold()[:24000]
+    text = re.sub(r"[‐‑‒–—]", "-", text)
+    return " ".join(
+        sentence
+        for sentence in re.split(r"(?<=[.!?])\s+", text)
+        if not re.search(
+            r"\b(?:according to|i (?:claim|read)|(?:source|paper|article|literature) "
+            r"(?:says|states|reports|claims)|measured band[ -]?gap)\b",
+            sentence,
+        )
+    )
 
 
 def _negated_preference(text: str, start: int, end: int) -> bool:
@@ -607,3 +1007,511 @@ def _negated_preference(text: str, start: int, end: int) -> bool:
             text[end:],
         )
     )
+
+
+def _hint_matches(prompt: str, values: set[str], aliases: dict) -> set[str]:
+    """Keep specific phrases over contained generic ones (e.g. quantum
+    dots)."""
+    text = _preference_words(_request_text(prompt))
+    spans: dict[tuple[int, int], set[str]] = {}
+    for value in values:
+        if value == "custom":
+            continue
+        phrases = aliases.get(value, (_preference_words(value),))
+        for phrase in phrases:
+            if not any(character.isalpha() for character in phrase):
+                continue
+            for match in re.finditer(r"(?<!\w)" + re.escape(phrase) + r"(?!\w)", text):
+                if _negated_preference(text, match.start(), match.end()):
+                    # A negated specific phrase also suppresses the generic
+                    # aliases inside it (e.g. 'not oxide ceramics').
+                    spans.setdefault(match.span(), set())
+                    continue
+                if (
+                    value == "metals_metal_alloys"
+                    and phrase in {"metal", "metals"}
+                    and re.match(
+                        r"\s+(?:halide|oxide|organic|nitride|carbide|"
+                        r"chalcogenide|sulfide|sulphide|selenide|telluride)\b",
+                        text[match.end() :],
+                    )
+                ):
+                    continue
+                spans.setdefault(match.span(), set()).add(value)
+    matched = set()
+    furthest_end = -1
+    # A sweep avoids quadratic comparisons for long, repeated user input.
+    for start, end in sorted(spans, key=lambda span: (span[0], -span[1])):
+        if end > furthest_end:
+            matched.update(spans[(start, end)])
+            furthest_end = end
+    return matched
+
+
+def _infer_profile(
+    prompt: str, profiles: list[dict], active: dict
+) -> tuple[dict, str, str]:
+    classes = _hint_matches(
+        prompt, {profile["material_class"] for profile in profiles}, _CLASS_ALIASES
+    )
+    oxide_dielectric_hint = "oxide_dielectrics" in classes
+    # Broad descriptors can qualify a more specific requested family. These
+    # preference hints cannot establish a candidate's composition or structure.
+    qualifiers = {
+        "semiconductors": {
+            "perovskites",
+            "perovskitoids",
+            "semiconductor_nanocrystals",
+            "organic_electronic_materials",
+            "two_dimensional_materials",
+        },
+        "oxide_dielectrics": {"perovskites", "perovskitoids"},
+        "structural_ceramics": {"perovskites", "perovskitoids", "ceramic_oxides"},
+        "ceramic_oxides": {"perovskites", "perovskitoids"},
+        "metals_metal_alloys": {"two_dimensional_materials"},
+    }
+    for generic, specific in qualifiers.items():
+        if generic not in classes or not classes & specific:
+            continue
+        aliases = "(?:" + "|".join(map(re.escape, _CLASS_ALIASES[generic])) + ")"
+        specific_aliases = (
+            "(?:"
+            + "|".join(
+                re.escape(alias)
+                for identifier in sorted(classes & specific)
+                for alias in _CLASS_ALIASES[identifier]
+            )
+            + ")"
+        )
+        comparison = r"(?:versus|vs|or|and|with|against)"
+        modifier = r"(?:\w+\s+){0,2}"
+        subject = r"(?:\s+(?:materials?|candidates?|systems?))?"
+        if not re.search(
+            rf"\b{aliases}{subject}\s+{comparison}\s+{modifier}{specific_aliases}\b|"
+            rf"\b{specific_aliases}{subject}\s+{comparison}\s+{modifier}{aliases}\b",
+            _preference_words(_request_text(prompt)),
+        ):
+            classes.discard(generic)
+    applications = _hint_matches(
+        prompt, {profile["application"] for profile in profiles}, _APPLICATION_ALIASES
+    )
+    # Film geometry alone must not override a more explicit optical/electrical
+    # application. An explicit insulation request remains an ambiguity.
+    if (
+        "thin_film_insulation" in applications
+        and (
+            applications & {"optoelectronics", "high_k_screening"}
+            or not oxide_dielectric_hint
+        )
+        and not _hint_matches(prompt, {"insulation"}, {"insulation": ("insulation",)})
+    ):
+        applications.discard("thin_film_insulation")
+    if len(classes) != 1 or len(applications) > 1:
+        return (
+            active,
+            "fallback",
+            (
+                "The prompt does not identify one unambiguous material class and "
+                "application. Used the active ranking profile for weights only; "
+                "its material class does not restrict source queries. Choose a "
+                "profile to override."
+            ),
+        )
+    candidates = [p for p in profiles if p["material_class"] in classes]
+    if applications:
+        candidates = [p for p in candidates if p["application"] in applications]
+        if not candidates:
+            composed = _composed_profile(
+                next(iter(classes)), next(iter(applications)), profiles
+            )
+            if composed is not None:
+                return (
+                    composed,
+                    "inferred",
+                    "Combined the requested material class with the catalog's "
+                    "application priorities for this run. No saved profile changed. "
+                    "These are search and ranking preferences; source evidence is "
+                    "still required for every candidate and property.",
+                )
+    if len({p["application"] for p in candidates}) > 1:
+        return (
+            active,
+            "fallback",
+            "Several applications fit the material-class hint. Used the active "
+            "ranking profile for weights only, without restricting source queries "
+            "to its material class. Choose a profile or add an application preference.",
+        )
+    if any(p["id"] == active["id"] for p in candidates):
+        return (
+            active,
+            "inferred",
+            (
+                "The active ranking profile matches the recognized preference hints. "
+                "Its saved importance values were retained."
+            ),
+        )
+    presets = [p for p in candidates if p["preset"]]
+    if len(candidates) == 1 or len(presets) == 1:
+        selected = candidates[0] if len(candidates) == 1 else presets[0]
+        return (
+            selected,
+            "inferred",
+            (
+                "Matched the prompt's recognized preference hints to a saved "
+                "ranking profile. Used its saved importance values and material "
+                "class as search preferences; only retrieved public records can "
+                "establish properties."
+            ),
+        )
+    return (
+        active,
+        "fallback",
+        (
+            "The prompt's hints do not resolve to a single available ranking profile. "
+            "Used the active ranking profile for weights only, without restricting "
+            "source queries to its material class; choose a profile to override."
+        ),
+    )
+
+
+def prompt_preferences(profile: dict, prompt: str) -> tuple[dict, list[dict]]:
+    """Extract narrowly worded goals, never measured values or arbitrary
+    weights.
+
+    This is intentionally not a general numerical extractor. A requested
+    target or minimum must be attached to a band-gap goal; nearby source
+    claims, URLs, arbitrary JSON and weight assignments do not populate
+    material records.
+    """
+    # Source claims embedded in a research request are not requested properties.
+    # Keep their original text in chat, but omit claim-bearing sentences here.
+    text = _request_text(prompt)
+    requested = re.search(
+        r"\b(find|screen|seek|seeking|looking for|want|would like|prefer|target|"
+        r"aim|need|require|change|adjust|instead|compare|evaluate|assess|identify|"
+        r"suggest|recommend|shortlist|select|explore|search|show|list)\b",
+        text,
+    )
+    if not requested:
+        return deepcopy(profile), []
+    number = r"(?<![\w.])(?:\d{1,3}(?:\.\d{1,6})?|\.\d{1,6})(?![\w.])"
+    gap = r"band[ -]?gap"
+    target_patterns = (
+        rf"{gap}\s+(?:(?:should|must)\s+be\s+|(?:of|is|at)\s+)?"
+        rf"(?:around|about|approximately|near|close to|target(?:ed)?(?: at)?|~)"
+        rf"\s*(?P<value>{number})\s*ev\b",
+        rf"\b(?:target|targeting|aim(?:ing)? for)\s+(?:a\s+)?"
+        rf"(?P<value>{number})\s*ev\s+{gap}\b",
+        rf"{gap}\s+(?:should|must)\s+be\s+(?P<value>{number})\s*ev\b",
+        rf"\btarget(?:ed)?\s+{gap}\s+(?:(?:of|is|at)\s+)?"
+        rf"(?P<value>{number})\s*ev\b",
+        rf"{gap}\s+(?:(?:of|is|around|about)\s+)?(?P<value>{number})\s*"
+        rf"(?:±|\+/-)\s*{number}\s*ev\b",
+    )
+    minimum_pattern = (
+        rf"{gap}\s+(?:(?:should|must)\s+be\s+|(?:of|is)\s+)?"
+        rf"(?:at least|no less than|minimum(?: of)?|>=|≥)\s*"
+        rf"(?P<value>{number})\s*ev\b"
+    )
+    targets = {
+        float(match["value"])
+        for pattern in target_patterns
+        for match in re.finditer(pattern, text)
+        if 0 <= float(match["value"]) <= 100
+        and not _negated_preference(text, match.start(), match.end())
+    }
+    minimums = {
+        float(match["value"])
+        for match in re.finditer(minimum_pattern, text)
+        if 0 <= float(match["value"]) <= 100
+        and not _negated_preference(text, match.start(), match.end())
+    }
+    selected, adjustments = (
+        application_preferences(profile, prompt)
+        if str(profile.get("id", "")).startswith("inferred-")
+        else (deepcopy(profile), [])
+    )
+    if len(targets) > 1 or len(minimums) > 1:
+        adjustments.append(
+            {
+                "attribute": "band_gap",
+                "status": "needs_clarification",
+                "reason": "Several different band-gap goals were requested; "
+                "the saved preference is unchanged. Choose one target or minimum.",
+            }
+        )
+    elif targets:
+        target = next(iter(targets))
+        stated_tolerances = {
+            float(match["value"])
+            for match in re.finditer(
+                rf"(?:±|\+/-|\+−)\s*(?P<value>{number})\s*ev\b", text
+            )
+        }
+        tolerances = {value for value in stated_tolerances if 0 < value <= 100}
+        if len(tolerances) > 1 or tolerances != stated_tolerances:
+            adjustments.append(
+                {
+                    "attribute": "band_gap",
+                    "status": "needs_clarification",
+                    "reason": "The target tolerance is ambiguous or outside the "
+                    "supported positive preference range; the saved band-gap "
+                    "preference is unchanged.",
+                }
+            )
+        else:
+            tolerance = (
+                next(iter(tolerances))
+                if tolerances
+                else DEFAULT_TARGET_BAND_GAP_TOLERANCE_EV
+            )
+            selected["target_band_gap_ev"] = target
+            selected["band_gap_tolerance_ev"] = tolerance
+            # A target replaces a stale minimum unless both were explicitly
+            # requested in this turn. In particular, a lower optical target must
+            # not be eliminated by an inherited insulation threshold.
+            selected["minimum_band_gap_ev"] = next(iter(minimums)) if minimums else None
+            selected["importance"]["band_gap"] = max(
+                0.5, selected["importance"].get("band_gap", 0)
+            )
+            adjustments.append(
+                {
+                    "attribute": "band_gap",
+                    "status": "applied_preference",
+                    "target_band_gap_ev": target,
+                    "band_gap_tolerance_ev": tolerance,
+                    "tolerance_origin": (
+                        "prompt_preference" if tolerances else "application_default"
+                    ),
+                    "reason": "The requested band gap is a target preference, "
+                    "never source evidence. The tolerance is a soft ranking scale "
+                    "(half band-gap utility at this distance), not a measured "
+                    "uncertainty or a hard exclusion. "
+                    + (
+                        "Used the requested tolerance."
+                        if tolerances
+                        else "No tolerance was specified; used the editable "
+                        f"{tolerance:g} eV application preference."
+                    ),
+                }
+            )
+    elif minimums:
+        selected["minimum_band_gap_ev"] = next(iter(minimums))
+        selected["target_band_gap_ev"] = None
+        selected["band_gap_tolerance_ev"] = None
+        selected["importance"]["band_gap"] = max(
+            0.5, selected["importance"].get("band_gap", 0)
+        )
+        adjustments.append(
+            {
+                "attribute": "band_gap",
+                "status": "applied_preference",
+                "minimum_band_gap_ev": next(iter(minimums)),
+                "reason": "Used the explicitly requested minimum as a screening "
+                "preference. It does not supply a material's band-gap value.",
+            }
+        )
+    for attribute, pattern, reason in (
+        (
+            "stability",
+            r"\b(?:stable|thermodynamic(?:ally)? stabil(?:ity|e))\b",
+            "Added the stability preference. Hull energy alone does not establish "
+            "stability during processing or operation.",
+        ),
+        (
+            "ambient_phase_stability",
+            r"\b(?:room[ -]temperature|ambient)(?: phase)?[ -]stabil(?:ity|e)\b|"
+            r"\bstable (?:phase )?(?:at|under) (?:room[ -]temperature|ambient)\b",
+            "Retained room-temperature phase stability for public source review. "
+            "It is separate from hull energy and remains unknown without evidence.",
+        ),
+        (
+            "operational_stability",
+            r"\b(?:operational|operating|device)[ -]stability\b|"
+            r"\b(?:operationally stable|stable (?:during|under|in) "
+            r"(?:operation|illumination|operating conditions|use))\b",
+            "Retained stability under operating conditions for public source "
+            "review. It remains unscored and unknown without suitable evidence.",
+        ),
+        (
+            "band_gap",
+            r"\b(?:wide|wider|large|larger|high)[ -]band[ -]?gaps?\b",
+            "Used the requested wider-gap preference. No gap value is supplied "
+            "by the prompt; an explicit numeric target still takes precedence.",
+        ),
+        (
+            "dielectric_total",
+            r"\b(?:high|higher|large|larger)[ -](?:permittivity|dielectric "
+            r"(?:constant|response))\b|\bhigh[ -]k\b",
+            "Used the requested larger total dielectric response preference. "
+            "It does not establish dielectric loss or device performance.",
+        ),
+        (
+            "simplicity",
+            r"\b(?:simple|simpler)[ -]compositions?\b|\bfewer (?:distinct )?elements\b",
+            "Used the requested preference for fewer distinct elements. "
+            "This does not establish synthesis difficulty.",
+        ),
+        (
+            "element_screen",
+            r"\b(?:non[ -]?toxic|low[ -]toxicity|avoid toxic|exclude toxic)\b",
+            "Retained the requested conservative element screen. Passing this "
+            "screen is not evidence that a compound is safe.",
+        ),
+        (
+            "bulk_modulus",
+            r"\b(?:high|higher|large|larger)[ -]bulk modulus\b",
+            "Used the requested larger bulk modulus preference; source evidence "
+            "is required and this is not a toughness measurement.",
+        ),
+        (
+            "shear_modulus",
+            r"\b(?:high|higher|large|larger)[ -]shear modulus\b",
+            "Used the requested larger shear modulus preference; source evidence "
+            "is required and this is not a ductility measurement.",
+        ),
+        (
+            "direct_gap",
+            r"\bdirect[ -](?:band[ -]?)?gap\b",
+            "Retained direct gap character as an explicit preference. It does "
+            "not establish light-emission efficiency or absorption performance.",
+        ),
+        (
+            "density",
+            r"\b(?:(?:low(?:er)?|reduced|mass|bulk)[ -]+)?density\b",
+            "Retained density as a ranking preference. The catalog favors lower "
+            "source-reported mass density; no density value comes from the prompt.",
+        ),
+        (
+            "solution_processability",
+            r"\bsolution[\s‐‑‒–—-]+process(?:able|ability|ed|ing)\b",
+            "Retained the requested processing preference for public source review. "
+            "It remains unscored until a supported adapter supplies suitable evidence.",
+        ),
+    ):
+        matches = list(re.finditer(pattern, text))
+        if attribute == "density":
+            # Only mass density is the catalog criterion. Other densities and
+            # an explicit preference for higher density need different utilities.
+            matches = [
+                match
+                for match in matches
+                if not re.search(
+                    r"\b(?:energy|power|current|charge|electron|carrier|spin|optical|"
+                    r"number|surface|state|high(?:er)?|greater|maximum|"
+                    r"increas(?:e|ed|ing))[ -]+$",
+                    text[max(0, match.start() - 40) : match.start()],
+                )
+                and not re.match(r"\s+of\s+states\b", text[match.end() :])
+            ]
+        if any(
+            not _negated_preference(text, match.start(), match.end())
+            for match in matches
+        ):
+            selected["importance"][attribute] = max(
+                0.5, selected["importance"].get(attribute, 0)
+            )
+            adjustments.append(
+                {
+                    "attribute": attribute,
+                    "status": "applied_preference",
+                    "reason": reason,
+                }
+            )
+    if adjustments:
+        selected["normalized_weights"] = normalize_importance(selected["importance"])
+    return selected, adjustments
+
+
+class RankingProfileNotFound(ValueError):
+    """The requested profile does not exist."""
+
+
+def normalize_importance(value: object) -> dict[str, float]:
+    """All selected criteria share the denominator, including
+    unsupported ones."""
+    if not isinstance(value, dict) or not value or set(value) - ATTRIBUTE_IDS:
+        raise ValueError("Choose attributes from the supported preference catalog.")
+    if any(
+        type(weight) not in {int, float}
+        or not 0 <= weight <= 1
+        or not math.isfinite(weight)
+        for weight in value.values()
+    ):
+        raise ValueError("Each importance must be a finite number from zero to one.")
+    total = math.fsum(value.values())
+    if total <= 0:
+        raise ValueError("At least one importance must be greater than zero.")
+    return {name: weight / total for name, weight in value.items()}
+
+
+def validate_profile(value: object) -> dict:
+    required = {
+        "name",
+        "material_class",
+        "application",
+        "importance",
+    }
+    if (
+        not isinstance(value, dict)
+        or not required <= set(value)
+        or set(value)
+        - required
+        - {"minimum_band_gap_ev", "target_band_gap_ev", "band_gap_tolerance_ev"}
+    ):
+        raise ValueError(
+            "Provide name, material class, application, importance, and optionally "
+            "minimum or target band-gap preferences."
+        )
+    cleaned = {}
+    for name in ("name", "material_class", "application"):
+        text = value[name]
+        if not isinstance(text, str) or not 1 <= len(text.strip()) <= 120:
+            raise ValueError("Profile names and labels must be 1–120 characters.")
+        if any(ord(character) < 32 for character in text):
+            raise ValueError(
+                "Profile names and labels cannot contain control characters."
+            )
+        cleaned[name] = text.strip()
+    normalize_importance(value["importance"])
+    cleaned["importance"] = dict(value["importance"])
+    if "minimum_band_gap_ev" in value:
+        minimum = value["minimum_band_gap_ev"]
+        if minimum is not None and (
+            type(minimum) not in (int, float)
+            or not 0 <= minimum <= 100
+            or not math.isfinite(minimum)
+        ):
+            raise ValueError(
+                "Minimum band gap must be a finite preference from 0 to 100 eV, "
+                "or disabled."
+            )
+        # Preserve omission in older/custom profiles rather than silently adding
+        # a default threshold or rewriting archived preference snapshots.
+        cleaned["minimum_band_gap_ev"] = minimum
+    if "target_band_gap_ev" in value:
+        target = value["target_band_gap_ev"]
+        if target is not None and (
+            type(target) not in (int, float)
+            or not 0 <= target <= 100
+            or not math.isfinite(target)
+        ):
+            raise ValueError(
+                "Target band gap must be a finite preference from 0 to 100 eV, "
+                "or disabled."
+            )
+        cleaned["target_band_gap_ev"] = target
+    if "band_gap_tolerance_ev" in value:
+        tolerance = value["band_gap_tolerance_ev"]
+        if tolerance is not None and (
+            type(tolerance) not in (int, float)
+            or not 0 < tolerance <= 100
+            or not math.isfinite(tolerance)
+            or value.get("target_band_gap_ev") is None
+        ):
+            raise ValueError(
+                "Band-gap tolerance must be a finite preference above zero and "
+                "at most 100 eV, with a target band gap enabled, or disabled."
+            )
+        cleaned["band_gap_tolerance_ev"] = tolerance
+    return cleaned

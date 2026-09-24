@@ -8,61 +8,46 @@ policy or tool access.
 """
 
 import json
+import math
 import re
 import unicodedata
 from copy import deepcopy
 
+from labcat.config import DEFAULT_TARGET_BAND_GAP_TOLERANCE_EV
 from labcat.ranking_profiles import (
     ATTRIBUTE_IDS,
+    PRESETS,
+    SUPPORTED_ATTRIBUTES,
     _negated_preference,
+    apply_semantic_goals,
     catalog,
+    compose_catalog_profile,
+    prompt_preferences,
 )
 from labcat.untrusted_text import source_instruction_reason
 
 INTENT_VERSION = "semantic-intake-v1"
-
-
 DECISIONS = ("materials_research", "needs_clarification", "out_of_scope", "unsafe")
-
-
 IDENTITY_SCOPES = ("bulk", "molecular", "nanoscale", "unspecified")
-
-
 PRIORITIES = ("primary", "normal", "secondary")
-
-
 RELATIONS = ("consider", "maximize", "minimize", "target")
-
-
 MAX_ARGUMENT_BYTES = 12_000
-
-
 _ROLE_FIELDS = (
     "target_spans",
     "application_spans",
     "environment_spans",
     "processing_spans",
 )
-
-
 _INTENT_FIELDS = frozenset(
     {"material_class", "application", "identity_scope", "goals", *_ROLE_FIELDS}
 )
-
-
 _SCOPE_FIELDS = _INTENT_FIELDS | {"version", "target_text", "is_evidence"}
-
-
 _URL = re.compile(r"https?://|www\.|\bdoi:|[a-z][a-z0-9+.-]*://", re.I)
-
-
 _CLAIM = re.compile(
     r"\b(?:according to|i (?:claim|read)|(?:source|paper|article|literature|study) "
     r"(?:says|states|reports|claims)|measured band[ -]?gap)\b",
     re.I,
 )
-
-
 _NEGATED_DIRECTIVE = re.compile(
     r"\b(?:do not|don't|not)\s+(?:need|require|prefer|prioritize|target|use|"
     r"consider|include|select|seek|want|find|choose|compare|look for|search for)|"
@@ -346,3 +331,180 @@ def validate_scope(scope, prompt) -> dict:
     if scope != bound:
         raise ValueError("Semantic scope does not match its original request.")
     return bound
+
+
+def _preserve_profile(profile, selection):
+    if profile is None and selection is None:
+        return False
+    if not isinstance(selection, dict) or selection.get("mode") not in {
+        "inferred",
+        "fallback",
+        "semantic_inferred",
+    }:
+        return True
+    if not isinstance(profile, dict):
+        return False
+    identifier = profile.get("id")
+    return not isinstance(identifier, str) or not (
+        identifier in {key for key, _ in PRESETS} or identifier.startswith("inferred-")
+    )
+
+
+def review_only_attributes(scope, profile) -> list[dict]:
+    """Flag selected goals the catalog utility cannot score as
+    requested.
+
+    Call after validate_scope binds the request. Only criterion
+    direction and server-owned preference values are inspected; no
+    material evidence enters. The caller preserves explicit-profile
+    authority; inferred profiles can keep incompatible goals visible and
+    unscored instead of applying an opposite utility.
+    """
+    if scope is None:
+        return []
+    if (
+        not isinstance(scope, dict)
+        or set(scope) != _SCOPE_FIELDS
+        or scope.get("version") != INTENT_VERSION
+        or scope.get("is_evidence") is not False
+        or not _valid_intent({field: scope[field] for field in _INTENT_FIELDS})
+        or not isinstance(profile, dict)
+        or not isinstance(profile.get("importance"), dict)
+    ):
+        raise ValueError("Invalid directional goal preferences.")
+    directions = {
+        "stability": "maximize",
+        "band_gap": "maximize",
+        "element_screen": "maximize",
+        "simplicity": "maximize",
+        "evidence_quality": "maximize",
+        "dielectric_total": "maximize",
+        "dielectric_electronic": "maximize",
+        "nsites": "minimize",
+        "density": "minimize",
+        "bulk_modulus": "maximize",
+        "shear_modulus": "maximize",
+        "metallicity": "maximize",
+        "direct_gap": "maximize",
+    }
+    reviews = []
+    for goal in scope["goals"]:
+        attribute = goal["attribute_id"]
+        importance = profile["importance"].get(attribute, 0)
+        if (
+            type(importance) not in (int, float)
+            or not math.isfinite(importance)
+            or not 0 <= importance <= 1
+        ):
+            raise ValueError("Invalid directional goal importance.")
+        if importance <= 0:
+            continue
+        relation = goal.get("relation", "consider")
+        reason = None
+        if attribute not in SUPPORTED_ATTRIBUTES:
+            reason = (
+                "This selected criterion has no reviewed scoring utility; "
+                "the requested goal requires evidence review."
+            )
+        elif relation == "target":
+            # Existing parsing is limited to numeric band-gap targets. Bind a
+            # supported target to both its literal requested goal and the actual
+            # profile; an unrelated saved target cannot satisfy a new request.
+            parsed, adjustments = prompt_preferences(
+                {"importance": {"band_gap": 0.5}},
+                "Prefer " + goal["request_span"],
+            )
+            expected = parsed.get("target_band_gap_ev")
+            actual = profile.get("target_band_gap_ev")
+            tolerance = profile.get("band_gap_tolerance_ev")
+            if tolerance is None:
+                tolerance = DEFAULT_TARGET_BAND_GAP_TOLERANCE_EV
+            stated_tolerance = any(
+                item.get("tolerance_origin") == "prompt_preference"
+                for item in adjustments
+            )
+            if (
+                attribute != "band_gap"
+                or type(expected) not in (int, float)
+                or type(actual) not in (int, float)
+                or not math.isfinite(actual)
+                or actual != expected
+                or type(tolerance) not in (int, float)
+                or not math.isfinite(tolerance)
+                or not 0 < tolerance <= 100
+                or stated_tolerance
+                and tolerance != parsed.get("band_gap_tolerance_ev")
+                or any(item["status"] == "needs_clarification" for item in adjustments)
+            ):
+                reason = (
+                    "The requested target has no supported, unambiguous "
+                    "server-parsed target utility matching this profile."
+                )
+        elif relation != "consider":
+            if (
+                attribute == "band_gap"
+                and profile.get("target_band_gap_ev") is not None
+            ):
+                reason = (
+                    "This profile uses a band-gap target utility, which "
+                    "does not implement the requested directional goal."
+                )
+            elif directions.get(attribute) != relation:
+                reason = (
+                    "The catalog utility does not implement the requested "
+                    "direction for this criterion; the goal requires evidence review."
+                )
+        if reason is not None:
+            reviews.append(
+                {"attribute_id": attribute, "relation": relation, "reason": reason}
+            )
+    return reviews
+
+
+def resolve_intent(prompt, arguments, profile, selection) -> dict:
+    """Resolve a validated per-run preference snapshot; never mutate the
+    inputs."""
+    if not valid_assessment_arguments(arguments):
+        raise ValueError("Invalid semantic research assessment.")
+    result = {
+        "profile": deepcopy(profile),
+        "selection": deepcopy(selection),
+        "scope": None,
+    }
+    if "intent" not in arguments or arguments["decision"] != "materials_research":
+        return result
+    scope = _bound_intent(arguments["intent"], prompt)
+    result["scope"] = scope
+    if _preserve_profile(profile, selection):
+        return result
+    unknown_class = scope["material_class"] == "unknown"
+    application = scope["application"]
+    if application == "unknown" or unknown_class:
+        application = "property_exploration"
+    selected = compose_catalog_profile(
+        "custom" if unknown_class else scope["material_class"], application
+    )
+    if unknown_class:
+        selected["name"] = "Unresolved material class · Property exploration"
+    selected, adjustments = apply_semantic_goals(selected, prompt, scope["goals"])
+    selection = {
+        **deepcopy(selection or {}),
+        "mode": "semantic_inferred",
+        "selected_profile_id": selected["id"],
+        "inference_version": INTENT_VERSION,
+        "reason": (
+            "The requested material class remains unresolved. Used neutral "
+            "property-exploration preferences and retained the scope uncertainty; "
+            "no saved profile changed."
+            if unknown_class
+            else "Interpreted the requested material separately from its "
+            "application and environment. Used catalog preferences for this run; "
+            "no saved profile changed and no material facts came from the model."
+        ),
+    }
+    if adjustments:
+        selection["preference_adjustments"] = adjustments
+    else:
+        selection.pop("preference_adjustments", None)
+    result.update(profile=selected, selection=selection)
+    return result

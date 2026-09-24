@@ -2,11 +2,13 @@
 requests."""
 
 import builtins
+import hashlib
 import json
 import socket
 from pathlib import Path
 
 import pytest
+from test_property_research import XML, provide, run
 
 from labcat import property_research
 from labcat.article_xml import (
@@ -22,7 +24,6 @@ BASE = (
     "</article-meta></front><body><p>TEST ONLY inert polymer paragraph.</p>"
     "</body><back><p>Reference-only text is not body evidence.</p></back></article>"
 )
-
 
 DECL = '<!DOCTYPE article SYSTEM "journal.dtd">'
 
@@ -463,3 +464,25 @@ def test_unexpected_internal_failure_retains_only_last_known_preparation_state(
 def test_parser_error_rejects_non_catalog_metadata(reason, handling):
     with pytest.raises(ValueError, match=r"^Invalid article parser failure state\.$"):
         ArticleParseError(reason, declaration_handling=handling)
+
+
+def test_full_text_provenance_hashes_original_bytes_not_sanitized_xml(monkeypatch):
+    raw = XML.replace(b"?>", b"?>\n" + DECL.encode(), 1)
+    searches, reads = provide(monkeypatch, xml=raw)
+    result = run()
+    (passage,) = result["attributes"][0]["passages"]
+    (source,) = result["sources"]
+    original_digest = hashlib.sha256(raw).hexdigest()
+    sanitized, handling = prepare_article_xml(
+        raw, max_bytes=property_research.MAX_BYTES
+    )
+    assert handling == "inert_removed"
+    assert hashlib.sha256(sanitized.encode()).hexdigest() != original_digest
+    assert passage["response_sha256"] == original_digest
+    assert source["provenance"]["full_text_response_sha256"] == original_digest
+    assert source["record_id"] == passage["article_id"] == "PMC123"
+    assert source["metadata"]["full_text_read"] is True
+    assert passage["locator"] == "body/sec[1]/p[1]"
+    assert result["attributes"][0]["articles_read"] == 1
+    assert reads == ["PMC123"] and len(searches) == 1
+    assert "properties" not in source and "score" not in passage

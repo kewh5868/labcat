@@ -19,7 +19,9 @@ from urllib.parse import urlencode
 
 import pytest
 
+from labcat.config import load_config
 from labcat.science import dielectric
+from labcat.science.ranking import rank_records
 from labcat.science.retrieval_budget import repository_budget
 from labcat.science.sources import SourceError
 
@@ -65,6 +67,46 @@ def first_row(payload):
 
 def set_field(row, field, value):
     row[dielectric._COLUMNS.index(field)] = value
+
+
+def test_full_envelope_scalar_provenance_without_cohort_or_structures(
+    monkeypatch, payload
+):
+    original = copy.deepcopy(payload)
+    raw, calls = fixture_transport(monkeypatch, payload)
+    records, metadata = dielectric.retrieve_live()
+    assert calls and len(records) == metadata["records_examined"] == len(
+        payload["data"]
+    )
+    assert metadata["records_filtered"] == metadata["records_rejected"] == 0
+    assert metadata["mode"] == "live_public_dielectric"
+    assert metadata["response_sha256"] == hashlib.sha256(raw).hexdigest()
+    assert payload == original
+    for record, values in zip(records, payload["data"], strict=True):
+        source = dict(zip(payload["columns"], values, strict=True))
+        assert record["material_id"] == "dielectric:" + source["material_id"]
+        assert record["source_record_id"] == source["material_id"]
+        assert record["formula"] == source["formula"]
+        assert record["band_gap_ev"] == source["band_gap"]
+        assert record["dielectric_total"] == source["poly_total"]
+        assert record["dielectric_electronic"] == source["poly_electronic"]
+        assert record["energy_above_hull_ev_atom"] is None
+        assert record["is_metal"] is None and record["hazard_status"] == "unassessed"
+        assert not {"structure", "cif", "poscar", "meta"} & record.keys()
+        provenance = record["provenance"]
+        assert (
+            provenance["upstream_row_sha256"]
+            == hashlib.sha256(dielectric._canonical(source)).hexdigest()
+        )
+        assert (
+            provenance["raw_fields_sha256"]
+            == hashlib.sha256(
+                dielectric._canonical(provenance["raw_fields"])
+            ).hexdigest()
+        )
+        assert provenance["dataset_version"] == dielectric.DATASET_VERSION
+    shortlist, _ = rank_records(records, load_config())
+    assert shortlist
 
 
 @pytest.mark.parametrize(

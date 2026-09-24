@@ -1,5 +1,5 @@
-"""Pure intake boundaries and closed outcomes; no evidence is
-created."""
+"""Server-owned scope decisions; prompts and history remain search hints
+only."""
 
 import html
 import re
@@ -10,8 +10,6 @@ QUESTIONS = (
     "What application or research question should the comparison address?",
     "Which properties or constraints matter most for the comparison?",
 )
-
-
 REASONS = {
     "accepted",
     "research_boundary",
@@ -218,6 +216,139 @@ def validate_intake(value):
     ):
         raise ValueError("Invalid server intake outcome.")
     return {**value, "questions": list(value["questions"])}
+
+
+def assess(prompt, *, context=None):
+    """Return a closed decision and bounded same-chat user search
+    context."""
+    from labcat.science import request_violation
+
+    violation = request_violation(prompt)
+    if violation:
+        return (
+            decision(
+                "refused",
+                (
+                    "harmful_manufacture"
+                    if isinstance(prompt, str) and harmful_manufacture(prompt)
+                    else "research_boundary"
+                ),
+            ),
+            prompt,
+        )
+    messages = context.get("intake_messages", []) if isinstance(context, dict) else []
+    entries = (
+        [
+            m
+            for m in messages[-4:]
+            if isinstance(m, dict)
+            and m.get("role") == "user"
+            and isinstance(m.get("content"), str)
+        ]
+        if isinstance(messages, list)
+        else []
+    )
+    current = _scope(prompt)
+    reset = resets_scope(prompt)
+    # Once a benign new scope is established, its later replies must not be
+    # poisoned by an older refused task still inside the bounded history window.
+    for index in range(len(entries) - 1, -1, -1):
+        entry = entries[index]
+        if entry.get("refused") is not True and resets_scope(entry["content"]):
+            entries = entries[index:]
+            break
+    previous = []
+    if not reset:
+        for entry in entries:
+            earlier = entry["content"][:500]
+            if entry.get("refused") is True or request_violation(earlier):
+                reason = entry.get("reason_code")
+                if reason not in {
+                    "harmful_manufacture",
+                    "research_boundary",
+                    "model_declined",
+                }:
+                    reason = (
+                        "harmful_manufacture"
+                        if harmful_manufacture(earlier)
+                        else "research_boundary"
+                    )
+                return decision("refused", reason), prompt
+            previous.append(earlier)
+    # A property-only refinement still needs this chat's composition preferences.
+    # Explicit new composition/class hints remain authoritative search preferences.
+    from labcat.science.preferences import derive_search_filters
+
+    active = context.get("active_chat", {}) if isinstance(context, dict) else {}
+    generic_refinement = (
+        isinstance(active, dict)
+        and bool(active.get("latest_completed_report_id"))
+        and not any(
+            key in derive_search_filters(prompt)
+            for key in ("formula", "chemsys", "elements", "is_metal")
+        )
+    )
+    # A concrete standalone question need not inherit an unrelated old topic.
+    query = prompt
+    if (current["status"] != "accepted" or generic_refinement) and previous:
+        # Trim only optional history; the whole current request must reach the
+        # model's intent assessment, including a potentially unsafe final clause.
+        remaining = max(0, 20_000 - len(prompt) - 1)
+        history = "\n".join(previous)[-remaining:] if remaining else ""
+        if history:
+            query = history + "\n" + prompt
+    return _scope(query), query
+
+
+def resets_scope(prompt):
+    """A concrete, benign standalone request can explicitly establish
+    new scope."""
+    from labcat.science import request_violation
+
+    if request_violation(prompt):
+        return False
+    text = normalized(prompt)
+    explicit_reset = re.search(
+        r"\b(?:new topic|new question|unrelated question)\b", text
+    )
+    benign_application = re.search(
+        r"\b(?:food packaging|water filtration|medical implants|solar cells|"
+        r"building insulation|consumer electronics|biodegradable packaging)\b",
+        text,
+    )
+    continuation = re.search(r"\b(?:it|its|that device|the device|same device)\b", text)
+    return bool(
+        _scope(prompt)["status"] == "accepted"
+        and (explicit_reset or benign_application)
+        and not continuation
+    )
+
+
+def _scope(query):
+    text = normalized(query)
+    # Concrete subjects/properties suffice; saved ranking preferences can supply
+    # priorities. Generic 'materials' alone does not select an unrelated class.
+    terms = (
+        r"\b(?:oxides?|dielectrics?|polymers?|perovsk\w*|ceramics?|"
+        r"metals?|alloys?|mofs?|"
+        r"semiconduct\w*|nanocrystals?|quantum dots?|composites?|biomaterials?|"
+        r"elastomers?|liquid crystals?|thermosets?|thermoplastics?|batter\w*|"
+        r"electrodes?|electrolytes?|"
+        r"catalysts?|photovoltaic\w*|superconduct\w*|graphene|silicon|titania|alumina|"
+        r"steel|glass|membranes?|corrosion|metallurg\w*|crystall\w*|band[ -]?gaps?|"
+        r"conductivity|permittivity|refractive index|ballistic transport|tensile|"
+        r"magnet\w*|piezoelectr\w*|ferroelectr\w*|porosity|density|thermal expansion)\b"
+    )
+    if re.search(terms, text) or re.search(r"\b(?:[A-Z][a-z]?\d*){2,}\b", query):
+        return decision("accepted", "accepted")
+    return decision(
+        "clarification_required",
+        (
+            "research_details_needed"
+            if re.search(r"\b(?:materials?|research|properties|candidates?)\b", text)
+            else "materials_scope_needed"
+        ),
+    )
 
 
 def outcome(intake):

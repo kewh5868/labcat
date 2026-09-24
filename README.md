@@ -7,13 +7,13 @@ Level 4 foundation.
 
 ## Current Python capabilities
 
-Materials Project, NOMAD, HybriD3 and the licensed public dielectric release have
-typed property adapters with source provenance, bounded retrieval and isolated
-failures. Public bibliography discovery remains separate from scientific property
-records.
+Deterministic property scoring and experimental/computed evidence comparisons retain
+missing values, conflicts and uncertainty. Bounded public article passages support
+traceable review leads. Profile and request inference supplies preferences only; it
+cannot create evidence.
 
-Ranking, cited reports, saved workspace, model connection lifecycle and the
-application interface remain planned.
+Cited report rendering, saved workspace, connection lifecycle and the complete
+research/application interface remain planned.
 
 The command-line interface currently provides software status, configuration
 validation and an explicit read-only AWS account check. It does not yet expose the
