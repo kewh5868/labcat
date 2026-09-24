@@ -19,8 +19,11 @@ def test_cli_json_uses_shared_status_without_placeholder_materials(capsys, style
     assert report == get_status(load_config(), style)
     assert report["candidates"] == []
     assert report["stage"] == "scaffold"
-    assert "research are not implemented yet" in report["message"]
-    assert any("No scientific records" in item for item in report["limitations"])
+    assert "The research command and UI are not available yet." in report["message"]
+    assert any(
+        "Status contains no scientific records" in item
+        for item in report["limitations"]
+    )
 
 
 def test_cli_default_text_and_configured_audit_presentation(tmp_path, capsys):

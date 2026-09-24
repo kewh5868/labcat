@@ -1,9 +1,18 @@
-"""Block real provider network transport in isolated unit tests.
+"""Offline unit tests never silently contact scientific or model
+services."""
 
-Transport tests replace their own opener or AWS session explicitly.
-"""
+import socket
 
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def offline_network(monkeypatch):
+    def unavailable(*args, **kwargs):
+        pytest.fail("Unit test attempted a network connection")
+
+    monkeypatch.setattr(socket, "create_connection", unavailable)
+    monkeypatch.setattr(socket, "getaddrinfo", unavailable)
 
 
 @pytest.fixture(autouse=True)

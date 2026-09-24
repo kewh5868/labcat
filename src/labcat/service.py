@@ -27,29 +27,37 @@ def get_status(config: AppConfig, style: str | None = None) -> dict[str, Any]:
         "version": __version__,
         "stage": "scaffold",
         "style": selected,
-        "message": "Configuration and software status are available. "
-        "Scientific retrieval, ranking and research are not implemented yet.",
+        "message": (
+            "Guarded public discovery is available through Python APIs. The "
+            "research command and UI are not available yet."
+        ),
         "provider": config.provider,
         "compute": "local",
         "constraints": list(CONSTRAINTS),
         "candidates": [],
         "limitations": [
-            "No scientific records or ranked candidates are available "
-            "in this snapshot.",
-            "Report appearance settings are preferences for future research reports.",
-            "Model connections, scientific retrieval and the application UI "
-            "are planned.",
+            "Status contains no scientific records or ranked candidates.",
+            (
+                "Validated property adapters, ranking, cited reports, saved "
+                "workspace, model connection lifecycle and the application "
+                "interface remain planned."
+            ),
+            "Scientific coverage depends on independently validated public evidence.",
         ],
     }
     if selected == "audit":
         report["configuration"] = config.to_dict()
         report["implemented"] = [
-            "Installable Python package and status-only command-line interface",
-            "Strict preference configuration with no safety-policy override fields",
+            "Installable Python package and software status commands",
+            "Strict local preference configuration",
+            "Guarded public discovery",
         ]
         report["next_steps"] = [
-            "Add validated public evidence retrieval and reproducible ranking.",
-            "Add model connection management and the application interface.",
+            (
+                "Validated property adapters, ranking, cited reports, saved "
+                "workspace, model connection lifecycle and the application "
+                "interface remain planned."
+            )
         ]
     return report
 

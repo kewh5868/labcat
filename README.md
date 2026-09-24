@@ -3,11 +3,20 @@
 **Curious. Clever. Companionable.**
 
 A public-evidence materials research assistant in development on a scikit-package
-Level 4 foundation. This snapshot validates local preferences and reports software
-capabilities. Python APIs provide closed model planning, approved provider routes
-and an encrypted credential vault. The optional `labcat aws-check --profile NAME
---region REGION` command performs a read-only account check. Scientific retrieval,
-ranking, saved connection lifecycle and the application UI are planned; it returns no demonstration materials or scientific evidence.
+Level 4 foundation.
+
+## Current Python capabilities
+
+Fixed public HTTP adapters retrieve bounded bibliography and material-identity
+metadata. Public destinations, response sizes, deadlines and retrieved instructions
+are validated. Discovery metadata is not scored property evidence.
+
+Validated property adapters, ranking, cited reports, saved workspace, model connection
+lifecycle and the application interface remain planned.
+
+The command-line interface currently provides software status, configuration
+validation and an explicit read-only AWS account check. It does not yet expose the
+research library as a command or serve an application UI.
 
 ## Development and status
 
@@ -23,18 +32,21 @@ labcat check-config
 python -m pre_commit install
 python -m pre_commit run --all-files
 python -m pytest
-python -m build
 ```
 
 On Windows PowerShell, activate with `.\.venv\Scripts\Activate.ps1` instead.
 `python -m labcat` supports the same commands. Pass `--config preferences.toml`
-before a command to load partial TOML preferences. Unknown fields, scientific
-properties and policy overrides are rejected. Numeric weights are preferences,
-never measurements or scientific confidence. Ordinary status and configuration
+before a command to load partial TOML preferences. Ordinary status/configuration
 commands use the standard library and make no network requests.
 
-Pre-commit downloads pinned environments on first use. Black formats Python;
-Flake8, Ruff and file checks provide additional validation. The current CI
-configuration targets Linux with Python 3.13; it does not prove other-platform
-coverage. See [scaffold provenance](docs/scaffolding.md),
-[configuration](docs/configuration.md), [provider boundaries](docs/providers.md), and [the license](LICENSE.rst).
+Only approved public adapters can establish scientific evidence. Prompts, pasted
+citations, model memory and retrieved instructions cannot supply measurements or
+change safeguards. No private-data or wetlab tools are available. Model/provider
+operations use explicitly configured accounts; no silent cloud fallback is made.
+
+Pre-commit downloads pinned environments on first use. Black formats Python; Flake8,
+Ruff and file checks provide additional validation. Offline tests use explicit source
+and provider fixtures. The current CI targets Linux with Python 3.13; configured
+checks do not prove other-platform or live-provider coverage. See [scaffold
+provenance](docs/scaffolding.md), [configuration](docs/configuration.md), [provider
+boundaries](docs/providers.md), and [the license](LICENSE.rst).
