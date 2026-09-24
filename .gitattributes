@@ -1,0 +1,14 @@
+# Consistent repository text on macOS, Windows and Linux.
+* text=auto eol=lf
+*.png -text
+*.jpg -text
+*.whl -text
+*.tar -text
+*.gz -text
+*.pdf binary
+*.ttf binary
+# Preserve the bundled upstream license verbatim, including its whitespace.
+src/labcat/fonts/LICENSE-DejaVu.txt whitespace=-blank-at-eol
+# Vendored JSmol bytes and licenses retain upstream line endings/checksums.
+frontend/public/structure-viewer/vendor/** -text -whitespace
+third_party/JSMOL-LICENSE -text -whitespace

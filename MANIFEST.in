@@ -1,0 +1,11 @@
+include README.md LICENSE.rst CODE-OF-CONDUCT.rst pyproject.toml cookiecutter.json
+include .gitignore .gitattributes .pre-commit-config.yaml .flake8
+recursive-include src *.py py.typed
+recursive-include tests *.py
+recursive-include docs *.md
+include requirements/build.in requirements/build.lock
+prune .venv
+prune .local
+prune .repo-snapshots
+exclude LOCAL_BRIEF.md .env .env.*
+global-exclude __pycache__ *.py[cod] *.log .DS_Store

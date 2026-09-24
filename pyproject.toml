@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "labcat"
+version = "0.1.0.dev0"
+description = "A public-evidence materials triage assistant"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "BSD-3-Clause"
+license-files = ["LICENSE.rst"]
+authors = [{ name = "Keith White" }]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["build>=1.2,<2", "pytest>=8,<10", "ruff>=0.11,<1", "pre-commit>=4.3,<5"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["labcat*"]
+
+[tool.setuptools.package-data]
+labcat = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.black]
+line-length = 88
+target-version = ["py311"]
+
+[tool.docformatter]
+recursive = true
+wrap-summaries = 72
+wrap-descriptions = 72

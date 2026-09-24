@@ -1,0 +1,58 @@
+# Local interview requirements and private working notes (never distribute).
+LOCAL_BRIEF.md
+.local/
+.repo-snapshots/
+
+# Credentials and local deployment overrides.
+.env
+.env.*
+!.env.example
+config/site.local.toml
+compose.local.yaml
+
+# Python and build artifacts.
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+.DS_Store
+
+# Runtime records may contain user prompts or sensitive configuration.
+data/cache/
+runs/
+*.log
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+*.sqlite3-journal
+*.sqlite-wal
+*.sqlite3-wal
+*.sqlite-shm
+*.sqlite3-shm
+*.connections.json
+*.setup.json
+*.credentials.enc.json
+*.agent-usage.json
+auth.json
+tokens.json
+
+# Frontend build assets are bundled into wheels/images, not committed.
+frontend/node_modules/
+frontend/dist/
+src/labcat/static/
+*.tsbuildinfo
+
+# Native desktop build outputs and staged install binaries.
+desktop/target/
+desktop/node_modules/
+desktop/gen/
+desktop-bin/
+
+# Generated working media; reviewed runtime assets live in frontend/public/.
+/output/
