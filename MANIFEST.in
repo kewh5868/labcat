@@ -2,6 +2,7 @@ include README.md LICENSE.rst CODE-OF-CONDUCT.rst pyproject.toml cookiecutter.js
 include .gitignore .gitattributes .pre-commit-config.yaml .flake8
 recursive-include src *.py *.toml py.typed
 recursive-include tests *.py
+recursive-include tests/fixtures *.json *.md
 recursive-include docs *.md
 include requirements/build.in requirements/build.lock
 prune .venv

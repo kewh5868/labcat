@@ -1,0 +1,88 @@
+{
+  "owner": "public",
+  "query": { "name": "entry_id", "value": "-1MyUqWhJXYiWx2cQvqa00NTb_JT" },
+  "pagination": {
+    "page_size": 1,
+    "order_by": "entry_id",
+    "order": "asc",
+    "total": 1
+  },
+  "required": {
+    "metadata": { "entry_id": "*", "published": "*", "with_embargo": "*" },
+    "run[-1]": {
+      "system[-1]": {
+        "atoms": {
+          "lattice_vectors": "*",
+          "periodic": "*",
+          "positions": "*",
+          "labels": "*",
+          "concentrations": "*"
+        }
+      }
+    },
+    "results": {
+      "material": { "chemical_formula_reduced": "*", "structural_type": "*" },
+      "properties": {
+        "structures": {
+          "structure_original": {
+            "dimension_types": "*",
+            "lattice_vectors": "*",
+            "cartesian_site_positions": "*",
+            "n_sites": "*",
+            "species_at_sites": "*",
+            "species": "*"
+          }
+        }
+      }
+    }
+  },
+  "data": [
+    {
+      "entry_id": "-1MyUqWhJXYiWx2cQvqa00NTb_JT",
+      "upload_id": "mynsIhZ4TJSsLW4PPYZI-w",
+      "parser_name": "parsers/vasp",
+      "archive": {
+        "metadata": {
+          "entry_id": "-1MyUqWhJXYiWx2cQvqa00NTb_JT",
+          "published": true,
+          "with_embargo": false
+        },
+        "run": [
+          {
+            "system": [
+              {
+                "atoms": {
+                  "lattice_vectors": [
+                    [3.852381e-10, 0.0, 0.0],
+                    [0.0, 6.668133e-10, 0.0],
+                    [0.0, 0.0, 6.365686000000001e-10]
+                  ],
+                  "periodic": [true, true, true],
+                  "positions": [
+                    [0.0, 5.555515000152e-10, 2.782084872184e-10],
+                    [0.0, 1.1126179998480002e-10, 5.964927872184e-10],
+                    [0.0, 5.555515000152e-10, 4.00758127816e-11],
+                    [0.0, 1.1126179998480002e-10, 3.583601127816e-10],
+                    [1.9261905e-10, 2.221448500152e-10, 2.782084872184e-10],
+                    [1.9261905e-10, 4.446684499848e-10, 5.964927872184e-10],
+                    [1.9261905e-10, 2.221448500152e-10, 4.00758127816e-11],
+                    [1.9261905e-10, 4.446684499848e-10, 3.583601127816e-10]
+                  ],
+                  "labels": ["Si", "Si", "Si", "Si", "Si", "Si", "Si", "Si"]
+                }
+              }
+            ]
+          }
+        ],
+        "results": {
+          "material": {
+            "chemical_formula_reduced": "Si",
+            "structural_type": "bulk"
+          },
+          "properties": {}
+        },
+        "m_ref_archives": {}
+      }
+    }
+  ]
+}

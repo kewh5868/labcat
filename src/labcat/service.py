@@ -28,7 +28,7 @@ def get_status(config: AppConfig, style: str | None = None) -> dict[str, Any]:
         "stage": "scaffold",
         "style": selected,
         "message": (
-            "Guarded public discovery is available through Python APIs. The "
+            "Python APIs provide validated public material properties. The "
             "research command and UI are not available yet."
         ),
         "provider": config.provider,
@@ -38,9 +38,8 @@ def get_status(config: AppConfig, style: str | None = None) -> dict[str, Any]:
         "limitations": [
             "Status contains no scientific records or ranked candidates.",
             (
-                "Validated property adapters, ranking, cited reports, saved "
-                "workspace, model connection lifecycle and the application "
-                "interface remain planned."
+                "Ranking, cited reports, saved workspace, model connection "
+                "lifecycle and the application interface remain planned."
             ),
             "Scientific coverage depends on independently validated public evidence.",
         ],
@@ -50,13 +49,12 @@ def get_status(config: AppConfig, style: str | None = None) -> dict[str, Any]:
         report["implemented"] = [
             "Installable Python package and software status commands",
             "Strict local preference configuration",
-            "Guarded public discovery",
+            "Validated public material properties",
         ]
         report["next_steps"] = [
             (
-                "Validated property adapters, ranking, cited reports, saved "
-                "workspace, model connection lifecycle and the application "
-                "interface remain planned."
+                "Ranking, cited reports, saved workspace, model connection "
+                "lifecycle and the application interface remain planned."
             )
         ]
     return report

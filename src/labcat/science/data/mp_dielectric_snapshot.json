@@ -1,0 +1,349 @@
+{
+  "absent_cohort_formulas": [
+    "CaO",
+    "MgAl2O4",
+    "MgO",
+    "Nb2O5",
+    "Sc2O3",
+    "Ta2O5",
+    "Y2O3",
+    "ZrSiO4"
+  ],
+  "cohort_formulas": [
+    "Al2O3",
+    "BaTiO3",
+    "BeO",
+    "B2O3",
+    "CaO",
+    "HfO2",
+    "LiAlO2",
+    "LiBO2",
+    "MgO",
+    "MgAl2O4",
+    "Nb2O5",
+    "Sc2O3",
+    "SiO2",
+    "SrTiO3",
+    "Ta2O5",
+    "TiO2",
+    "Y2O3",
+    "ZnO",
+    "ZrO2",
+    "ZrSiO4"
+  ],
+  "dataset": "Materials Project dielectric dataset / matminer public mirror",
+  "dataset_version": "Figshare 7108790 version 2 (2018-10-08)",
+  "license_checked_on": "2026-09-09",
+  "mirror_license": "MIT",
+  "original_data_license": "CC0-1.0",
+  "original_dataset_url": "https://doi.org/10.5061/dryad.ph81h",
+  "publication_url": "https://www.nature.com/articles/sdata2016134",
+  "records": [
+    {
+      "fields": {
+        "band_gap": 1.73,
+        "formula": "BaTiO3",
+        "material_id": "mp-12992",
+        "nsites": 5,
+        "poly_electronic": 5.89,
+        "poly_total": 11.5,
+        "pot_ferroelectric": true,
+        "space_group": 99
+      },
+      "fields_sha256": "74a8219758f68b8629fc9f6754936a037f84a7ac153290f916f2a669fa3537c7",
+      "upstream_row_index": 644,
+      "upstream_row_sha256": "72092fc17d2b4c40af2f8ae11de2c67287e8ad71e9f8c2920fd722101a8a5491"
+    },
+    {
+      "fields": {
+        "band_gap": 7.28,
+        "formula": "LiBO2",
+        "material_id": "mp-14232",
+        "nsites": 8,
+        "poly_electronic": 2.93,
+        "poly_total": 8.16,
+        "pot_ferroelectric": true,
+        "space_group": 122
+      },
+      "fields_sha256": "2533deede8404a4da18e37deed5040b46f1f5c9a57f83dafa5c45136b298bace",
+      "upstream_row_index": 599,
+      "upstream_row_sha256": "37b86572072f8e707bf8ab880059dd5f8fcce3f2da5bd012369af8e38a03a660"
+    },
+    {
+      "fields": {
+        "band_gap": 6.85,
+        "formula": "BeO",
+        "material_id": "mp-1778",
+        "nsites": 2,
+        "poly_electronic": 3.11,
+        "poly_total": 7.2,
+        "pot_ferroelectric": false,
+        "space_group": 216
+      },
+      "fields_sha256": "fb26be90311d6af62e10b122543c95e4656cf850c12a2aecf4148125da9d6770",
+      "upstream_row_index": 47,
+      "upstream_row_sha256": "1ceb59e0d042692e3f5924616ef7a12a084bef28abd88973555605fe4b7c9894"
+    },
+    {
+      "fields": {
+        "band_gap": 0.63,
+        "formula": "ZnO",
+        "material_id": "mp-1986",
+        "nsites": 2,
+        "poly_electronic": 6.01,
+        "poly_total": 11.35,
+        "pot_ferroelectric": false,
+        "space_group": 216
+      },
+      "fields_sha256": "665c9d41cf4a6ffcfa1434861fd87cd575932745d0f6b1a3f88bb24676380665",
+      "upstream_row_index": 70,
+      "upstream_row_sha256": "c91f673d5370995f624dffec158f1ded09d29568cd9ecd09d8117d59279397be"
+    },
+    {
+      "fields": {
+        "band_gap": 3.47,
+        "formula": "ZrO2",
+        "material_id": "mp-2858",
+        "nsites": 12,
+        "poly_electronic": 5.35,
+        "poly_total": 21.28,
+        "pot_ferroelectric": false,
+        "space_group": 14
+      },
+      "fields_sha256": "0920682b884fc3935c40bf32a52ffcb459cd7d79fe5b87d8e5e17699c1b5dafa",
+      "upstream_row_index": 195,
+      "upstream_row_sha256": "6f9150c9022cdaf9aaac35fd1cdf812d86a536a83ca0666480045a84484e32fe"
+    },
+    {
+      "fields": {
+        "band_gap": 1.67,
+        "formula": "BaTiO3",
+        "material_id": "mp-2998",
+        "nsites": 5,
+        "poly_electronic": 6.87,
+        "poly_total": 7.87,
+        "pot_ferroelectric": true,
+        "space_group": 221
+      },
+      "fields_sha256": "9ad02923b9562ca00ff60825361d93d161027434599a79c262dbb2a07f339c92",
+      "upstream_row_index": 447,
+      "upstream_row_sha256": "c0a3a717dea7dc1e7d9eb4dc9943bcd8022c6ab6191b7fd2dea67aaf8ad509ac"
+    },
+    {
+      "fields": {
+        "band_gap": 6.3,
+        "formula": "B2O3",
+        "material_id": "mp-306",
+        "nsites": 15,
+        "poly_electronic": 2.72,
+        "poly_total": 4.79,
+        "pot_ferroelectric": false,
+        "space_group": 152
+      },
+      "fields_sha256": "e69e9f2919453f99eb714cab910889913e498512ac85d7c73ee7cde418a1ce5a",
+      "upstream_row_index": 188,
+      "upstream_row_sha256": "555d784cd2d412f57a3044450d123ccf9ed4358c424f863920edf31235ecff94"
+    },
+    {
+      "fields": {
+        "band_gap": 4.02,
+        "formula": "HfO2",
+        "material_id": "mp-352",
+        "nsites": 12,
+        "poly_electronic": 4.81,
+        "poly_total": 18.75,
+        "pot_ferroelectric": false,
+        "space_group": 14
+      },
+      "fields_sha256": "7c8f3c72039a8fb486ab9509cd6877eafcf96acf2c13ba70b3189650bd9cbeaf",
+      "upstream_row_index": 95,
+      "upstream_row_sha256": "1a76b1fb7e4de4e09616b4a3f94294e369b14548053c5de2fdd79ef7abe83c8f"
+    },
+    {
+      "fields": {
+        "band_gap": 1.85,
+        "formula": "SrTiO3",
+        "material_id": "mp-4651",
+        "nsites": 10,
+        "poly_electronic": 6.43,
+        "poly_total": 7.8,
+        "pot_ferroelectric": true,
+        "space_group": 140
+      },
+      "fields_sha256": "84ad07f87bc2abb6ae296c4a86867bcb838ca56a8cb95563e3b9412760d5f626",
+      "upstream_row_index": 709,
+      "upstream_row_sha256": "e08b6d60da22ae9bd5a6adae953b6dfce60a4f91c2ea2ec27269b7a8e8448e49"
+    },
+    {
+      "fields": {
+        "band_gap": 5.66,
+        "formula": "SiO2",
+        "material_id": "mp-554089",
+        "nsites": 12,
+        "poly_electronic": 2.25,
+        "poly_total": 3.99,
+        "pot_ferroelectric": false,
+        "space_group": 33
+      },
+      "fields_sha256": "246ea98e68d6723f382b27c9cb101ac05692e66ebb6f1a6478754cf2c8bcc150",
+      "upstream_row_index": 191,
+      "upstream_row_sha256": "7705d2ca2f391882c0c07ad5293f87c16ce5323090052fde956a9ce621c019ce"
+    },
+    {
+      "fields": {
+        "band_gap": 5.73,
+        "formula": "SiO2",
+        "material_id": "mp-554151",
+        "nsites": 12,
+        "poly_electronic": 2.15,
+        "poly_total": 3.74,
+        "pot_ferroelectric": false,
+        "space_group": 82
+      },
+      "fields_sha256": "9d74605d6bfdb12060d16b456360ae36bdf844cdbf9966cbd0fbe1626596f024",
+      "upstream_row_index": 140,
+      "upstream_row_sha256": "d15abe01d0ee997fe217040e1bfb1f688b649f268e92b472c962034f97cb835e"
+    },
+    {
+      "fields": {
+        "band_gap": 2.68,
+        "formula": "TiO2",
+        "material_id": "mp-554278",
+        "nsites": 12,
+        "poly_electronic": 6.2,
+        "poly_total": 35.47,
+        "pot_ferroelectric": false,
+        "space_group": 12
+      },
+      "fields_sha256": "46ca70615c2a98655d25560b85217ab43d2eae7e4a0a35973290a764c4eab89f",
+      "upstream_row_index": 287,
+      "upstream_row_sha256": "472f9960db5144101ea83386ef9f8284dcf62e70e825a3aaa3e9b9590b930149"
+    },
+    {
+      "fields": {
+        "band_gap": 5.62,
+        "formula": "SiO2",
+        "material_id": "mp-554573",
+        "nsites": 12,
+        "poly_electronic": 2.19,
+        "poly_total": 3.9,
+        "pot_ferroelectric": false,
+        "space_group": 40
+      },
+      "fields_sha256": "be222b56e6adcf4584b5fb13d7c415f6b8f32faf4554d1aeea170312e317a07c",
+      "upstream_row_index": 306,
+      "upstream_row_sha256": "8459329e0908f05d81e2230dbc121cb3f719ca6f4edc5fd2c3052f2c90cac7a4"
+    },
+    {
+      "fields": {
+        "band_gap": 5.5,
+        "formula": "SiO2",
+        "material_id": "mp-555235",
+        "nsites": 12,
+        "poly_electronic": 2.17,
+        "poly_total": 3.9,
+        "pot_ferroelectric": true,
+        "space_group": 9
+      },
+      "fields_sha256": "38b97d0de38c5e9cbfcc66fed2adba4d5268ebd8062a106573a9c296f2723c88",
+      "upstream_row_index": 199,
+      "upstream_row_sha256": "0b925b86910d33f36147e7525d25ea3b10623bd319ff991c8527e6a925653a95"
+    },
+    {
+      "fields": {
+        "band_gap": 5.44,
+        "formula": "SiO2",
+        "material_id": "mp-559091",
+        "nsites": 12,
+        "poly_electronic": 2.15,
+        "poly_total": 3.84,
+        "pot_ferroelectric": true,
+        "space_group": 182
+      },
+      "fields_sha256": "9c8a68d1200d43778ace8f418ea6bc9ed6496600af217a7510d5be3c4626b17d",
+      "upstream_row_index": 164,
+      "upstream_row_sha256": "7de8d87c18a1d0d3e6db524c5960a081c742660d0da24ba932f430d7340f7b64"
+    },
+    {
+      "fields": {
+        "band_gap": 5.61,
+        "formula": "SiO2",
+        "material_id": "mp-559550",
+        "nsites": 18,
+        "poly_electronic": 2.0,
+        "poly_total": 3.39,
+        "pot_ferroelectric": false,
+        "space_group": 148
+      },
+      "fields_sha256": "515f31ef195d2b422da75d60043a8055679f37665e60cbc6166ec9e4fec043eb",
+      "upstream_row_index": 362,
+      "upstream_row_sha256": "9bddc9eb2174125dee7420a3586632fb12f586b7b936573cc50decb4c319bcb6"
+    },
+    {
+      "fields": {
+        "band_gap": 1.73,
+        "formula": "BaTiO3",
+        "material_id": "mp-5986",
+        "nsites": 5,
+        "poly_electronic": 5.91,
+        "poly_total": 11.53,
+        "pot_ferroelectric": true,
+        "space_group": 99
+      },
+      "fields_sha256": "fca842b2a168220c425e7de55cd680942fae9f20088b217ecad4b2e7f675f5ee",
+      "upstream_row_index": 534,
+      "upstream_row_sha256": "18bdee67bc25bc3086c34146b97e0567b26c8bb012cfa9439be223469d6ac2af"
+    },
+    {
+      "fields": {
+        "band_gap": 5.51,
+        "formula": "SiO2",
+        "material_id": "mp-7029",
+        "nsites": 12,
+        "poly_electronic": 2.24,
+        "poly_total": 4.04,
+        "pot_ferroelectric": true,
+        "space_group": 96
+      },
+      "fields_sha256": "17661ec869973a7e5f88ea1c8fe853672820de89a8f7813c56a188a66f06ce60",
+      "upstream_row_index": 139,
+      "upstream_row_sha256": "1d14b09f5e6e3879b21a3ac885ad707b2279fea40a438da8e05426fef8fb2131"
+    },
+    {
+      "fields": {
+        "band_gap": 4.46,
+        "formula": "Al2O3",
+        "material_id": "mp-7048",
+        "nsites": 10,
+        "poly_electronic": 3.16,
+        "poly_total": 8.98,
+        "pot_ferroelectric": false,
+        "space_group": 12
+      },
+      "fields_sha256": "afe3e49277be9e1c17d2f2baa67c65a9bf72e3a7b70f39cee9e94d4ef7420261",
+      "upstream_row_index": 138,
+      "upstream_row_sha256": "eced0bde0f1b35ed15aa07404fb7851d2869945aca6a8197d1900aff5728081d"
+    },
+    {
+      "fields": {
+        "band_gap": 6.12,
+        "formula": "LiAlO2",
+        "material_id": "mp-8001",
+        "nsites": 4,
+        "poly_electronic": 3.09,
+        "poly_total": 12.78,
+        "pot_ferroelectric": true,
+        "space_group": 166
+      },
+      "fields_sha256": "52a286e9c024cd07db9507a1d2b97128b3b6f6c58c4a44aed47bcc9531397357",
+      "upstream_row_index": 895,
+      "upstream_row_sha256": "65e7db06a0a819be0d13757d3c86a47d1da2fe2696581ba4c35b87ca9213f1ce"
+    }
+  ],
+  "schema_version": 1,
+  "selection": "All rows whose original formula matches the fixed oxide cohort; no value-based selection.",
+  "source_url": "https://doi.org/10.6084/m9.figshare.7108790.v2",
+  "upstream_record_count": 1056,
+  "upstream_sha256": "8eb24812148732786cd7c657eccfc6b5ee66533429c2cfbcc4f0059c0295e8b6",
+  "upstream_url": "https://ndownloader.figshare.com/files/13213475"
+}

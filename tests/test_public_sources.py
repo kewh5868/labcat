@@ -40,7 +40,7 @@ def test_public_catalog_is_explicit_and_keyless():
     assert {item["id"] for item in catalog} == set(sources._ADAPTERS)
     assert all(item["requires_credentials"] is False for item in catalog)
     catalog[0]["name"] = "changed"
-    assert sources.catalog()[0]["name"] == "HybriD³"
+    assert sources.catalog()[0]["name"] == "Public dielectric dataset"
 
 
 @pytest.mark.parametrize(

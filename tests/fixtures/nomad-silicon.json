@@ -1,0 +1,146 @@
+{
+  "owner": "public",
+  "query": {
+    "and": [
+      { "name": "results.material.chemical_formula_reduced", "value": "Si" },
+      { "name": "results.material.structural_type", "value": "bulk" },
+      {
+        "prefix": "results.properties.electronic.band_gap",
+        "query": { "name": "value", "value": { "lte": 1e-16 } }
+      }
+    ]
+  },
+  "pagination": {
+    "page_size": 5,
+    "order_by": "entry_id",
+    "order": "asc",
+    "total": 334,
+    "next_page_after_value": "-piIRnlvbWEwua6TWneduQu3qx_s"
+  },
+  "required": {
+    "include": [
+      "entry_id",
+      "upload_id",
+      "published",
+      "with_embargo",
+      "results.material.chemical_formula_reduced",
+      "results.material.chemical_formula_hill",
+      "results.material.elements",
+      "results.material.structural_type",
+      "results.material.symmetry.space_group_number",
+      "results.properties.electronic.band_gap.value",
+      "results.properties.electronic.band_gap.type",
+      "results.properties.electronic.band_gap.index",
+      "results.properties.structures.structure_original.n_sites"
+    ]
+  },
+  "data": [
+    {
+      "upload_id": "mynsIhZ4TJSsLW4PPYZI-w",
+      "with_embargo": false,
+      "published": true,
+      "results": {
+        "material": {
+          "symmetry": { "space_group_number": 194 },
+          "elements": ["Si"],
+          "structural_type": "bulk",
+          "chemical_formula_reduced": "Si",
+          "chemical_formula_hill": "Si8"
+        },
+        "properties": {
+          "electronic": {
+            "band_gap": [
+              { "index": 0, "value": 1.2950393732622013e-19 },
+              { "index": 1, "value": 1.2950393732622013e-19 }
+            ]
+          }
+        }
+      },
+      "entry_id": "-1MyUqWhJXYiWx2cQvqa00NTb_JT"
+    },
+    {
+      "upload_id": "9FVTPztzTdGNVSEbc4QbXg",
+      "with_embargo": false,
+      "published": true,
+      "results": {
+        "material": {
+          "symmetry": { "space_group_number": 227 },
+          "elements": ["Si"],
+          "structural_type": "bulk",
+          "chemical_formula_reduced": "Si",
+          "chemical_formula_hill": "Si2"
+        },
+        "properties": {
+          "structures": { "structure_original": { "n_sites": 2 } },
+          "electronic": {
+            "band_gap": [
+              { "value": 2.1581319259979998e-19 },
+              { "index": 0, "value": 1.743897888882868e-19 },
+              { "index": 0, "type": "indirect", "value": 2.023195819156805e-19 }
+            ]
+          }
+        }
+      },
+      "entry_id": "-F97NVxjGWo0nKZtQvsKPqfReI-a"
+    },
+    {
+      "upload_id": "k9sGq77iQGao2iRf9fT93A",
+      "with_embargo": false,
+      "published": true,
+      "results": {
+        "material": {
+          "symmetry": { "space_group_number": 227 },
+          "elements": ["Si"],
+          "structural_type": "bulk",
+          "chemical_formula_reduced": "Si",
+          "chemical_formula_hill": "Si64"
+        },
+        "properties": {
+          "electronic": { "band_gap": [{ "index": 0, "value": 0.0 }] }
+        }
+      },
+      "entry_id": "-RD9dpb7XlovREiu-eonmv-WDz8a"
+    },
+    {
+      "upload_id": "_V0QZjHBSPup0KMHBXxNbA",
+      "with_embargo": false,
+      "published": true,
+      "results": {
+        "material": {
+          "symmetry": { "space_group_number": 64 },
+          "elements": ["Si"],
+          "structural_type": "bulk",
+          "chemical_formula_reduced": "Si",
+          "chemical_formula_hill": "Si8"
+        },
+        "properties": {
+          "electronic": { "band_gap": [{ "index": 0, "value": 0.0 }] }
+        }
+      },
+      "entry_id": "-cvHlLYZqSzkJPnndm10GNzvpF7M"
+    },
+    {
+      "upload_id": "6saoL1v5Syaiusw1Kk_-_g",
+      "with_embargo": false,
+      "published": true,
+      "results": {
+        "material": {
+          "symmetry": { "space_group_number": 3 },
+          "elements": ["Si"],
+          "structural_type": "bulk",
+          "chemical_formula_reduced": "Si",
+          "chemical_formula_hill": "Si8"
+        },
+        "properties": {
+          "electronic": {
+            "band_gap": [
+              { "index": 0, "value": 0.0 },
+              { "index": 1, "value": 0.0 }
+            ]
+          }
+        }
+      },
+      "entry_id": "-piIRnlvbWEwua6TWneduQu3qx_s"
+    }
+  ]
+}

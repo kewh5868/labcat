@@ -7,12 +7,13 @@ Level 4 foundation.
 
 ## Current Python capabilities
 
-Fixed public HTTP adapters retrieve bounded bibliography and material-identity
-metadata. Public destinations, response sizes, deadlines and retrieved instructions
-are validated. Discovery metadata is not scored property evidence.
+Materials Project, NOMAD, HybriD3 and the licensed public dielectric release have
+typed property adapters with source provenance, bounded retrieval and isolated
+failures. Public bibliography discovery remains separate from scientific property
+records.
 
-Validated property adapters, ranking, cited reports, saved workspace, model connection
-lifecycle and the application interface remain planned.
+Ranking, cited reports, saved workspace, model connection lifecycle and the
+application interface remain planned.
 
 The command-line interface currently provides software status, configuration
 validation and an explicit read-only AWS account check. It does not yet expose the
@@ -25,7 +26,7 @@ Use Python 3.11 or newer. From the repository root:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e ".[dev,aws,connections]"
+python -m pip install -e ".[dev,web,aws,connections]"
 labcat status
 labcat status --style audit --format json
 labcat check-config

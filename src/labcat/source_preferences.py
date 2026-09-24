@@ -2,6 +2,7 @@
 configurable."""
 
 SOURCE_IDS = (
+    "public_dielectric",
     "hybrid3",
     "nomad",
     "europe_pmc",

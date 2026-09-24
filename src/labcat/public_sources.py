@@ -35,14 +35,8 @@ from labcat.extended_discovery import (
 )
 
 MAX_BYTES = 1_000_000
-
-
 MAX_SECONDS = 12
-
-
 MAX_RESULTS = 10
-
-
 ROUTES = {
     "hybrid3": ("materials.hybrid3.duke.edu", "/materials/systems/"),
     "hybrid3_datasets": ("materials.hybrid3.duke.edu", "/materials/datasets/"),
@@ -64,9 +58,19 @@ ROUTES = {
     "pubchem_formula": ("pubchem.ncbi.nlm.nih.gov", "/rest/pug/compound/fastformula/"),
     "pubchem_names": ("pubchem.ncbi.nlm.nih.gov", "/rest/pug/compound/cid/"),
 }
-
-
 _CATALOG = (
+    {
+        "id": "public_dielectric",
+        "name": "Public dielectric dataset",
+        "description": "Anonymous access to a versioned corpus of calculated "
+        "dielectric properties and crystal structures.",
+        "homepage": "https://doi.org/10.6084/m9.figshare.7108790.v2",
+        "documentation_url": "https://www.nature.com/articles/sdata2016134",
+        "kind": "materials_database",
+        "scope": "Fresh reads of a historical public release. Matching rows can "
+        "supply calculated dielectric and band-gap evidence; stability, safety "
+        "and thin-film performance remain unassessed.",
+    },
     {
         "id": "hybrid3",
         "name": "HybriD³",
@@ -141,8 +145,6 @@ _CATALOG = (
         "repository. No direct scraping, full-text or peer-review verification.",
     },
 )
-
-
 _STOP = set(
     "a an the i we you me us my our your please find search look for to of and or "
     "in on with from that this these those is are be can could would should want "
@@ -162,8 +164,6 @@ _STOP = set(
     "prioritize prioritizing prefer favor worth investigate review keep "
     "distinguish explain establish compare comparison".split()
 )
-
-
 _ELEMENTS = set(
     "H He Li Be B C N O F Ne Na Mg Al Si P S Cl Ar K Ca Sc Ti V Cr Mn Fe Co Ni Cu "
     "Zn Ga Ge As Se Br Kr Rb Sr Y Zr Nb Mo Tc Ru Rh Pd Ag Cd In Sn Sb Te I Xe Cs "
@@ -171,11 +171,7 @@ _ELEMENTS = set(
     "Pb Bi Po At Rn Fr Ra Ac Th Pa U Np Pu Am Cm Bk Cf Es Fm Md No Lr Rf Db Sg "
     "Bh Hs Mt Ds Rg Cn Nh Fl Mc Lv Ts Og".split()
 )
-
-
 _ARXIV_LOCK = threading.Lock()
-
-
 _ARXIV_LAST = 0.0
 
 
@@ -196,8 +192,6 @@ def _query_text(query: str) -> str:
 
 
 _SEARCH_SCOPE = ContextVar("public_source_semantic_scope", default=None)
-
-
 _SEARCH_CONTEXT = ContextVar("public_source_identity_context", default=None)
 
 
@@ -1018,7 +1012,64 @@ def _search_arxiv(query: str, limit: int, deadline: float, *, focused_topic=Fals
     )
 
 
+def _search_public_dielectric(query, limit, deadline):
+    from labcat.science.dielectric import retrieve_live
+    from labcat.science.formula_display import display_formula
+    from labcat.science.preferences import (
+        derive_search_filters,
+        scalar_scope_resolved,
+        supports_bulk_search,
+    )
+    from labcat.science.retrieval_budget import repository_budget
+
+    target, material_class, identity_scope = _identity_context(query)
+    filters = derive_search_filters(target, material_class)
+    if (
+        not scalar_scope_resolved(target, material_class, identity_scope)
+        or not supports_bulk_search(target, material_class)
+        or filters.get("has_props") != "dielectric"
+    ):
+        return (
+            [],
+            "This specialized corpus is searched for inorganic dielectric queries.",
+        )
+    with repository_budget(_remaining(deadline)):
+        records, _ = retrieve_live(filters)
+    references = []
+    for record in records[:limit]:
+        provenance = record["provenance"]
+        references.append(
+            {
+                "source_id": "public_dielectric",
+                "record_id": record["material_id"],
+                "source_name": "Public dielectric dataset",
+                "title": display_formula(record["formula"])
+                + " — public dielectric record",
+                "url": provenance["source_url"],
+                "access_scope": "public",
+                "provenance_status": "verified",
+                "kind": "discovery_reference",
+                "is_material_evidence": False,
+                "metadata": {
+                    "formula": record["formula"],
+                    "dataset_version": provenance["dataset_version"],
+                },
+                "provenance": {
+                    **provenance,
+                    "verification_scope": "Material identity from a freshly validated "
+                    "public dataset. This reference is not ranking-property evidence.",
+                },
+            }
+        )
+    return (
+        references,
+        "Matching identities from the public dielectric corpus; "
+        "quantitative ranking uses the separate validated property adapter.",
+    )
+
+
 _ADAPTERS = {
+    "public_dielectric": _search_public_dielectric,
     "hybrid3": _search_hybrid3,
     "nomad": _search_nomad,
     "europe_pmc": _search_europe_pmc,
