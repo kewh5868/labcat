@@ -4,7 +4,9 @@
 
 A public-evidence materials research assistant in development on a scikit-package
 Level 4 foundation. This snapshot validates local preferences and reports software
-capabilities. Scientific retrieval, ranking, model connections and the application
+capabilities. Closed request and model-plan contracts, bounded untrusted context
+and retrieved-text instruction checks are also available as Python helpers.
+Scientific retrieval, ranking, model connections and the application
 UI are planned; it returns no demonstration materials or scientific evidence.
 
 ## Development and status
