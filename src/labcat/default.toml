@@ -1,0 +1,29 @@
+# Ranking settings are preferences, never scientific evidence.
+# Dynamic web profiles normalize independent importance values automatically.
+[ranking]
+stability = 0.30
+band_gap = 0.25
+element_screen = 0.20
+simplicity = 0.10
+evidence_quality = 0.15
+
+[presentation]
+style = "pi"
+format = "text"
+terminology = "general"
+verbosity = "standard"
+outputs = ["pi", "audit"]
+
+[presentation.layout]
+page_size = "letter"
+font_family = "sans"
+font_size = 11
+line_spacing = "comfortable"
+accent = "sage"
+table_style = "striped"
+page_numbers = true
+text_width = 88
+json_indent = 2
+
+[model]
+provider = "none"

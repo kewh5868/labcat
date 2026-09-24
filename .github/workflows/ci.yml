@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
 jobs:
-  scaffold:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,7 +18,11 @@ jobs:
         with:
           node-version: "24"
       - run: python -m pip install --require-hashes -r requirements/build.lock
-      - run: python -m pip install -e ".[dev]"
+      - name: Install the available application and test extras
+        run: >-
+          python -c "import pathlib, subprocess, sys, tomllib;
+          extras = tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project'].get('optional-dependencies', {});
+          subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-e', '.[' + ','.join(extras) + ']'])"
       - run: python -m pre_commit run --all-files
       - run: python -m pytest
       - run: python -m build --no-isolation

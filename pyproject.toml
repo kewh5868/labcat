@@ -16,12 +16,15 @@ dependencies = []
 [project.optional-dependencies]
 dev = ["build>=1.2,<2", "pytest>=8,<10", "ruff>=0.11,<1", "pre-commit>=4.3,<5"]
 
+[project.scripts]
+labcat = "labcat.cli:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["labcat*"]
 
 [tool.setuptools.package-data]
-labcat = ["py.typed"]
+labcat = ["default.toml", "py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
