@@ -1,4 +1,4 @@
-name: Package checks
+name: Cross-platform package checks
 on:
   push:
     branches: [main]
@@ -8,24 +8,106 @@ permissions:
   contents: read
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python: ["3.11", "3.13"]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: ${{ matrix.python }}
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
-      - run: python -m pip install --require-hashes -r requirements/build.lock
-      - name: Install the available application and test extras
-        run: >-
-          python -c "import pathlib, subprocess, sys, tomllib;
-          extras = tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project'].get('optional-dependencies', {});
-          subprocess.check_call([sys.executable, '-m', 'pip', 'install', '-e', '.[' + ','.join(extras) + ']'])"
-      - run: npm ci --prefix frontend
-      - run: npm run build --prefix frontend
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
       - run: npm test --prefix frontend
-      - run: python -m pre_commit run --all-files
+      - run: python -m pip install --require-hashes -r requirements/runtime.lock
+      - run: python -m pip install -e ".[web,aws,connections,exports,dev]"
       - run: python -m pytest
-      - run: python -m build --no-isolation
+      - run: python -m ruff check .
+      - run: python -m pre_commit run --all-files
+      - name: Build and inspect a fresh distribution pair
+        shell: python
+        run: |
+          import pathlib
+          import subprocess
+          import sys
+
+          dist = pathlib.Path("dist").resolve()
+          dist.mkdir()
+          marker = dist / ".build-start"
+          marker.touch()
+          subprocess.run(
+              [sys.executable, "-m", "build", "--outdir", str(dist)], check=True
+          )
+          archives = [*dist.glob("*.whl"), *dist.glob("*.tar.gz")]
+          subprocess.run(
+              [
+                  sys.executable, "scripts/check_distributions.py",
+                  "--built-after", str(marker), *map(str, archives),
+              ],
+              check=True,
+          )
+      - name: Smoke test the installed wheel in isolation
+        shell: python
+        run: |
+          import json
+          import os
+          import pathlib
+          import subprocess
+          import sys
+          import tempfile
+
+          wheels = list(pathlib.Path("dist").resolve().glob("*.whl"))
+          if len(wheels) != 1:
+              raise SystemExit("Expected exactly one freshly checked wheel.")
+          env = os.environ.copy()
+          for key in ("PYTHONPATH", "PYTHONHOME"):
+              env.pop(key, None)
+          env["PYTHONNOUSERSITE"] = "1"
+          env["PYTHONSAFEPATH"] = "1"
+          with tempfile.TemporaryDirectory(prefix="labcat-wheel-smoke-") as temp:
+              work = pathlib.Path(temp)
+              venv = work / "venv"
+              subprocess.run(
+                  [sys.executable, "-I", "-m", "venv", str(venv)],
+                  check=True, cwd=work, env=env,
+              )
+              scripts = venv / ("Scripts" if os.name == "nt" else "bin")
+              python = scripts / ("python.exe" if os.name == "nt" else "python")
+              cli = scripts / ("labcat.exe" if os.name == "nt" else "labcat")
+              subprocess.run(
+                  [
+                      str(python), "-I", "-m", "pip", "--isolated", "install",
+                      "--no-index", "--no-deps", str(wheels[0]),
+                  ],
+                  check=True, cwd=work, env=env,
+              )
+              check = "\n".join([
+                  "import pathlib, sys, labcat",
+                  "from importlib.resources import files",
+                  "assert pathlib.Path(labcat.__file__).resolve().is_relative_to("
+                  "pathlib.Path(sys.prefix).resolve()), 'Import escaped wheel venv'",
+                  "assert (files('labcat') / 'static' / 'index.html').is_file(), "
+                  "'Wheel interface is missing'",
+              ])
+              subprocess.run(
+                  [str(python), "-I", "-c", check],
+                  check=True, cwd=work, env=env,
+              )
+              result = subprocess.run(
+                  [str(cli), "status", "--style", "audit", "--format", "json"],
+                  check=True, cwd=work, env=env, text=True, capture_output=True,
+              )
+              status = json.loads(result.stdout)
+              assert status["application"] == "Labcat"
+              assert status["style"] == "audit"
+              print("Installed wheel import, interface and CLI status passed.")

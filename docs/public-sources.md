@@ -68,6 +68,8 @@ passages. These checks do not independently certify peer review.
 ResearchGate scraping is unsupported. There is no arbitrary publisher crawler,
 closed-account access, paywall bypass or automatic following of external download
 links. Unavailable endpoints, rate limits and missing metadata remain explicit.
+See [scientific retrieval and property follow-up](scientific-sources.md) for the
+quantitative repository adapters and evidence rules.
 
 ## Reference structures
 
@@ -88,4 +90,6 @@ associations; no demonstration structures or fabricated coordinates are supplied
 
 Use **View structure** within a shortlist row for the inline JSmol viewer and
 available CIF downloads. When several records are available, choose one before
-retrieving it. Explicit lookup retries remain available.
+retrieving it. Explicit lookup retries remain available. See
+[crystal structures in saved reports](structures.md) for adapter coverage,
+source-matching limits and download behavior.

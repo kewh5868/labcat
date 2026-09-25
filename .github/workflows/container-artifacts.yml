@@ -1,0 +1,52 @@
+name: Build and test portable image archives
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install report validation dependencies
+        run: python -m pip install ".[dev]"
+      - name: Build archive without publishing
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/${{ matrix.arch }}
+          tags: labcat:0.1.0.dev0
+          push: false
+          outputs: type=docker,dest=/tmp/labcat-0.1.0.dev0-linux-${{ matrix.arch }}.tar
+      - name: Test archive and record checksum
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: |
+          archive="/tmp/labcat-0.1.0.dev0-linux-${TARGET_ARCH}.tar"
+          docker load --input "$archive"
+          python scripts/smoke_container.py --platform "linux/${TARGET_ARCH}" --workspace
+          cd /tmp
+          sha256sum "$(basename "$archive")" > "${archive}.sha256"
+      - name: Package verified image with host launchers
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: |
+          python scripts/build_install_bundle.py "/tmp/labcat-0.1.0.dev0-linux-${TARGET_ARCH}.tar" --output-dir /tmp
+      - uses: actions/upload-artifact@v4
+        with:
+          name: labcat-0.1.0.dev0-linux-${{ matrix.arch }}
+          path: |
+            /tmp/labcat-0.1.0.dev0-linux-${{ matrix.arch }}.tar
+            /tmp/labcat-0.1.0.dev0-linux-${{ matrix.arch }}.tar.sha256
+            /tmp/labcat-0.1.0.dev0-linux-${{ matrix.arch }}.zip
+            /tmp/labcat-0.1.0.dev0-linux-${{ matrix.arch }}.zip.sha256
+          retention-days: 14

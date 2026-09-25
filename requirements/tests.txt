@@ -1,0 +1,2 @@
+# Install test dependencies and optional interfaces from the package metadata.
+-e .[web,dev,aws]

@@ -1,0 +1,531 @@
+%PDF-1.3
+%‚„œ”
+1 0 obj
+<<
+/PageMode /UseNone
+/Pages 2 0 R
+/Type /Catalog
+>>
+endobj
+2 0 obj
+<<
+/Count 3
+/Kids [ 3 0 R 9 0 R 11 0 R ]
+/Type /Pages
+>>
+endobj
+3 0 obj
+<<
+/Contents 4 0 R
+/MediaBox [ 0 0 612 792 ]
+/Parent 2 0 R
+/Resources <<
+/Font 5 0 R
+/ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ]
+>>
+/Rotate 0
+/Trans <<
+>>
+/Type /Page
+>>
+endobj
+4 0 obj
+<<
+/Length 8018
+>>
+stream
+1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
+BT /F1 8 Tf 9.6 TL ET
+.423529 .498039 .529412 rg
+BT 1 0 0 1 45 28 Tm (Labcat \267 Technical design) Tj T* ET
+BT 1 0 0 1 562.552 28 Tm (1) Tj T* ET
+q
+1 0 0 1 51 720 cm
+q
+.070588 .223529 .270588 rg
+BT 1 0 0 1 0 4 Tm /F2 24 Tf 28 TL (Labcat) Tj T* ET
+Q
+Q
+q
+1 0 0 1 51 691.2 cm
+q
+.133333 .2 .25098 rg
+BT 1 0 0 1 0 3.5 Tm /F1 9.3 Tf 12.8 TL (Design note \267 Public-evidence materials triage \267 September 2026) Tj T* ET
+Q
+Q
+q
+1 0 0 1 51 665.2 cm
+q
+.070588 .294118 .337255 rg
+BT 1 0 0 1 0 4 Tm /F2 14 Tf 18 TL (1. Deployment and scientist workflow) Tj T* ET
+Q
+Q
+q
+1 0 0 1 51 578.4 cm
+q
+.133333 .2 .25098 rg
+BT 1 0 0 1 0 67.5 Tm /F1 9.3 Tf 12.8 TL (Labcat is a single-user prototype for public-evidence research across material classes before experiments.) Tj T* (React/TypeScript presents Chat, Report Format, Search Criterion and Connections. FastAPI serves the built UI and the) Tj T* (same Python research core used by the headless CLI. One Docker image supplies three non-root, read-only services: the) Tj T* (app, an isolated Goose worker and a restricted provider-network proxy. Only the app mounts the named volume retaining) Tj T* (research history. Host launchers discover a free loopback port and reuse the managed service. An optional Tauri shell) Tj T* (opens the system webview, with a normal-browser fallback and no Chrome requirement.) Tj T* ET
+Q
+Q
+q
+1 0 0 1 51 520.2 cm
+q
+.133333 .2 .25098 rg
+BT 1 0 0 1 0 41.9 Tm /F1 9.3 Tf 12.8 TL (Scientists can start standalone chats or enter a project and start a chat there. Projects expand into nested sidebar chats;) Tj T* (selecting the project opens pinned contents, while a chat opens its latest Summary and Technical View. A report pair is one) Tj T* (immutable saved result. Sources have many-to-many chat/report links; pins select reusable contents without copying facts) Tj T* (or granting trust. Counts show pinned reports/resources per chat and distinct totals per project.) Tj T* ET
+Q
+Q
+q
+1 0 0 1 51 506.2 cm
+Q
+q
+1 0 0 1 51 352.2 cm
+.92549 .956863 .952941 rg
+.654902 .776471 .772549 RG
+n
+7 92 m
+149 92 l
+152.8696 92 156 95.1304 156 99 c
+156 134 l
+156 137.8696 152.8696 141 149 141 c
+7 141 l
+3.1304 141 0 137.8696 0 134 c
+0 99 l
+0 95.1304 3.1304 92 7 92 c
+h
+B*
+.086275 .247059 .286275 rg
+BT /F2 9 Tf 10.8 TL ET
+BT 1 0 0 1 28.8555 121 Tm (Safety + verified model) Tj T* ET
+BT /F1 7.4 Tf 8.88 TL ET
+BT 1 0 0 1 41.3996 107 Tm (Desktop, browser, CLI) Tj T* ET
+.92549 .956863 .952941 rg
+.654902 .776471 .772549 RG
+n
+181 92 m
+323 92 l
+326.8696 92 330 95.1304 330 99 c
+330 134 l
+330 137.8696 326.8696 141 323 141 c
+181 141 l
+177.1304 141 174 137.8696 174 134 c
+174 99 l
+174 95.1304 177.1304 92 181 92 c
+h
+B*
+.086275 .247059 .286275 rg
+BT /F2 9 Tf 10.8 TL ET
+BT 1 0 0 1 197.4825 121 Tm (Goose intent assessment) Tj T* ET
+BT /F1 7.4 Tf 8.88 TL ET
+BT 1 0 0 1 205.2172 107 Tm (Profile + fixed research tools) Tj T* ET
+.92549 .956863 .952941 rg
+.654902 .776471 .772549 RG
+n
+355 92 m
+497 92 l
+500.8696 92 504 95.1304 504 99 c
+504 134 l
+504 137.8696 500.8696 141 497 141 c
+355 141 l
+351.1304 141 348 137.8696 348 134 c
+348 99 l
+348 95.1304 351.1304 92 355 92 c
+h
+B*
+.086275 .247059 .286275 rg
+BT /F2 9 Tf 10.8 TL ET
+BT 1 0 0 1 385.986 121 Tm (Public source gate) Tj T* ET
+BT /F1 7.4 Tf 8.88 TL ET
+BT 1 0 0 1 372.4277 107 Tm (Repositories + open publications) Tj T* ET
+.92549 .956863 .952941 rg
+.654902 .776471 .772549 RG
+n
+355 12 m
+497 12 l
+500.8696 12 504 15.1304 504 19 c
+504 54 l
+504 57.8696 500.8696 61 497 61 c
+355 61 l
+351.1304 61 348 57.8696 348 54 c
+348 19 l
+348 15.1304 351.1304 12 355 12 c
+h
+B*
+.086275 .247059 .286275 rg
+BT /F2 9 Tf 10.8 TL ET
+BT 1 0 0 1 392.2365 41 Tm (Typed evidence) Tj T* ET
+BT /F1 7.4 Tf 8.88 TL ET
+BT 1 0 0 1 380.1422 27 Tm (Records, fields, provenance) Tj T* ET
+.92549 .956863 .952941 rg
+.654902 .776471 .772549 RG
+n
+181 12 m
+323 12 l
+326.8696 12 330 15.1304 330 19 c
+330 54 l
+330 57.8696 326.8696 61 323 61 c
+181 61 l
+177.1304 61 174 57.8696 174 54 c
+174 19 l
+174 15.1304 177.1304 12 181 12 c
+h
+B*
+.086275 .247059 .286275 rg
+BT /F2 9 Tf 10.8 TL ET
+BT 1 0 0 1 196.3665 41 Tm (Rank + property follow-up) Tj T* ET
+BT /F1 7.4 Tf 8.88 TL ET
+BT 1 0 0 1 199.8707 27 Tm (Scores + cited review passages) Tj T* ET
+.92549 .956863 .952941 rg
+.654902 .776471 .772549 RG
+n
+7 12 m
+149 12 l
+152.8696 12 156 15.1304 156 19 c
+156 54 l
+156 57.8696 152.8696 61 149 61 c
+7 61 l
+3.1304 61 0 57.8696 0 54 c
+0 19 l
+0 15.1304 3.1304 12 7 12 c
+h
+B*
+.086275 .247059 .286275 rg
+BT /F2 9 Tf 10.8 TL ET
+BT 1 0 0 1 40.9875 41 Tm (Saved report pair) Tj T* ET
+BT /F1 7.4 Tf 8.88 TL ET
+BT 1 0 0 1 34.2068 27 Tm (Summary / Technical View) Tj T* ET
+.262745 .509804 .509804 RG
+1.4 w
+n 156 117 m 174 117 l S
+n 174 117 m 170 120 l S
+n 174 117 m 170 114 l S
+n 330 117 m 348 117 l S
+n 348 117 m 344 120 l S
+n 348 117 m 344 114 l S
+n 426 92 m 426 61 l S
+n 426 61 m 423 65 l S
+n 426 61 m 429 65 l S
+n 348 37 m 330 37 l S
+n 330 37 m 334 40 l S
+n 330 37 m 334 34 l S
+n 174 37 m 156 37 l S
+n 156 37 m 160 40 l S
+n 156 37 m 160 34 l S
+[2 2] 0 d
+n 348 103 m 336 78 l S
+n 336 78 m 78 78 l S
+n 78 78 m 78 61 l S
+n 78 61 m 75 65 l S
+n 78 61 m 81 65 l S
+[] 0 d
+BT /F1 6.8 Tf 8.16 TL ET
+BT 1 0 0 1 143.018 82 Tm (Bibliographic metadata bypasses ranking) Tj T* ET
+BT /F3 7.3 Tf 8.76 TL ET
+.278431 .396078 .439216 rg
+BT 1 0 0 1 3 0 Tm (Saved project context is an untrusted hint; only public adapters establish scientific evidence.) Tj T* ET
+Q
+q
+1 0 0 1 51 343.2 cm
+Q
+q
+1 0 0 1 51 292 cm
+q
+.133333 .2 .25098 rg
+BT 1 0 0 1 0 41.9 Tm /F1 9.3 Tf 12.8 TL (SQLite transactions save the prompt, reply, report pair, structured result and source links together. Retrieval runs outside) Tj T* (write transactions. If a chat moves during retrieval, the save is rejected against its original project scope. Schema migrations) Tj T* (preserve earlier reports and pins, reject unsupported schemas, and validate foreign keys. Saved transcript text never) Tj T* (becomes evidence.) Tj T* ET
+Q
+Q
+q
+1 0 0 1 51 266 cm
+q
+.070588 .294118 .337255 rg
+BT 1 0 0 1 0 4 Tm /F2 14 Tf 18 TL (2. Evidence and scientific limits) Tj T* ET
+Q
+Q
+q
+1 0 0 1 51 192 cm
+q
+.133333 .2 .25098 rg
+BT 1 0 0 1 0 54.7 Tm /F1 9.3 Tf 12.8 TL (Selected public repositories are searched first. Optional API access and anonymous adapters provide typed records;) Tj T* (automatic mode can fall through to another enabled repository after an empty or unavailable response. Missing selected) Tj T* (attributes trigger bounded, separate searches in an enabled open-access publication service. Available article text is) Tj T* (skimmed for relevant passages with source and section attribution. Saved filters and result limits apply; user text supplies) Tj T* (search hints only. There is no fixed production cohort or historical-data fallback.) Tj T* ET
+Q
+Q
+q
+1 0 0 1 51 133.8 cm
+q
+.133333 .2 .25098 rg
+BT 1 0 0 1 0 41.9 Tm /F1 9.3 Tf 12.8 TL (Reference metadata and literature passages are separate from scored property evidence. A passage is a review lead until) Tj T* (phase, identity, units and conditions are validated; it cannot fill missing values or change scores. The initial text adapter) Tj T* (reads only available open-access XML from Europe PMC, not arbitrary websites or paywalled articles. Missing coverage) Tj T* (and failed requests stay explicit. Historical saved reports remain unchanged.) Tj T* ET
+Q
+Q
+q
+1 0 0 1 51 62.8 cm
+q
+.133333 .2 .25098 rg
+BT 1 0 0 1 0 54.7 Tm /F1 9.3 Tf 12.8 TL (Only approved adapters create scientific records. Each result retains material and phase identity, original property fields,) Tj T* (values/units, source URL, retrieval time, method qualifiers and hashes. Eligibility and ranking must use available verified) Tj T* (fields and the chosen application. Missing or conflicting stability, compound hazards and film-performance data remain) Tj T* (unknown. Negative formation energy is not a stability substitute; bulk evidence does not qualify a thin film. Offline evaluation) Tj T* (fixtures are explicitly separate from user runs.) Tj T* ET
+Q
+Q
+ 
+
+endstream
+endobj
+5 0 obj
+<<
+/F1 6 0 R
+/F2 7 0 R
+/F3 8 0 R
+>>
+endobj
+6 0 obj
+<<
+/BaseFont /Helvetica
+/Encoding /WinAnsiEncoding
+/Name /F1
+/Subtype /Type1
+/Type /Font
+>>
+endobj
+7 0 obj
+<<
+/BaseFont /Helvetica-Bold
+/Encoding /WinAnsiEncoding
+/Name /F2
+/Subtype /Type1
+/Type /Font
+>>
+endobj
+8 0 obj
+<<
+/BaseFont /Helvetica-Oblique
+/Encoding /WinAnsiEncoding
+/Name /F3
+/Subtype /Type1
+/Type /Font
+>>
+endobj
+9 0 obj
+<<
+/Contents 10 0 R
+/MediaBox [ 0 0 612 792 ]
+/Parent 2 0 R
+/Resources <<
+/Font 5 0 R
+/ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ]
+>>
+/Rotate 0
+/Trans <<
+>>
+/Type /Page
+>>
+endobj
+10 0 obj
+<<
+/Length 6590
+>>
+stream
+1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
+BT /F1 8 Tf 9.6 TL ET
+.423529 .498039 .529412 rg
+BT 1 0 0 1 45 28 Tm (Labcat \267 Technical design) Tj T* ET
+BT 1 0 0 1 562.552 28 Tm (2) Tj T* ET
+q
+1 0 0 1 51 684 cm
+q
+.133333 .2 .25098 rg
+BT 1 0 0 1 0 54.7 Tm /F1 9.3 Tf 12.8 TL (The shortlist includes one phase per composition, with deterministic tie-breaking and a visible audit of exclusions/alternate) Tj T* (phases. Ranking uses normalized preferences, explicit bounded utility functions and recorded contributions. Selected) Tj T* (missing or unsupported attributes contribute zero and remain in the normalization denominator. Scores are derived) Tj T* (preference utilities, not measurements, calibrated confidence or probabilities. The conservative element exclusion preset) Tj T* (does not establish that a compound is non-toxic.) Tj T* ET
+Q
+Q
+q
+1 0 0 1 51 600.2 cm
+q
+.133333 .2 .25098 rg
+BT 1 0 0 1 0 67.5 Tm /F1 9.3 Tf 12.8 TL (Summary and Technical View render the same validated result. The Summary provides a written screening) Tj T* (recommendation, a compact shortlist and essential caveats. The Technical View expands the table and retains detailed) Tj T* (provenance. Report Format previews and exports share validated layout preferences, saved with each new report.) Tj T* -0.010631 Tw (Download format is independent of these readable views. Checkboxes select either or both views; TXT/JSON and formatted) Tj T* 0 Tw (PDF/Word retain saved content. Additional references appear separately and cannot change eligibility or scores. Database) Tj T* (credentials do not authorize private access; no general scraper or wetlab tool exists.) Tj T* ET
+Q
+Q
+q
+1 0 0 1 51 574.2 cm
+q
+.070588 .294118 .337255 rg
+BT 1 0 0 1 0 4 Tm /F2 14 Tf 18 TL (3. Agent and security boundary) Tj T* ET
+Q
+Q
+q
+1 0 0 1 51 372.2 cm
+q
+.133333 .2 .25098 rg
+BT 1 0 0 1 0 182.7 Tm /F1 9.3 Tf 12.8 TL (The user edition exposes no developer configuration routes. Explicit startup configuration enables Developer Settings for) Tj T* (bounded stage/history controls, search budgets and a default model connection; fixed source and evidence boundaries) Tj T* (cannot be disabled. Keyed sources require current credential verification. New research requires a verified provider account) Tj T* (and selected model. The Docker image embeds pinned Goose with all default/profile extensions disabled. The worker has) Tj T* (no host folders or workspace mount, and an internal network with restricted provider egress. The main API rejects worker) Tj T* (access; a separate capability exposes only research stages. Desktop exports add files to Downloads; Goose cannot browse) Tj T* (it. Goose has one closed-enum suitability tool and two empty-argument research tools: configured public-reference search) Tj T* (and ranked-report generation. Assessment must accept the materials-research intent before retrieval can execute. It can) Tj T* (narrow the fixed safety decision, never override it. Vague or unrelated questions receive guiding questions without retrieval.) Tj T* (Harmful operational requests, including weapon manufacture, are refused. These turns stay in the conversation without) Tj T* (manufacturing scientific reports. The server retains evidence and compiles reports; model prose is discarded. Research) Tj T* (stages, Ranking Profile, source settings and developer limits are recorded. A model failure rejects the run without saving a) Tj T* (report or falling back to local research. Plain Python uses the same required connection gate and a bounded enum planner.) Tj T* (Docker headless commands use the existing backend and its unlocked connection through a fixed loopback,) Tj T* (CSRF-protected research endpoint.) Tj T* ET
+Q
+Q
+q
+1 0 0 1 51 262.8 cm
+q
+.133333 .2 .25098 rg
+BT 1 0 0 1 0 93.1 Tm /F1 9.3 Tf 12.8 TL (Project context is bounded and marked untrusted. It contains recent messages and selected pinned titles/identifiers;) Tj T* (arbitrary source text/URLs and report prose are excluded from model context. Prompt checks reject common requests to) Tj T* -0.039547 Tw (ignore policy, fabricate evidence, use private/paywalled data or perform wetlab actions before any provider call. This is basic) Tj T* 0 Tw (social-engineering resistance, not a claim that a phrase detector solves prompt injection. Capability isolation provides the) Tj T* (stronger boundary: no shell, arbitrary URL, file or lab tools exist in the scientific workflow. Source text cannot execute) Tj T* (instructions. Retrieved titles and passages also undergo instruction/hidden-control screening; rejected paragraphs are) Tj T* (counted without retaining attack text. This filter is not a proof that a source is scientifically reliable or free from every) Tj T* (injection.) Tj T* ET
+Q
+Q
+q
+1 0 0 1 51 191.8 cm
+q
+.133333 .2 .25098 rg
+BT 1 0 0 1 0 54.7 Tm /F1 9.3 Tf 12.8 TL (Network adapters restrict destinations, paths, methods, redirects, response sizes and timeouts. Public-source adapters) Tj T* (reject nonpublic resolution; model endpoints are fixed except explicitly approved local Ollama addresses. Host/Origin/Fetch) Tj T* (Metadata checks protect local browser writes; connection changes additionally require a server-session cookie and CSRF) Tj T* (token. CSP blocks remote scripts and framing. This is a loopback single-user application, not authenticated shared hosting;) Tj T* (a cloud service would require identity, authorization and managed egress.) Tj T* ET
+Q
+Q
+q
+1 0 0 1 51 165.8 cm
+q
+.070588 .294118 .337255 rg
+BT 1 0 0 1 0 4 Tm /F2 14 Tf 18 TL (4. Configuration, credentials and validation) Tj T* ET
+Q
+Q
+q
+1 0 0 1 51 66.2 cm
+q
+.133333 .2 .25098 rg
+BT 1 0 0 1 0 80.3 Tm /F1 9.3 Tf 12.8 TL (Search Criterion offers class/application presets, saved custom profiles and predefined attributes directly grouped by) Tj T* (physical-property category. New selections start at 0.5; sliders and numeric inputs independently range from zero to one.) Tj T* (The active profile appears above the editing preview. The application computes relative weights and visualizes them.) Tj T* (Implemented scoring criteria remain subject to source availability. Other catalog attributes remain explicit unscored) Tj T* (preferences. Class/application profiles express research preferences across material types; source adapters and verified) Tj T* (fields determine quantitative coverage. Preferences are editable; evidence invariants are not. A scientist tunes criteria and) Tj T* (presentation, an admin configures connections, and a field engineer adds/test-reviews adapters or utility functions in code.) Tj T* ET
+Q
+Q
+ 
+
+endstream
+endobj
+11 0 obj
+<<
+/Annots [ 12 0 R 13 0 R 14 0 R 15 0 R ]
+/Contents 16 0 R
+/MediaBox [ 0 0 612 792 ]
+/Parent 2 0 R
+/Resources <<
+/Font 5 0 R
+/ProcSet [ /PDF /Text /ImageB /ImageC /ImageI ]
+>>
+/Rotate 0
+/Trans <<
+>>
+/Type /Page
+>>
+endobj
+12 0 obj
+<<
+/A <<
+/S /URI
+/Type /Action
+/URI (https\072\057\057nomad\055lab\056eu\057)
+>>
+/Border [ 0 0 0 ]
+/Rect [ 128.0133 479.64 162.6279 490.8 ]
+/Subtype /Link
+/Type /Annot
+>>
+endobj
+13 0 obj
+<<
+/A <<
+/S /URI
+/Type /Action
+/URI (https\072\057\057www\056nature\056com\057articles\057sdata2016134)
+>>
+/Border [ 0 0 0 ]
+/Rect [ 167.7987 479.64 235.5213 490.8 ]
+/Subtype /Link
+/Type /Annot
+>>
+endobj
+14 0 obj
+<<
+/A <<
+/S /URI
+/Type /Action
+/URI (https\072\057\057docs\056materialsproject\056org\057downloading\055data\057using\055the\055api\057querying\055data)
+>>
+/Border [ 0 0 0 ]
+/Rect [ 240.6921 479.64 287.7222 490.8 ]
+/Subtype /Link
+/Type /Annot
+>>
+endobj
+15 0 obj
+<<
+/A <<
+/S /URI
+/Type /Action
+/URI (https\072\057\057materialsproject\056github\056io\057api\057\137autosummary\057mp\137api\056client\056routes\056materials\056summary\056SummaryRester\056html)
+>>
+/Border [ 0 0 0 ]
+/Rect [ 292.893 479.64 384.8979 490.8 ]
+/Subtype /Link
+/Type /Annot
+>>
+endobj
+16 0 obj
+<<
+/Length 3135
+>>
+stream
+1 0 0 1 0 0 cm  BT /F1 12 Tf 14.4 TL ET
+BT /F1 8 Tf 9.6 TL ET
+.423529 .498039 .529412 rg
+BT 1 0 0 1 45 28 Tm (Labcat \267 Technical design) Tj T* ET
+BT 1 0 0 1 562.552 28 Tm (3) Tj T* ET
+q
+1 0 0 1 51 594.4 cm
+q
+.133333 .2 .25098 rg
+BT 1 0 0 1 0 144.3 Tm /F1 9.3 Tf 12.8 TL (First-run setup requires model connection and verification, then offers optional AWS and public-source steps. The) Tj T* (workspace runs locally by default. Nonsecret setup progress persists; it cannot authorize research. Credential-bound) Tj T* -0.0442 Tw (readiness is short-lived and checked before new research; history remains accessible when locked or disconnected. Profiles) Tj T* 0 Tw (remember nonsecret connection identifiers and explicit hosted-inference consent. Keys are session-only unless saved to an) Tj T* (authenticated encrypted vault. Passphrase-derived keys remain in memory; a restarted vault stays locked until unlocked. An) Tj T* (external key/file supports administrator-managed unattended use. Atomic writes and validation report corruption instead of) Tj T* (silently choosing an account. The app never asks for third-party passwords or stores secrets in browser storage, logs or) Tj T* (images. Connection tests perform metadata/identity checks, not billable inference. ChatGPT uses a provider-owned device) Tj T* (login through the pinned Codex helper. Temporary tokens stay on memory-backed storage; remembered tokens are) Tj T* (encrypted. Available account quota windows and per-run usage are labeled separately. Claude uses API/Bedrock) Tj T* (credentials; subscription login is not implemented. AWS uses an existing profile/SSO session for optional Bedrock planning;) Tj T* (no cloud resources are provisioned and AWS credentials do not relocate the application.) Tj T* ET
+Q
+Q
+q
+1 0 0 1 51 497.8 cm
+q
+.133333 .2 .25098 rg
+BT 1 0 0 1 0 80.3 Tm /F1 9.3 Tf 12.8 TL (Evaluations cover broad material discovery and separate scoring fixtures, prompt-supplied false values, attempted policy) Tj T* (override, malicious extra model fields, missing/conflicting data, redirect and nonpublic-destination rejection, profile) Tj T* (normalization, credential redaction, vault restart/tamper, and project isolation/persistence. Docker tests exercise both Linux) Tj T* (architectures on this Mac \(AMD64 emulated\); native Windows/Linux and real account inference require deployment-site) Tj T* (verification. Test fixtures check provider protocols without claiming live authorization. See the validation record for observed) Tj T* (results. The next scientific work is broader verified coverage, compound hazard evidence and task-level methodology,) Tj T* (followed by authenticated shared deployment if needed.) Tj T* ET
+Q
+Q
+q
+1 0 0 1 51 478 cm
+q
+BT 1 0 0 1 0 3.5 Tm 12.8 TL /F1 9.3 Tf .133333 .2 .25098 rg (Public references: ) Tj .113725 .411765 .45098 rg (NOMAD) Tj .133333 .2 .25098 rg (, ) Tj .113725 .411765 .45098 rg (open publication) Tj .133333 .2 .25098 rg (, ) Tj .113725 .411765 .45098 rg (MP queries) Tj .133333 .2 .25098 rg (, ) Tj .113725 .411765 .45098 rg (MP attribute reference) Tj .133333 .2 .25098 rg (.) Tj T* ET
+Q
+Q
+ 
+
+endstream
+endobj
+17 0 obj
+<<
+/Author (Labcat project)
+/CreationDate (D\07220260909232118\05506\04700\047)
+/Creator (\050unspecified\051)
+/Keywords ()
+/ModDate (D\07220260922172635\0550600)
+/Producer (ReportLab PDF Library \055 \050opensource\051)
+/Subject (\050unspecified\051)
+/Title (Labcat \055 design note)
+/Trapped (\057False)
+>>
+endobj
+xref
+0 18
+0000000000 65535 f 
+0000000015 00000 n 
+0000000083 00000 n 
+0000000155 00000 n 
+0000000344 00000 n 
+0000008414 00000 n 
+0000008465 00000 n 
+0000008572 00000 n 
+0000008684 00000 n 
+0000008799 00000 n 
+0000008989 00000 n 
+0000015632 00000 n 
+0000015863 00000 n 
+0000016050 00000 n 
+0000016263 00000 n 
+0000016525 00000 n 
+0000016829 00000 n 
+0000020017 00000 n 
+trailer
+<<
+/Size 18
+/Root 1 0 R
+/Info 17 0 R
+/ID [ <0e920ebe1b3f2a20594de382ce0600f4> <0e920ebe1b3f2a20594de382ce0600f4> ]
+>>
+startxref
+20342
+%%EOF

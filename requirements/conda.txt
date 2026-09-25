@@ -1,0 +1,3 @@
+# Optional conda environment bootstrap; then pip install -e ".[web,dev]".
+python>=3.11
+pip

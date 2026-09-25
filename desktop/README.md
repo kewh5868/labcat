@@ -13,7 +13,7 @@ The native shell has version `0.1.0`; the research application reports its own
 version (`0.1.0.dev0` in this prototype). The shared backend supports bounded
 public-source materials screening and deterministic ranking through a required
 connected model planner.
-See [source coverage](../docs/public-sources.md) for its scientific limits.
+See [source coverage](../docs/scientific-sources.md) for its scientific limits.
 
 ## Run
 
@@ -94,9 +94,9 @@ changes or global Rust installation are required.
 
 macOS output is `desktop/target/release/bundle/macos/Labcat.app` for an
 untargeted native build. Explicit `--target` builds add the target triple beneath
-`desktop/target`. A planned native CI matrix will cover macOS ARM64/Intel, Windows x64, and
-Linux x64 artifacts. That workflow is not included in this snapshot. An
-implementation or workflow definition does not establish a platform test result. Releases are
+`desktop/target`. The native CI matrix builds macOS ARM64/Intel, Windows x64, and
+Linux x64 artifacts. A workflow definition is not evidence those platforms have
+passed; see the repository's validation record for actual results. Releases are
 currently development artifacts without platform signing or notarization.
 Linux packages build on Ubuntu 22.04 as a compatibility baseline; other Linux
 distributions still need their own installation checks.
