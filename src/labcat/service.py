@@ -38,8 +38,8 @@ def get_status(config: AppConfig, style: str | None = None) -> dict[str, Any]:
         "limitations": [
             "Status contains no scientific records or ranked candidates.",
             (
-                "Chemical names and reference structures, downloads, the complete "
-                "CLI/API/UI and packaged deployment remain planned."
+                "Report downloads, the complete CLI/API/UI and packaged "
+                "deployment remain planned."
             ),
             "Scientific coverage depends on independently validated public evidence.",
         ],
@@ -53,8 +53,8 @@ def get_status(config: AppConfig, style: str | None = None) -> dict[str, Any]:
         ]
         report["next_steps"] = [
             (
-                "Chemical names and reference structures, downloads, the complete "
-                "CLI/API/UI and packaged deployment remain planned."
+                "Report downloads, the complete CLI/API/UI and packaged "
+                "deployment remain planned."
             )
         ]
     return report

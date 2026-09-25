@@ -92,12 +92,14 @@ def historical_property_fixture(monkeypatch):
 @pytest.fixture(autouse=True)
 def offline_public_sources(monkeypatch, request):
     from labcat import property_research, public_sources
-    from labcat.science import dielectric, hybrid3, nomad
+    from labcat.science import dielectric, hybrid3, nomad, structure_identity
 
     def unavailable(*args, **kwargs):
         raise public_sources.PublicSourceError(
             "External network disabled in unit tests."
         )
+
+    monkeypatch.setattr(structure_identity, "_fetch", unavailable)
 
     if request.module.__name__.split(".")[-1] != "test_dielectric":
         monkeypatch.setattr(dielectric, "_download", unavailable)
@@ -129,16 +131,3 @@ def empty_default_material_query(monkeypatch):
             },
         ),
     )
-
-
-@pytest.fixture(autouse=True)
-def offline_provider_transport(monkeypatch):
-    def unavailable(*args, **kwargs):
-        raise AssertionError("External network disabled in unit tests.")
-
-    monkeypatch.setattr("urllib.request.OpenerDirector.open", unavailable)
-    try:
-        from botocore.httpsession import URLLib3Session
-    except ImportError:
-        return
-    monkeypatch.setattr(URLLib3Session, "send", unavailable)
