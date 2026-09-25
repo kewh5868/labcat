@@ -28,7 +28,7 @@ def get_status(config: AppConfig, style: str | None = None) -> dict[str, Any]:
         "stage": "scaffold",
         "style": selected,
         "message": (
-            "Python APIs provide isolated research tools. The research "
+            "Python APIs provide bounded research orchestration. The research "
             "command and UI are not available yet."
         ),
         "provider": config.provider,
@@ -38,10 +38,8 @@ def get_status(config: AppConfig, style: str | None = None) -> dict[str, Any]:
         "limitations": [
             "Status contains no scientific records or ranked candidates.",
             (
-                "Connected top-level orchestration, the application interface and "
-                "packaged container deployment remain planned. Offline "
-                "transport/process fixtures do not establish live provider or "
-                "deployment isolation behavior."
+                "Chemical names and reference structures, downloads, the complete "
+                "CLI/API/UI and packaged deployment remain planned."
             ),
             "Scientific coverage depends on independently validated public evidence.",
         ],
@@ -51,14 +49,12 @@ def get_status(config: AppConfig, style: str | None = None) -> dict[str, Any]:
         report["implemented"] = [
             "Installable Python package and software status commands",
             "Strict local preference configuration",
-            "Isolated research tools",
+            "Bounded research orchestration",
         ]
         report["next_steps"] = [
             (
-                "Connected top-level orchestration, the application interface and "
-                "packaged container deployment remain planned. Offline "
-                "transport/process fixtures do not establish live provider or "
-                "deployment isolation behavior."
+                "Chemical names and reference structures, downloads, the complete "
+                "CLI/API/UI and packaged deployment remain planned."
             )
         ]
     return report

@@ -7,14 +7,13 @@ Level 4 foundation.
 
 ## Current Python capabilities
 
-Goose worker and provider-network boundaries expose a fixed set of research actions.
-The parent validates requests and creates scientific reports from approved sources;
-model prose cannot establish facts. Worker channels, authentication handoff, budgets
-and partial report signals have offline test coverage.
+The Python research workflow coordinates verified connections, request assessment,
+approved public retrieval, deterministic ranking and cited reports. An in-process
+background registry preserves accepted research across navigation and retains partial
+results. It is not a persistent queue that resumes after process or machine restarts.
 
-Connected top-level orchestration, the application interface and packaged container
-deployment remain planned. Offline transport/process fixtures do not establish live
-provider or deployment isolation behavior.
+Chemical names and reference structures, downloads, the complete CLI/API/UI and
+packaged deployment remain planned.
 
 The command-line interface currently provides software status, configuration
 validation and an explicit read-only AWS account check. It does not yet expose the

@@ -8,9 +8,17 @@ from copy import deepcopy
 from urllib.parse import urlsplit
 
 from labcat.config import AppConfig
+from labcat.connections import ConnectionManager
+from labcat.developer_settings import defaults as default_controls
+from labcat.developer_settings import effective_sources, validate_controls
 from labcat.extended_discovery import valid_wikipedia_url
+from labcat.models import ModelBusy, ModelError
 from labcat.onboarding import SetupRequired
-from labcat.research_progress import report_progress
+from labcat.research_progress import ResearchProgress, report_progress
+from labcat.source_preferences import (
+    default_source_preferences,
+    validate_source_preferences,
+)
 
 _REFERENCE_PATHS = {
     "public_dielectric": ("doi.org", r"/10\.6084/m9\.figshare\.7108790\.v2"),
@@ -25,8 +33,6 @@ _REFERENCE_PATHS = {
     "openalex": ("openalex.org", r"/W[0-9]{1,15}"),
     "chemrxiv": ("openalex.org", r"/W[0-9]{1,15}"),
 }
-
-
 _DISCOVERY_CAVEATS = [
     "General discovery reads bibliographic and material-identity metadata and "
     "selected encyclopedia introductions; these are not scored property evidence. "
@@ -36,8 +42,6 @@ _DISCOVERY_CAVEATS = [
     "Some database adapters need composition hints. Retrieved instructions and "
     "arbitrary links are never followed.",
 ]
-
-
 _SOURCE_STATUSES = {"ok", "no_results", "unavailable", "blocked", "skipped"}
 
 
@@ -870,3 +874,490 @@ def _require_research_setup(connections, controls, intake):
         )
     connections.apply_default_account(controls["default_model_account_id"])
     connections.setup.require_ready()
+
+
+def research(
+    prompt: str,
+    config: AppConfig,
+    *,
+    connections: ConnectionManager | None = None,
+    context: dict | None = None,
+    ranking_profile: dict | None = None,
+    ranking_selection: dict | None = None,
+    source_preferences: dict | None = None,
+    research_controls: dict | None = None,
+) -> dict:
+    """Run without accepting caller-supplied scientific records or
+    arbitrary tools."""
+    from labcat.intake import assess, decision
+    from labcat.intake import outcome as intake_outcome
+    from labcat.science import render_research, run_research
+
+    report_progress("intake")
+    # Refuse prohibited intent before transmitting it to a provider or source API.
+    controls = validate_controls(
+        default_controls() if research_controls is None else research_controls
+    )
+    execution_preferences = {
+        "presentation": config.to_dict()["presentation"],
+        "ranking_profile": deepcopy(ranking_profile),
+        "ranking_selection": deepcopy(ranking_selection),
+        "profile_labels_are_user_preferences": True,
+        "research_controls": controls,
+    }
+    if not controls["include_history"]:
+        context = None
+    intake, effective_prompt = assess(prompt, context=context)
+    _require_research_setup(connections, controls, intake)
+    if intake["status"] == "refused":
+        outcome = intake_outcome(intake)
+        outcome["result"]["execution"] = {
+            "provider": "none",
+            "mode": "not_run",
+            "warning": None,
+            "context_is_evidence": False,
+            **execution_preferences,
+        }
+        return render_research(outcome, config)
+    semantic_assessment = connections.agent.uses_goose and intake["reason_code"] in {
+        "materials_scope_needed",
+        "research_details_needed",
+    }
+    if intake["status"] == "clarification_required" and not semantic_assessment:
+        outcome = intake_outcome(intake)
+        outcome["result"]["execution"] = {
+            "provider": connections.status()["profile"]["provider"],
+            "requested_model": connections.status()["profile"]["model"],
+            "mode": "not_run",
+            "context_is_evidence": False,
+            **execution_preferences,
+        }
+        return outcome
+    from labcat.research_context import material_hints
+
+    prior_material_ids = material_hints(context, prompt)
+    prompt = effective_prompt
+    source_config = validate_source_preferences(
+        default_source_preferences()
+        if source_preferences is None
+        else source_preferences
+    )
+    source_config = effective_sources(source_config, controls)
+    # Optional source credentials are checked at retrieval, independently of
+    # model readiness. One unavailable API must not stop other public sources.
+    if connections is not None and connections.agent.uses_goose:
+        from labcat.agent_tools import ResearchToolSession
+        from labcat.credentials import ConnectionBusy, ConnectionError
+
+        session = ResearchToolSession(
+            prompt,
+            config,
+            ranking_profile=ranking_profile,
+            ranking_selection=ranking_selection,
+            source_preferences=source_config,
+            research_controls=controls,
+            key_supplier=lambda: _public_api_key(
+                connections, source_config["materials_project_mode"]
+            ),
+            source_observer=connections.observe_source_result,
+            prior_material_ids=prior_material_ids,
+        )
+        requested_profile = connections.status()["profile"]
+        provider = requested_profile["provider"]
+        agent_run = None
+        interrupted = False
+        attempt = None
+        failure_code = None
+        worker_rejections = None
+        try:
+            report_progress("model")
+            agent_run = connections.agent.run(prompt, context, session)
+            if (
+                agent_run.get("status") == "stopped_after_report"
+                and not session.report_retained
+            ):
+                raise ModelError(
+                    "The model worker reported an unconfirmed report stop."
+                )
+        except (ModelBusy, ConnectionBusy):
+            # No provider request ran. A metadata refresh is not a failed login.
+            raise
+        except (ModelError, ConnectionError) as error:
+            from labcat.goose_runtime import (
+                FAILURE_CODES,
+                safe_worker_rejection_diagnostics,
+            )
+
+            candidate_attempt = getattr(error, "research_attempt", None)
+            if isinstance(candidate_attempt, dict) and candidate_attempt == {
+                "provider": provider,
+                "model": requested_profile["model"],
+            }:
+                attempt = dict(candidate_attempt)
+            code = getattr(error, "failure_code", None)
+            if isinstance(code, str) and code in FAILURE_CODES:
+                failure_code = code
+            diagnostics = getattr(error, "worker_rejection_diagnostics", None)
+            if diagnostics is not None:
+                try:
+                    worker_rejections = safe_worker_rejection_diagnostics(diagnostics)
+                except ValueError:
+                    pass  # Untrusted diagnostic content cannot enter the report.
+            connections.setup.invalidate(
+                "The model request failed. Check the connection and available quota."
+            )
+            if not session.can_complete_without_model:
+                raise ModelError(
+                    "The language-model request failed. No report was saved and no "
+                    "automatic retry was made. Check the connection and quota."
+                ) from None
+            # The request already passed both intake checks. Complete only the
+            # fixed, selected public-source stages; no model retry or generated
+            # facts are needed to retain approved evidence and render the report.
+            interrupted = True
+        outcome = session.finalize()
+        if interrupted:
+            if outcome["stage"] == "complete":
+                outcome["stage"] = outcome["result"]["stage"] = "partial"
+            outcome["result"]["execution"].update(
+                provider=provider,
+                mode="goose",
+                model_interrupted=True,
+                completion_version="bounded-recovery-v2",
+                requested_model=requested_profile["model"],
+                attempted_model=attempt["model"] if attempt else None,
+                failure_code=failure_code,
+                warning=(
+                    "Model-led research stopped before completion. The server "
+                    "completed the configured public-source stages without "
+                    "another model call. Search coverage may be incomplete."
+                ),
+            )
+            if worker_rejections is not None:
+                outcome["result"]["execution"][
+                    "worker_rejection_diagnostics"
+                ] = worker_rejections
+        else:
+            outcome["result"]["execution"].update(
+                provider=agent_run["provider"],
+                mode="goose",
+                warning=None,
+                agent=agent_run,
+                requested_model=requested_profile["model"],
+            )
+            if agent_run.get("status") == "stopped_after_report":
+                outcome["result"]["execution"].update(
+                    model_stopped_after_report=True,
+                    stop_reason="server_report_retained",
+                )
+        return render_research(outcome, config)
+    requested_profile = connections.status()["profile"]
+    provider = requested_profile["provider"]
+    try:
+        report_progress("model")
+        plan = connections.plan(prompt, context=context).to_dict()
+    except ModelError:
+        connections.setup.invalidate(
+            "The model request failed. Check the connection and available quota."
+        )
+        raise ModelError(
+            "The language-model request failed. No report was saved and no "
+            "automatic retry was made. Check the connection and quota."
+        ) from None
+    if plan["task"] == "unsupported":
+        outcome = intake_outcome(
+            decision("clarification_required", "model_scope_uncertain")
+        )
+        outcome["result"]["execution"] = {
+            "provider": provider,
+            "mode": "model",
+            "requested_model": requested_profile["model"],
+            "context_is_evidence": False,
+            **execution_preferences,
+        }
+        return outcome
+    key = _public_api_key(connections, source_config["materials_project_mode"])
+    from labcat.perovskite_discovery import (
+        discovery_article_budget,
+        remaining_literature_controls,
+    )
+
+    discovery = None
+    reserved_articles = 0
+    if source_config["search_public_references"]:
+        reserved_articles = discovery_article_budget(
+            prompt, source_config["enabled_sources"], controls
+        )
+        discovery = _add_public_discovery(
+            {"stage": "partial", "answer": "", "sources": [], "result": {}},
+            prompt,
+            source_config,
+            allow_preprints=controls["allow_preprints"],
+            discovery_article_budget=reserved_articles,
+        )
+    try:
+        outcome = run_research(
+            prompt,
+            config,
+            mp_api_key=key,
+            materials_project_mode=source_config["materials_project_mode"],
+            plan=plan,
+            importance=ranking_profile["importance"] if ranking_profile else None,
+            material_class=_material_class_hint(ranking_profile, ranking_selection),
+            application=ranking_profile.get("application") if ranking_profile else None,
+            minimum_band_gap_ev=(
+                ranking_profile.get("minimum_band_gap_ev") if ranking_profile else None
+            ),
+            target_band_gap_ev=(
+                ranking_profile.get("target_band_gap_ev") if ranking_profile else None
+            ),
+            band_gap_tolerance_ev=(
+                ranking_profile.get("band_gap_tolerance_ev")
+                if ranking_profile
+                else None
+            ),
+            allow_hybrid3="hybrid3" in source_config["enabled_sources"],
+            discovery_references=discovery["sources"] if discovery else [],
+            allow_nomad="nomad" in source_config["enabled_sources"],
+            allow_public_dielectric="public_dielectric"
+            in source_config["enabled_sources"],
+            prior_material_ids=prior_material_ids,
+        )
+    except Exception:
+        from labcat.science import _blocked
+
+        outcome = _blocked("The material-property retrieval stage was unavailable.")
+        outcome["result"]["failure_stage"] = "material_retrieval"
+    if (
+        discovery is not None
+        and discovery.get("sources")
+        and outcome.get("result", {}).get("failure_stage") == "material_retrieval"
+    ):
+        from labcat.science import _reference_only
+
+        outcome = _reference_only(
+            "The material-property retrieval stage was unavailable. Healthy "
+            "public-source results are retained for screening.",
+            config,
+            plan,
+            ranking_profile["importance"] if ranking_profile else None,
+        )
+    try:
+        connections.observe_source_result(outcome, key)
+    except Exception:
+        outcome["result"].setdefault("limitations", []).append(
+            "Source connection status could not be refreshed. Retrieved "
+            "evidence remains available in this report."
+        )
+    outcome["result"]["execution"] = {
+        "provider": provider,
+        "mode": "model",
+        "warning": None,
+        "context_is_evidence": False,
+        **execution_preferences,
+        "source_preferences": source_config,
+    }
+    if discovery is not None:
+        outcome = _attach_public_discovery(
+            outcome, discovery["sources"], discovery["result"]["public_discovery"]
+        )
+    if outcome["stage"] != "blocked" and discovery is not None:
+        from labcat.science.candidate_leads import (
+            discovery_documents,
+            literal_formula_proposals,
+            validate_candidate_leads,
+        )
+
+        references = discovery["sources"]
+        documents = discovery_documents(references)
+        outcome["result"]["candidate_leads"] = validate_candidate_leads(
+            literal_formula_proposals(documents),
+            documents,
+            references,
+            importance=ranking_profile["importance"] if ranking_profile else None,
+        )
+    followup = deepcopy(outcome)
+    try:
+        _add_attribute_research(
+            followup,
+            prompt,
+            config,
+            source_config,
+            remaining_literature_controls(controls, reserved_articles),
+        )
+        outcome = followup
+    except Exception:
+        outcome["result"].setdefault("limitations", []).append(
+            "Optional attribute follow-up was unavailable. Earlier retrieved "
+            "evidence and candidate screening are retained."
+        )
+    if outcome["stage"] != "blocked" and discovery is not None:
+        _attach_preliminary_screening(
+            outcome,
+            ranking_profile or {"importance": config.to_dict()["ranking"]},
+            references=references,
+            documents=documents,
+        )
+    return render_research(outcome, config)
+
+
+class ResearchWorkflow:
+    """Avoid holding a database write lock across retrieval or model
+    requests."""
+
+    def __init__(
+        self,
+        store,
+        connections: ConnectionManager,
+        ranking_profiles=None,
+        source_preferences=None,
+        developer_settings=None,
+        structures=None,
+    ):
+        self.store = store
+        self.connections = connections
+        self.ranking_profiles = ranking_profiles
+        self.source_preferences = source_preferences
+        self.developer_settings = developer_settings
+        self.structures = structures
+        self.progress = ResearchProgress()
+
+    def respond(
+        self,
+        chat_id: str,
+        content: str,
+        config: AppConfig,
+        project_id: str | None = None,
+        ranking_profile_id: str | None = None,
+        run_id: str | None = None,
+        search_reference_structures: bool = True,
+    ):
+        prepared = {}
+
+        def prepare_submission():
+            # Validate and snapshot after reserving this chat, after any prior run
+            # completes and before naming the chat or publishing a running task.
+            if type(search_reference_structures) is not bool:
+                raise ValueError(
+                    "Reference structure search must be enabled or disabled."
+                )
+            scope, context = self.store.research_inputs(chat_id, project_id)
+            from labcat.research_context import select_profile
+
+            controls = (
+                self.developer_settings.load() if self.developer_settings else None
+            )
+            profile, selection = (
+                select_profile(
+                    self.ranking_profiles,
+                    ranking_profile_id,
+                    content,
+                    context,
+                    enabled=controls is None or controls["include_history"],
+                )
+                if self.ranking_profiles
+                else (None, None)
+            )
+            if ranking_profile_id is not None and self.ranking_profiles is None:
+                from labcat.ranking_profiles import RankingProfileNotFound
+
+                raise RankingProfileNotFound("Ranking profiles are unavailable.")
+            source_config = (
+                self.source_preferences.load()
+                if self.source_preferences
+                else default_source_preferences()
+            )
+            prepared.update(
+                scope=scope,
+                context=context,
+                profile=profile,
+                selection=selection,
+                source_config=source_config,
+                controls=controls,
+                search_reference_structures=search_reference_structures,
+            )
+            # A setup rejection is not an accepted submission: check the same
+            # refusal-aware gate before persisting a title or publishing a run.
+            from labcat.intake import assess
+
+            admission_controls = validate_controls(
+                default_controls() if controls is None else controls
+            )
+            intake, _ = assess(
+                content,
+                context=context if admission_controls["include_history"] else None,
+            )
+            _require_research_setup(self.connections, admission_controls, intake)
+            self.store.name_submitted_chat(chat_id, content, project_id)
+
+        with self.progress.track(chat_id, run_id, before_start=prepare_submission):
+            report_progress("profile")
+            return self._respond(chat_id, content, config, **prepared)
+
+    def _respond(
+        self,
+        chat_id,
+        content,
+        config,
+        *,
+        scope,
+        context,
+        profile,
+        selection,
+        source_config,
+        controls,
+        search_reference_structures,
+    ):
+        outcome = research(
+            content,
+            config,
+            connections=self.connections,
+            context=context,
+            ranking_profile=profile,
+            ranking_selection=selection,
+            source_preferences=source_config,
+            research_controls=controls,
+        )
+        outcome.setdefault("result", {}).setdefault("execution", {})[
+            "search_reference_structures"
+        ] = search_reference_structures
+        report_progress("saving")
+        detail = self.store.append_research(
+            chat_id,
+            scope,
+            content,
+            outcome,
+            submitted_at=self.progress.snapshot(chat_id)["started_at"],
+        )
+        if (
+            search_reference_structures
+            and self.structures is not None
+            and outcome.get("stage") in {"complete", "partial"}
+        ):
+            response = next(
+                (
+                    message
+                    for message in reversed(detail["messages"])
+                    if message["role"] == "assistant"
+                ),
+                {},
+            )
+            report_id = response.get("report_id")
+            if report_id:
+                report_progress("structures")
+                try:
+                    self.structures.discover_references(
+                        chat_id,
+                        report_id,
+                        enabled_sources=source_config["enabled_sources"],
+                        materials_project_mode=source_config["materials_project_mode"],
+                    )
+                except Exception:
+                    # Structure discovery is optional. The report is already saved;
+                    # an unavailable adapter must not turn it into a failed request.
+                    import logging
+
+                    logging.getLogger(__name__).warning(
+                        "Optional reference structure discovery could not complete."
+                    )
+        return detail

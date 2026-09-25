@@ -332,3 +332,91 @@ def test_quantitative_shortlist_does_not_suppress_literature_evaluation_reminder
     assert report["result"]["candidates"] == expected["result"]["candidates"]
     assert calls == {"search": 1}
     assert repository_calls == [True]
+
+
+@pytest.mark.parametrize(
+    "failure",
+    ["none", "repository", "observer", "followup", "marked_block", "unmarked_block"],
+)
+def test_direct_planning_path_preserves_preliminary_formula_shortlist(
+    monkeypatch, tmp_path, authenticated_model_factory, failure
+):
+    from labcat.research import research
+
+    monkeypatch.setenv("LABCAT_AGENT_ENGINE", "direct")
+    manager = authenticated_model_factory(tmp_path / "workspace.sqlite3")
+    references = [
+        source(
+            index,
+            text=f"TEST ONLY: {formula} is named in this synthetic source fixture.",
+        )
+        for index, formula in enumerate(("Li2O", "Na2O", "K2O"), 1)
+    ]
+    searches = []
+
+    def search(prompt, *args, **kwargs):
+        searches.append(prompt)
+        return {
+            "references": deepcopy(references),
+            "source_statuses": [],
+            "caveats": [],
+        }
+
+    monkeypatch.setattr(public_sources, "search_public_sources", search)
+    monkeypatch.setattr(
+        "labcat.research._add_attribute_research", lambda outcome, *args: outcome
+    )
+    monkeypatch.setattr(
+        manager.agent,
+        "run",
+        lambda *args, **kwargs: pytest.fail("Direct planning must not launch Goose"),
+    )
+    failures = []
+
+    def unavailable(*args, **kwargs):
+        failures.append(failure)
+        if failure == "followup":
+            args[0]["result"]["candidates"] = ["PRIVATE_DIRECT_MUTATION_CANARY"]
+        raise RuntimeError("PRIVATE_DIRECT_FAILURE_CANARY")
+
+    def blocked(*args, **kwargs):
+        failures.append(failure)
+        outcome = science._blocked("The synthetic request was blocked.")
+        if failure == "marked_block":
+            outcome["result"]["failure_stage"] = "material_retrieval"
+        return outcome
+
+    if failure == "repository":
+        monkeypatch.setattr(science, "run_research", unavailable)
+    elif failure == "observer":
+        monkeypatch.setattr(manager, "observe_source_result", unavailable)
+    elif failure == "followup":
+        monkeypatch.setattr("labcat.research._add_attribute_research", unavailable)
+    elif failure in {"marked_block", "unmarked_block"}:
+        monkeypatch.setattr(science, "run_research", blocked)
+    report = research(
+        "Find oxide materials for coatings.",
+        load_config(),
+        connections=manager,
+        ranking_profile={"importance": {"density": 1}},
+        source_preferences={
+            **default_source_preferences(),
+            "materials_project_mode": "off",
+            "enabled_sources": ["openalex"],
+        },
+    )
+    if failure == "unmarked_block":
+        assert report["stage"] == "blocked"
+        assert not report["result"].get("literature_evaluation")
+    else:
+        assert_preliminary_only(report)
+        assert not report["result"]["candidates"]
+        assert {lead["name"] for lead in report["result"]["candidate_leads"]} == {
+            "Li2O",
+            "Na2O",
+            "K2O",
+        }
+    assert failures == ([] if failure == "none" else [failure])
+    assert "PRIVATE_DIRECT_FAILURE_CANARY" not in json.dumps(report)
+    assert "PRIVATE_DIRECT_MUTATION_CANARY" not in json.dumps(report)
+    assert len(searches) == 1
