@@ -637,6 +637,13 @@ def _abstract_text(value):
         if decoded == text:
             break
         text = decoded
+    # HTMLParser may discard incomplete tags at EOF without a callback. Inspect
+    # every tag-like opening before parsing so malformed source cannot disappear.
+    # Only complete, attribute-free tokens proceed to the allowlist/stack checks.
+    tag_token = re.compile(r"<(?:[A-Za-z][A-Za-z0-9]*\s*/?|/[A-Za-z][A-Za-z0-9]*\s*)>")
+    for opening in re.finditer(r"<(?=[A-Za-z/!?])", text):
+        if tag_token.match(text, opening.start()) is None:
+            return None
     parser = _AbstractPlainText()
     try:
         parser.feed(text)
