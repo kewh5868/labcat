@@ -1,0 +1,464 @@
+{
+  "inputs": {
+    "references": [
+      {
+        "source_id": "openalex",
+        "record_id": "W1",
+        "title": "TEST ONLY source mention context",
+        "url": "https://openalex.org/W1",
+        "kind": "discovery_reference",
+        "access_scope": "public",
+        "is_material_evidence": false,
+        "provenance_status": "verified",
+        "provenance": {
+          "response_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "metadata": {
+          "abstract": "TESTONLY-Alpha has low density and is solution processable in the described sample.",
+          "abstract_read": true
+        }
+      },
+      {
+        "source_id": "openalex",
+        "record_id": "W2",
+        "title": "TEST ONLY source mention context",
+        "url": "https://openalex.org/W2",
+        "kind": "discovery_reference",
+        "access_scope": "public",
+        "is_material_evidence": false,
+        "provenance_status": "verified",
+        "provenance": {
+          "response_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "metadata": {
+          "abstract": "TESTONLY-Beta has density limitations but is solution processable in this sample.",
+          "abstract_read": true
+        }
+      },
+      {
+        "source_id": "openalex",
+        "record_id": "W3",
+        "title": "TEST ONLY source mention context",
+        "url": "https://openalex.org/W3",
+        "kind": "discovery_reference",
+        "access_scope": "public",
+        "is_material_evidence": false,
+        "provenance_status": "verified",
+        "provenance": {
+          "response_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "metadata": {
+          "abstract": "TESTONLY-Gamma is discussed without useful properties in this synthetic fixture.",
+          "abstract_read": true
+        }
+      }
+    ],
+    "documents": [
+      {
+        "document_id": "doc-3aa771e0b864874c44f546dc",
+        "source_id": "openalex",
+        "record_id": "W1",
+        "title": "TEST ONLY source mention context",
+        "text": "TEST ONLY source mention context TESTONLY-Alpha has low density and is solution processable in the described sample.",
+        "url": "https://openalex.org/W1"
+      },
+      {
+        "document_id": "doc-b63f4491296034fcfd115828",
+        "source_id": "openalex",
+        "record_id": "W2",
+        "title": "TEST ONLY source mention context",
+        "text": "TEST ONLY source mention context TESTONLY-Beta has density limitations but is solution processable in this sample.",
+        "url": "https://openalex.org/W2"
+      },
+      {
+        "document_id": "doc-642dc3196afc9ead899998a2",
+        "source_id": "openalex",
+        "record_id": "W3",
+        "title": "TEST ONLY source mention context",
+        "text": "TEST ONLY source mention context TESTONLY-Gamma is discussed without useful properties in this synthetic fixture.",
+        "url": "https://openalex.org/W3"
+      }
+    ],
+    "profile": {
+      "importance": {
+        "density": 0.25,
+        "solution_processability": 0.75
+      }
+    },
+    "leads": [
+      {
+        "id": "lead-2828480e527ad844a3a32dbd",
+        "name": "TESTONLY-Alpha",
+        "quote": "TESTONLY-Alpha has low density and is solution processable in the described sample.",
+        "source_id": "openalex",
+        "record_id": "W1",
+        "url": "https://openalex.org/W1",
+        "title": "TEST ONLY source mention context",
+        "status": "candidate_lead",
+        "properties_verified": false,
+        "suitability_verified": false,
+        "missing_criteria": [
+          "density",
+          "solution_processability",
+          "stability",
+          "ambient_phase_stability",
+          "operational_stability"
+        ],
+        "cautions": [
+          "This is a literal cited mention, not verified material identity, phase, property evidence or suitability for the requested application.",
+          "The source may discuss a comparison, limitation or rejected material; mention alone does not establish a recommendation.",
+          "Thermodynamic, room-temperature phase and operational stability remain unverified; unknown is not stable."
+        ],
+        "citations": [
+          {
+            "document_id": "doc-3aa771e0b864874c44f546dc",
+            "source_id": "openalex",
+            "record_id": "W1",
+            "url": "https://openalex.org/W1",
+            "title": "TEST ONLY source mention context",
+            "quote": "TESTONLY-Alpha has low density and is solution processable in the described sample."
+          }
+        ]
+      },
+      {
+        "id": "lead-cba7ddbcf88fcb87b25135a9",
+        "name": "TESTONLY-Beta",
+        "quote": "TESTONLY-Beta has density limitations but is solution processable in this sample.",
+        "source_id": "openalex",
+        "record_id": "W2",
+        "url": "https://openalex.org/W2",
+        "title": "TEST ONLY source mention context",
+        "status": "candidate_lead",
+        "properties_verified": false,
+        "suitability_verified": false,
+        "missing_criteria": [
+          "density",
+          "solution_processability",
+          "stability",
+          "ambient_phase_stability",
+          "operational_stability"
+        ],
+        "cautions": [
+          "This is a literal cited mention, not verified material identity, phase, property evidence or suitability for the requested application.",
+          "The source may discuss a comparison, limitation or rejected material; mention alone does not establish a recommendation.",
+          "Thermodynamic, room-temperature phase and operational stability remain unverified; unknown is not stable."
+        ],
+        "citations": [
+          {
+            "document_id": "doc-b63f4491296034fcfd115828",
+            "source_id": "openalex",
+            "record_id": "W2",
+            "url": "https://openalex.org/W2",
+            "title": "TEST ONLY source mention context",
+            "quote": "TESTONLY-Beta has density limitations but is solution processable in this sample."
+          }
+        ]
+      },
+      {
+        "id": "lead-346bcdc584f3ddcc3f892cc6",
+        "name": "TESTONLY-Gamma",
+        "quote": "TESTONLY-Gamma is discussed without useful properties in this synthetic fixture.",
+        "source_id": "openalex",
+        "record_id": "W3",
+        "url": "https://openalex.org/W3",
+        "title": "TEST ONLY source mention context",
+        "status": "candidate_lead",
+        "properties_verified": false,
+        "suitability_verified": false,
+        "missing_criteria": [
+          "density",
+          "solution_processability",
+          "stability",
+          "ambient_phase_stability",
+          "operational_stability"
+        ],
+        "cautions": [
+          "This is a literal cited mention, not verified material identity, phase, property evidence or suitability for the requested application.",
+          "The source may discuss a comparison, limitation or rejected material; mention alone does not establish a recommendation.",
+          "Thermodynamic, room-temperature phase and operational stability remain unverified; unknown is not stable."
+        ],
+        "citations": [
+          {
+            "document_id": "doc-642dc3196afc9ead899998a2",
+            "source_id": "openalex",
+            "record_id": "W3",
+            "url": "https://openalex.org/W3",
+            "title": "TEST ONLY source mention context",
+            "quote": "TESTONLY-Gamma is discussed without useful properties in this synthetic fixture."
+          }
+        ]
+      }
+    ],
+    "passages": [
+      "TESTONLY-Alpha has low density and is solution processable in the described sample.",
+      "TESTONLY-Beta has density limitations but is solution processable in this sample.",
+      "TESTONLY-Gamma is discussed without useful properties in this synthetic fixture."
+    ]
+  },
+  "evaluation": {
+    "version": "literature-fit-v1",
+    "is_material_evidence": false,
+    "properties_verified": false,
+    "criteria": [
+      {
+        "criterion_id": "ambient_phase_stability",
+        "label": "Room-temperature phase stability",
+        "importance": 0,
+        "weight": 0.0,
+        "goal": {
+          "relation": "maximize"
+        }
+      },
+      {
+        "criterion_id": "density",
+        "label": "Density",
+        "importance": 0.25,
+        "weight": 0.25,
+        "goal": {
+          "relation": "minimize"
+        }
+      },
+      {
+        "criterion_id": "operational_stability",
+        "label": "Operational stability",
+        "importance": 0,
+        "weight": 0.0,
+        "goal": {
+          "relation": "maximize"
+        }
+      },
+      {
+        "criterion_id": "solution_processability",
+        "label": "Solution processability",
+        "importance": 0.75,
+        "weight": 0.75,
+        "goal": {
+          "relation": "consider"
+        }
+      },
+      {
+        "criterion_id": "stability",
+        "label": "Thermodynamic stability",
+        "importance": 0,
+        "weight": 0.0,
+        "goal": {
+          "relation": "maximize"
+        }
+      }
+    ],
+    "proposals": [
+      {
+        "lead_id": "lead-2828480e527ad844a3a32dbd",
+        "criterion_id": "density",
+        "document_id": "doc-3aa771e0b864874c44f546dc",
+        "quote": "TESTONLY-Alpha has low density and is solution processable in the described sample.",
+        "judgment": "supports",
+        "interpretation": "The passage addresses the preference under its stated conditions."
+      },
+      {
+        "lead_id": "lead-cba7ddbcf88fcb87b25135a9",
+        "criterion_id": "solution_processability",
+        "document_id": "doc-b63f4491296034fcfd115828",
+        "quote": "TESTONLY-Beta has density limitations but is solution processable in this sample.",
+        "judgment": "supports",
+        "interpretation": "The passage addresses the preference under its stated conditions."
+      }
+    ],
+    "ranked_candidates": [
+      {
+        "lead_id": "lead-cba7ddbcf88fcb87b25135a9",
+        "name": "TESTONLY-Beta",
+        "rank": 1,
+        "observed_fit": 1.0,
+        "coverage": 0.75,
+        "fit_lower_bound": 0.75,
+        "fit_upper_bound": 1.0,
+        "unknown_criteria": [
+          "ambient_phase_stability",
+          "density",
+          "operational_stability",
+          "stability"
+        ],
+        "stability_unknown": [
+          "stability",
+          "ambient_phase_stability",
+          "operational_stability"
+        ],
+        "stability_concerns": [],
+        "criteria": [
+          {
+            "criterion_id": "ambient_phase_stability",
+            "judgment": "unknown",
+            "utility": null,
+            "assessments": []
+          },
+          {
+            "criterion_id": "density",
+            "judgment": "unknown",
+            "utility": null,
+            "assessments": []
+          },
+          {
+            "criterion_id": "operational_stability",
+            "judgment": "unknown",
+            "utility": null,
+            "assessments": []
+          },
+          {
+            "criterion_id": "solution_processability",
+            "judgment": "supports",
+            "utility": 1.0,
+            "assessments": [
+              {
+                "document_id": "doc-b63f4491296034fcfd115828",
+                "source_id": "openalex",
+                "record_id": "W2",
+                "url": "https://openalex.org/W2",
+                "title": "TEST ONLY source mention context",
+                "quote": "TESTONLY-Beta has density limitations but is solution processable in this sample.",
+                "judgment": "supports",
+                "interpretation": "The passage addresses the preference under its stated conditions.",
+                "document_sha256": "708268e30a30af41a996a7d5d44ef5b005d9075e7398e48b725ed50c02f38eb7",
+                "response_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              }
+            ]
+          },
+          {
+            "criterion_id": "stability",
+            "judgment": "unknown",
+            "utility": null,
+            "assessments": []
+          }
+        ]
+      },
+      {
+        "lead_id": "lead-2828480e527ad844a3a32dbd",
+        "name": "TESTONLY-Alpha",
+        "rank": 2,
+        "observed_fit": 1.0,
+        "coverage": 0.25,
+        "fit_lower_bound": 0.25,
+        "fit_upper_bound": 1.0,
+        "unknown_criteria": [
+          "ambient_phase_stability",
+          "operational_stability",
+          "solution_processability",
+          "stability"
+        ],
+        "stability_unknown": [
+          "stability",
+          "ambient_phase_stability",
+          "operational_stability"
+        ],
+        "stability_concerns": [],
+        "criteria": [
+          {
+            "criterion_id": "ambient_phase_stability",
+            "judgment": "unknown",
+            "utility": null,
+            "assessments": []
+          },
+          {
+            "criterion_id": "density",
+            "judgment": "supports",
+            "utility": 1.0,
+            "assessments": [
+              {
+                "document_id": "doc-3aa771e0b864874c44f546dc",
+                "source_id": "openalex",
+                "record_id": "W1",
+                "url": "https://openalex.org/W1",
+                "title": "TEST ONLY source mention context",
+                "quote": "TESTONLY-Alpha has low density and is solution processable in the described sample.",
+                "judgment": "supports",
+                "interpretation": "The passage addresses the preference under its stated conditions.",
+                "document_sha256": "b502dade5ea48f7bf49055bcff6411c400b4054e7bb6f1c3b57d4883714caeec",
+                "response_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              }
+            ]
+          },
+          {
+            "criterion_id": "operational_stability",
+            "judgment": "unknown",
+            "utility": null,
+            "assessments": []
+          },
+          {
+            "criterion_id": "solution_processability",
+            "judgment": "unknown",
+            "utility": null,
+            "assessments": []
+          },
+          {
+            "criterion_id": "stability",
+            "judgment": "unknown",
+            "utility": null,
+            "assessments": []
+          }
+        ]
+      }
+    ],
+    "unranked_candidates": [
+      {
+        "lead_id": "lead-346bcdc584f3ddcc3f892cc6",
+        "name": "TESTONLY-Gamma",
+        "rank": null,
+        "observed_fit": null,
+        "coverage": 0.0,
+        "fit_lower_bound": 0.0,
+        "fit_upper_bound": 1.0,
+        "unknown_criteria": [
+          "ambient_phase_stability",
+          "density",
+          "operational_stability",
+          "solution_processability",
+          "stability"
+        ],
+        "stability_unknown": [
+          "stability",
+          "ambient_phase_stability",
+          "operational_stability"
+        ],
+        "stability_concerns": [],
+        "criteria": [
+          {
+            "criterion_id": "ambient_phase_stability",
+            "judgment": "unknown",
+            "utility": null,
+            "assessments": []
+          },
+          {
+            "criterion_id": "density",
+            "judgment": "unknown",
+            "utility": null,
+            "assessments": []
+          },
+          {
+            "criterion_id": "operational_stability",
+            "judgment": "unknown",
+            "utility": null,
+            "assessments": []
+          },
+          {
+            "criterion_id": "solution_processability",
+            "judgment": "unknown",
+            "utility": null,
+            "assessments": []
+          },
+          {
+            "criterion_id": "stability",
+            "judgment": "unknown",
+            "utility": null,
+            "assessments": []
+          }
+        ]
+      }
+    ],
+    "cautions": [
+      "Provisional literature fit is a model interpretation of cited passages, not a verified measurement, material identity or experimental recommendation.",
+      "Rank uses supported weighted fit with unknown criteria left unresolved. The lower and upper bounds show possible fit if unknown criteria range from concern to support; they are not confidence intervals or probabilities.",
+      "Unknown stability is not established stability. Source phase, sample, conditions and applicability still require review.",
+      "Conflicting passages remain visible. Mixed assessments do not establish that the same phase or operating conditions were compared."
+    ]
+  }
+}

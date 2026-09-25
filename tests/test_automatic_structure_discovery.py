@@ -108,3 +108,13 @@ def test_refusals_do_not_search_for_structures(monkeypatch):
         ),
     )
     workflow.respond("chat", "blocked request", load_config())
+
+
+@pytest.mark.parametrize("value", ["false", 1, 0, [], {}])
+def test_structure_choice_is_strict_boolean(value):
+    from pydantic import ValidationError
+
+    from labcat.workspace_api import MessageCreate
+
+    with pytest.raises(ValidationError):
+        MessageCreate(content="question", search_reference_structures=value)

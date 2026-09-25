@@ -7,6 +7,7 @@ import pytest
 from test_evidence_comparison_reporting import adapter_record, source_for
 
 from labcat.config import load_config
+from labcat.report_exports import _blocks
 from labcat.science.ranking import rank_records
 from labcat.science.report_narrative import findings_lines, narrative_audit_lines
 from labcat.science.reporting import citation_references
@@ -597,6 +598,36 @@ def test_technical_target_direction_is_preference_not_larger_gap_recommendation(
     assert ranked[0]["formula"] == "SiO2"
 
 
+def test_technical_candidate_sections_and_comparisons_stay_separate_in_exports():
+    case = literature_case(
+        *(
+            {"name": f"TEST ONLY material {index}", "band_gap": judgment}
+            for index, judgment in enumerate(
+                ("supports", "mixed", "concern", "supports", "unknown", "unknown"),
+                1,
+            )
+        )
+    )
+    original = deepcopy(case)
+    text = prose(case, audit=True)
+    blocks = list(_blocks(text))
+    headings = [value for kind, value, _ in blocks if kind == "heading"]
+    for index in range(1, 7):
+        assert f"Candidate {index} — TEST ONLY material {index}:" in headings
+    comparisons = [
+        value
+        for kind, value, _ in blocks
+        if kind == "body" and " compared with " in value
+    ]
+    assert len(comparisons) == 2
+    assert all(value.count(" compared with ") == 1 for value in comparisons)
+    assert all("material 4" not in value for value in comparisons)
+    assert all(len(value) < 1200 for value in comparisons)
+    assert text.count("The cited phases, samples and conditions") == 1
+    assert "Candidate scoring details:" not in text
+    assert case == original
+
+
 def test_property_records_keep_distinct_identity_and_bounded_comparison():
     case = measured_case(
         *(
@@ -619,6 +650,21 @@ def test_property_records_keep_distinct_identity_and_bounded_comparison():
     assert "saved contribution" not in comparisons
     assert "0–1 utility scale" not in text
     assert "0–1 utility scale" in audit_prose(case)
+
+
+def test_long_punctuated_candidate_name_preserves_readable_heading_and_full_identity():
+    name = "TEST ONLY structure: [phase] # “quoted” " + "long " * 30
+    case = literature_case({"name": name, "band_gap": "supports"})
+    text = prose(case, audit=True)
+    heading = next(line for line in text.splitlines() if line.startswith("Candidate 1"))
+    assert len(heading) < 100
+    assert heading.endswith(":")
+    assert "[phase]" not in heading
+    assert any(
+        kind == "heading" and value == heading for kind, value, _ in _blocks(text)
+    )
+    assert "TEST ONLY structure: [phase] # “quoted”" in text
+    assert "[S1]" in text
 
 
 def test_leakage_assessment_stays_with_its_candidate_without_inventing_cross_support():
@@ -698,3 +744,13 @@ def test_assessed_candidate_excerpt_requires_its_own_report_reference():
     text = prose(case, audit=True)
     assert "Public-source context:" not in text
     assert "passage without a retained report reference" not in text
+
+
+def test_mixed_composition_heading_preserves_fractional_stoichiometry():
+    from labcat.report_exports import _blocks
+    from labcat.science.report_narrative import _candidate_heading
+
+    formula = "Cs0.22FA0.78Pb(I0.85Br0.15)3"
+    heading = _candidate_heading("Candidate", 1, formula)
+    assert formula in heading
+    assert next(_blocks(heading)) == ("heading", heading, 0)

@@ -7,6 +7,7 @@ import time
 from copy import deepcopy
 
 import pytest
+from fastapi.testclient import TestClient
 from test_public_sources import Response, network
 
 from labcat import chemical_names as names
@@ -16,6 +17,8 @@ from labcat.report_exports import prepare_presentation, render_download
 from labcat.science.candidate_leads import discovery_documents, validate_candidate_leads
 from labcat.science.rebuild_snapshot import canonical
 from labcat.science.reporting import render_reports
+from labcat.web import create_app
+from labcat.workspace import WorkspaceStore
 
 _TRANSPORT = public_sources._fetch
 
@@ -270,6 +273,75 @@ def test_numeric_offline_name_requires_exact_source_record_and_hash():
     assert names._offline(target) is None
 
 
+@pytest.fixture
+def client_report(tmp_path):
+    store = WorkspaceStore(tmp_path / "workspace.sqlite3")
+    chat = store.create_global_chat("TEST ONLY")
+    scope, _ = store.research_inputs(chat["id"])
+    report = report_fixture()
+    detail = store.append_research(chat["id"], scope, "TEST ONLY", report)
+    report_id = detail["reports"][0]["id"]
+    app = create_app(workspace_path=store.path)
+    with TestClient(app, base_url="http://localhost") as client:
+        token = client.get("/api/session").json()["csrf_token"]
+        client.headers["X-CSRF-Token"] = token
+        yield client, store, chat["id"], report_id
+
+
+def test_endpoint_lookup_is_report_scoped_and_presentation_remains_passive(
+    client_report, monkeypatch
+):
+    client, store, chat, report = client_report
+    path = f"/api/chats/{chat}/reports/{report}"
+    calls = mock_pubchem(monkeypatch)
+    before = store.get_global_chat(chat)
+    assert client.get(path + "/presentation").json()["material_names"] == []
+    assert calls == []
+    found = client.post(path + "/chemical-names", json={}).json()
+    assert found["chat_id"] == chat and found["report_id"] == report
+    assert found["material_names"][0]["name"] == "Fixture sulfide"
+    assert len(calls) == 3
+    assert (
+        client.get(path + "/presentation").json()["material_names"]
+        == found["material_names"]
+    )
+    assert store.get_global_chat(chat) == before
+    other = store.create_global_chat("Other")
+    assert (
+        client.post(
+            f"/api/chats/{other['id']}/reports/{report}/chemical-names", json={}
+        ).status_code
+        == 404
+    )
+    assert (
+        client.post(path + "/chemical-names", json={"formula": "Na3PS4"}).status_code
+        == 422
+    )
+    assert len(calls) == 3
+    store.archive_chat(chat)
+    assert client.post(path + "/chemical-names", json={}).status_code == 404
+
+
+@pytest.mark.parametrize("attack", ["csrf", "cookie", "origin", "site"])
+def test_name_lookup_requires_same_origin_session(client_report, monkeypatch, attack):
+    client, _, chat, report = client_report
+    calls = mock_pubchem(monkeypatch)
+    headers = {}
+    if attack == "csrf":
+        del client.headers["X-CSRF-Token"]
+    elif attack == "cookie":
+        client.cookies.clear()
+    elif attack == "origin":
+        headers["Origin"] = "https://attacker.invalid"
+    else:
+        headers["Sec-Fetch-Site"] = "cross-site"
+    response = client.post(
+        f"/api/chats/{chat}/reports/{report}/chemical-names", json={}, headers=headers
+    )
+    assert response.status_code == 403
+    assert calls == []
+
+
 @pytest.mark.parametrize(
     "route,params",
     [
@@ -433,6 +505,56 @@ def test_name_transport_uses_fixed_paths_and_small_response_limit(monkeypatch):
     assert not {"pubchem_formula", "pubchem_names"} & {
         row["id"] for row in public_sources.catalog()
     }
+
+
+def test_endpoint_honors_disabled_and_selected_literature_sources(
+    client_report, monkeypatch
+):
+    from labcat.science import chemical_name_literature
+
+    client, _, chat, report = client_report
+    path = f"/api/chats/{chat}/reports/{report}/chemical-names"
+    monkeypatch.setattr(names, "lookup_pubchem", lambda *args: None)
+    calls = []
+    monkeypatch.setattr(
+        chemical_name_literature,
+        "lookup_formula",
+        lambda *args: calls.append("europe_pmc"),
+    )
+
+    def openalex(formula, deadline):
+        calls.append("openalex")
+        return {
+            "formula": formula,
+            "name": "Fixture sulfide",
+            "url": "https://openalex.org/W2",
+            "source_name": "OpenAlex",
+            "provenance": {"scope": "composition_name_only"},
+        }
+
+    monkeypatch.setattr(chemical_name_literature, "lookup_openalex_formula", openalex)
+    preferences = client.get("/api/source-settings").json()
+    assert (
+        client.put(
+            "/api/source-settings",
+            json={**preferences, "search_public_references": False},
+        ).status_code
+        == 200
+    )
+    assert client.post(path).json()["material_names"] == []
+    assert calls == []
+    assert (
+        client.put(
+            "/api/source-settings",
+            json={**preferences, "enabled_sources": ["openalex"]},
+        ).status_code
+        == 200
+    )
+    assert (
+        client.post(path, json={}).json()["material_names"][0]["source_name"]
+        == "OpenAlex"
+    )
+    assert calls == ["openalex"]
 
 
 def test_optional_malformed_fallback_does_not_make_report_unreadable(monkeypatch):

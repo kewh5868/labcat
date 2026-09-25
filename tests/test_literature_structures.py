@@ -6,6 +6,8 @@ import json
 from copy import deepcopy
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from test_candidate_leads import reference
 from test_structures import NOMAD_FIXTURE, NOMAD_ID, structure_store, transport
 
@@ -16,6 +18,7 @@ from labcat.science.candidate_leads import (
 )
 from labcat.science.literature_evaluation import evaluate_candidate_batches
 from labcat.science.rebuild_snapshot import canonical
+from labcat.structures_api import create_structures_router
 from labcat.workspace import WorkspaceNotFound
 
 
@@ -372,6 +375,31 @@ def test_numeric_overlap_retains_original_record_and_literature_association(tmp_
     assert candidates[0]["literature_association"]["lead_ids"] == [leads[0]["id"]]
 
 
+def test_reference_router_then_original_structure_download_with_viewer_disabled(
+    tmp_path, monkeypatch
+):
+    store = structure_store(tmp_path, enabled=False)
+    chat, report, leads, _ = literature_report(store)
+    search_transport(monkeypatch, [nomad_reference()])
+    transport(monkeypatch, json.loads(NOMAD_FIXTURE.read_bytes()))
+    app = FastAPI()
+    app.include_router(create_structures_router(store))
+    client = TestClient(app)
+    base = f"/api/chats/{chat}/reports/{report}/structures"
+    response = client.post(f"{base}/references/{leads[0]['id']}")
+    assert response.status_code == 200 and response.json()["viewer_enabled"] is False
+    ready = client.post(f"{base}/{NOMAD_ID}").json()
+    assert ready["status"] == "ready"
+    download = client.get(ready["download_url"])
+    assert download.status_code == 200 and b"_cell_length_a" in download.content
+    assert (
+        download.headers["x-structure-sha256"]
+        == hashlib.sha256(download.content).hexdigest()
+    )
+    assert client.post(f"{base}/references/mp-149").status_code == 422
+    assert client.post(f"{base}/references/lead-{'f' * 24}").status_code == 404
+
+
 def test_reference_cache_semantic_tampering_rejected_even_with_new_checksum(
     tmp_path, monkeypatch
 ):
@@ -412,6 +440,23 @@ def test_mixed_cited_and_composition_associations_keep_conservative_label(
     relation = result["structures"][0]["literature_association"]
     assert set(relation["lead_ids"]) == {lead["id"] for lead in leads}
     assert relation["relation"] == "composition_reference"
+
+
+def test_malformed_source_annotation_returns_fixed_api_error(tmp_path):
+    store = structure_store(tmp_path)
+    chat, report, leads, _ = literature_report(store, refs=[nomad_reference()])
+    with store.workspace._connection(write=True) as conn:
+        conn.execute("UPDATE source_annotations SET annotation_json='not json'")
+    app = FastAPI()
+    app.include_router(create_structures_router(store))
+    client = TestClient(app)
+    base = f"/api/chats/{chat}/reports/{report}/structures"
+    for response in (
+        client.get(base),
+        client.post(f"{base}/references/{leads[0]['id']}"),
+    ):
+        assert response.status_code == 422
+        assert response.json()["detail"]["code"] == "structure_invalid"
 
 
 def test_canonical_rank_order_does_not_trust_modified_saved_rank(tmp_path):

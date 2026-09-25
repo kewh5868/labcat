@@ -8,8 +8,11 @@ import time
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from labcat import public_sources as sources
+from labcat.public_sources_api import create_public_sources_router
 
 
 @pytest.fixture(autouse=True)
@@ -873,3 +876,36 @@ def test_dns_rejects_private_or_mixed_public_private_addresses(
     )
     with pytest.raises(sources.PublicSourceError, match="prohibited"):
         sources._addresses("materials.hybrid3.duke.edu", time.monotonic() + 1)
+
+
+def test_router_validates_sources_and_does_not_accept_arbitrary_endpoints(
+    monkeypatch, tmp_path, authenticated_model_factory
+):
+    provide(monkeypatch, {"results": []})
+    app = FastAPI()
+    app.include_router(
+        create_public_sources_router(
+            authenticated_model_factory(tmp_path / "w.sqlite3")
+        )
+    )
+    with TestClient(app) as client:
+        assert len(client.get("/api/public-sources").json()["sources"]) == len(
+            sources.catalog()
+        )
+        response = client.post(
+            "/api/public-sources/search",
+            json={"query": "oxide", "sources": ["hybrid3"]},
+        )
+        assert response.status_code == 200
+        assert response.json()["references"] == []
+        assert (
+            client.post(
+                "/api/public-sources/search",
+                json={
+                    "query": "oxide",
+                    "sources": ["hybrid3"],
+                    "url": "http://localhost",
+                },
+            ).status_code
+            == 422
+        )

@@ -2,12 +2,17 @@
 results."""
 
 import hashlib
+import io
 import json
 from copy import deepcopy
+from xml.etree import ElementTree
+from zipfile import ZipFile
 
 import pytest
+from pypdf import PdfReader
 
 from labcat.config import load_config
+from labcat.report_exports import render_download
 from labcat.science import hybrid3
 from labcat.science.evidence_comparison import compare_observations
 from labcat.science.ranking import rank_records
@@ -374,3 +379,35 @@ def test_omitted_experimental_ranges_are_disclosed_without_inventing_values(
         assert "All supplied experiments still informed screening" in text
         assert "experimental band-gap spread:" not in text
         assert "Computed − experimental:" not in text
+
+
+@pytest.mark.parametrize("format", ["text", "json", "pdf", "docx"])
+def test_report_exports_preserve_comparisons_and_links(comparison_report, format):
+    _render(comparison_report)
+    body, _, _ = render_download(comparison_report, format, "both")
+    if format == "pdf":
+        text = " ".join(
+            page.extract_text() for page in PdfReader(io.BytesIO(body)).pages
+        )
+    elif format == "docx":
+        with ZipFile(io.BytesIO(body)) as archive:
+            xml = ElementTree.fromstring(archive.read("word/document.xml"))
+        namespace = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+        text = " ".join(
+            "".join(node.text or "" for node in paragraph.iter(namespace + "t"))
+            for paragraph in xml.iter(namespace + "p")
+        )
+        assert any(
+            node.get(namespace + "val") == "subscript"
+            for node in xml.iter(namespace + "vertAlign")
+        )
+    elif format == "json":
+        content = json.loads(body)
+        text = " ".join(content["views"].values())
+        assert content["result"]["comparison_records"]
+    else:
+        text = body.decode()
+    text = " ".join(text.split())
+    assert "experimental 2 eV [R1]; computed 1.5 eV [R2]" in text
+    assert "Computed − experimental: -0.5 eV" in text
+    assert "Experimental evidence used for screening and recommendations" in text

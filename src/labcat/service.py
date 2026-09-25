@@ -25,31 +25,47 @@ def get_status(config: AppConfig, style: str | None = None) -> dict[str, Any]:
     report: dict[str, Any] = {
         "application": "Labcat",
         "version": __version__,
-        "stage": "scaffold",
+        "stage": "prototype",
         "style": selected,
-        "message": (
-            "Python APIs provide bounded research orchestration. The research "
-            "command and UI are not available yet."
-        ),
+        "message": "Public-evidence materials research is ready. "
+        "Start a chat or run the research command.",
         "provider": config.provider,
         "compute": "local",
         "constraints": list(CONSTRAINTS),
         "candidates": [],
         "limitations": [
-            "Status contains no scientific records or ranked candidates.",
-            ("The complete CLI/API/UI and packaged deployment remain planned."),
-            "Scientific coverage depends on independently validated public evidence.",
+            "Live public queries are bounded; no fixed candidate list or "
+            "historical results are substituted when evidence is unavailable.",
+            "Quantitative coverage depends on reviewed source fields. Other "
+            "material classes may receive reference-only reports. Missing "
+            "stability, hazard and application evidence remain unknown.",
+            "New research requires a verified model connection. Models guide "
+            "the task but cannot supply scientific facts.",
+            "Open-access text follow-up returns cited review passages, not "
+            "automatically validated values or an exhaustive literature review.",
+            "This is a local single-user prototype, not a shared service.",
+            "The React workspace and portable/native launchers are not yet "
+            "included in this snapshot.",
         ],
     }
     if selected == "audit":
         report["configuration"] = config.to_dict()
         report["implemented"] = [
-            "Installable Python package and software status commands",
-            "Strict local preference configuration",
-            "Bounded research orchestration",
+            "Installable Python package and command-line interface",
+            "Strict preference configuration with no safety-policy override fields",
+            "Saved standalone chats, optional projects and pinned report collections",
+            "Persistent settings for paired Summary and Technical View reports",
+            "Local FastAPI service shared with the research command-line interface",
+            "Repository-first public retrieval, missing-attribute literature "
+            "follow-up, deterministic ranking and cited reports",
+            "Required verified model connection with encrypted or session-only "
+            "credentials",
+            "Optional isolated Goose orchestration through fixed research tools",
         ]
         report["next_steps"] = [
-            "The complete CLI/API/UI and packaged deployment remain planned."
+            "Add the React workspace and portable/native launchers.",
+            "Broaden independently verified scientific coverage and hazard evidence.",
+            "Validate authenticated providers and native hosts at the deployment site.",
         ]
     return report
 
@@ -82,7 +98,7 @@ def render_text(
                 "This report describes software capabilities, not materials.",
                 "Ranking weights express preferences, not scientific confidence.",
                 "Changing a preference or pinning a report does not verify a claim.",
-                "Scientific reports are not implemented in this snapshot.",
+                "Scientific reports are available through the research API and CLI.",
             ]
         )
     elif verbosity == "concise":

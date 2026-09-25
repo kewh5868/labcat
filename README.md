@@ -2,52 +2,55 @@
 
 **Curious. Clever. Companionable.**
 
-A public-evidence materials research assistant in development on a scikit-package
-Level 4 foundation.
+Labcat is a local materials research prototype with one Python core for its CLI
+and FastAPI service. This snapshot implements bounded public retrieval, reproducible
+ranking, cited report exports, saved projects/chats and explicit model connections.
+User prompts and model memory are preferences or search hints, never evidence.
+Only approved public-source adapters can supply scientific records. Missing evidence
+remains unknown; the application provides no private-data or wetlab tools.
 
-## Current Python capabilities
+The React workspace and portable/native launchers arrive in later snapshots.
+The backend serves an actionable missing-frontend response at `/`; `/health` and
+the application API work independently. This is a local single-user prototype.
 
-The Python research workflow coordinates verified connections, request assessment,
-approved public retrieval, deterministic ranking and cited reports. An in-process
-background registry preserves accepted research across navigation and retains partial
-results. It is not a persistent queue that resumes after process or machine restarts.
-
-Chemical names, validated reference structures and multi-format report exports are available as backend APIs.
-The complete CLI/API/UI and packaged deployment remain planned.
-
-The command-line interface currently provides software status, configuration
-validation and an explicit read-only AWS account check. It does not yet expose the
-research library as a command or serve an application UI.
-
-## Development and status
+## Run the backend
 
 Use Python 3.11 or newer. From the repository root:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e ".[dev,web,aws,connections]"
-labcat status
-labcat status --style audit --format json
+python -m pip install -e ".[web,aws,connections,exports,dev]"
+labcat status --style audit
 labcat check-config
-python -m pre_commit install
-python -m pre_commit run --all-files
-python -m pytest
+labcat serve --host 127.0.0.1 --port 8000
 ```
 
 On Windows PowerShell, activate with `.\.venv\Scripts\Activate.ps1` instead.
-`python -m labcat` supports the same commands. Pass `--config preferences.toml`
-before a command to load partial TOML preferences. Ordinary status/configuration
-commands use the standard library and make no network requests.
+Choose an available local port. `python -m labcat` supports the same commands.
+`labcat research --help` describes direct-workspace and running-backend research.
+New research requires an explicitly verified model connection; hosted inference
+also requires explicit consent. Status and configuration validation are offline.
+API connection and setup routes are implemented; the onboarding UI is still planned.
+No API key or user account is bundled.
 
-Only approved public adapters can establish scientific evidence. Prompts, pasted
-citations, model memory and retrieved instructions cannot supply measurements or
-change safeguards. No private-data or wetlab tools are available. Model/provider
-operations use explicitly configured accounts; no silent cloud fallback is made.
+TOML settings can change bounded ranking/presentation preferences, but cannot
+supply facts or disable fixed research boundaries. Public source coverage determines
+whether a request yields ranked candidates, references only or an honest abstention.
+Reports preserve source identities, missing data and caveats. This prototype is not
+a substitute for experimental validation or a comprehensive literature review.
 
-Pre-commit downloads pinned environments on first use. Black formats Python; Flake8,
-Ruff and file checks provide additional validation. Offline tests use explicit source
-and provider fixtures. The current CI targets Linux with Python 3.13; configured
-checks do not prove other-platform or live-provider coverage. See [scaffold
-provenance](docs/scaffolding.md), [configuration](docs/configuration.md), [provider
-boundaries](docs/providers.md), and [the license](LICENSE.rst).
+## Development checks
+
+```bash
+python -m pre_commit install
+python -m pre_commit run --all-files
+python -m pytest
+python -m ruff check src tests
+python -m build
+```
+
+Pinned pre-commit environments are downloaded on first use. Current local checks
+do not establish authenticated provider, Docker or other-operating-system coverage.
+See [scaffold provenance](docs/scaffolding.md), [the license](LICENSE.rst), and
+[the code of conduct](CODE-OF-CONDUCT.rst).

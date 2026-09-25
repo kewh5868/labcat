@@ -4,11 +4,15 @@ progress."""
 import json
 
 import pytest
+from fastapi.testclient import TestClient
 
+from labcat.config import load_config
 from labcat.connections import DEFAULT_PROFILE, ConnectionManager
 from labcat.credentials import ConnectionError
 from labcat.models import ModelError
 from labcat.onboarding import SetupRequired
+from labcat.research import research
+from labcat.web import create_app
 
 
 def test_first_setup_and_progress_have_no_authority(tmp_path):
@@ -25,6 +29,30 @@ def test_first_setup_and_progress_have_no_authority(tmp_path):
         reopened.setup.complete()
     with pytest.raises(ConnectionError):
         reopened.setup.save_progress({"current_step": "review", "completed": True})
+
+
+@pytest.mark.parametrize("provider", ["none", "ollama"])
+def test_no_model_and_unauthenticated_local_provider_cannot_research(
+    tmp_path, provider
+):
+    manager = ConnectionManager(tmp_path / "w.sqlite3")
+    manager.configure(
+        {
+            "profile": {**DEFAULT_PROFILE, "provider": provider, "model": "local"},
+            "secret_storage": "session",
+        }
+    )
+    with pytest.raises(SetupRequired, match="Connect"):
+        research("Find useful materials", load_config(), connections=manager)
+
+
+def test_missing_manager_cannot_research_or_contact_sources(monkeypatch):
+    monkeypatch.setattr(
+        "labcat.science.run_research",
+        lambda *a, **k: pytest.fail("Source retrieval ran without an account"),
+    )
+    with pytest.raises(SetupRequired, match="--connections"):
+        research("Find useful materials", load_config())
 
 
 def test_metadata_verification_is_not_persisted_authorization(
@@ -175,3 +203,81 @@ def test_existing_chatgpt_account_requires_provider_verified_metadata(
     assert not manager.setup.status()["can_research"]
     with pytest.raises(SetupRequired):
         manager.setup.require_ready()
+
+
+@pytest.mark.parametrize("engine", ["direct", "goose"])
+def test_failed_inference_never_falls_back_to_retrieval(
+    tmp_path, monkeypatch, authenticated_model_factory, engine
+):
+    monkeypatch.setenv("LABCAT_AGENT_ENGINE", engine)
+    manager = authenticated_model_factory(tmp_path / "w.sqlite3")
+
+    def failed(*args, **kwargs):
+        raise ModelError("Test provider failure")
+
+    monkeypatch.setattr(manager, "plan", failed)
+    monkeypatch.setattr(manager.agent, "run", failed)
+    monkeypatch.setattr(
+        "labcat.science.run_research",
+        lambda *a, **k: pytest.fail("Failed model fell back to source retrieval"),
+    )
+    with pytest.raises(ModelError, match="No report was saved"):
+        research(
+            "Find public oxide material evidence", load_config(), connections=manager
+        )
+    assert not manager.setup.status()["can_research"]
+
+
+def test_api_blocks_research_but_keeps_projects_and_settings_available(tmp_path):
+    with TestClient(
+        create_app(workspace_path=tmp_path / "w.sqlite3"), base_url="http://localhost"
+    ) as client:
+        chat = client.post("/api/chats", json={"title": "Keep draft"}).json()
+        denied = client.post(
+            f"/api/chats/{chat['id']}/messages", json={"content": "Find materials"}
+        )
+        assert denied.status_code == 409
+        assert denied.json()["detail"]["code"] == "model_setup_required"
+        assert client.get(f"/api/chats/{chat['id']}").json()["messages"] == []
+        for route in ("/api/projects", "/api/settings", "/api/public-sources"):
+            assert client.get(route).status_code == 200
+        assert (
+            client.post(
+                "/api/public-sources/search",
+                json={"query": "materials", "sources": ["arxiv"]},
+            ).status_code
+            == 409
+        )
+        assert (
+            client.post("/api/connections/setup/complete", json={}).status_code == 403
+        )
+        token = client.get("/api/session").json()["csrf_token"]
+        assert (
+            client.post(
+                "/api/connections/setup/complete",
+                json={},
+                headers={"X-CSRF-Token": token},
+            ).status_code
+            == 422
+        )
+        assert client.get("/api/connections/setup").json()["can_research"] is False
+
+
+def test_stateless_research_uses_current_connection_and_creates_no_chats(
+    tmp_path, authenticated_app_models
+):
+    app = create_app(workspace_path=tmp_path / "w.sqlite3")
+    with TestClient(app, base_url="http://localhost") as client:
+        assert (
+            client.post("/api/research", json={"prompt": "Find materials"}).status_code
+            == 403
+        )
+        token = client.get("/api/session").json()["csrf_token"]
+        response = client.post(
+            "/api/research",
+            json={"prompt": "Find polymers"},
+            headers={"X-CSRF-Token": token},
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["result"]["execution"]["provider"] == "openai"
+        assert client.get("/api/chats").json()["chats"] == []

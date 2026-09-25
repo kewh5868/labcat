@@ -8,6 +8,7 @@ from contextlib import ExitStack
 from uuid import uuid4
 
 import pytest
+from fastapi.testclient import TestClient
 
 from labcat.research_progress import (
     ResearchInProgress,
@@ -16,6 +17,7 @@ from labcat.research_progress import (
     progress_observer,
     report_progress,
 )
+from labcat.web import create_app
 
 
 def test_tracker_propagates_across_tool_threads_without_prompt_or_exception_text():
@@ -51,6 +53,90 @@ def test_tracker_propagates_across_tool_threads_without_prompt_or_exception_text
             "Saving this response and any linked sources."
         )
     assert progress.snapshot("chat")["status"] == "completed"
+
+
+@pytest.mark.parametrize(
+    "intake_status,intake_reason",
+    [
+        ("clarification_required", "assessment_missing"),
+        ("refused", "model_declined"),
+    ],
+)
+def test_status_visible_while_request_is_running_and_scoped_to_active_chat(
+    tmp_path, monkeypatch, intake_status, intake_reason
+):
+    from labcat import research
+    from labcat.intake import decision, outcome
+
+    started, finish = threading.Event(), threading.Event()
+
+    def slow_research(*args, **kwargs):
+        report_progress("discovery")
+        started.set()
+        assert finish.wait(3)
+        return outcome(decision(intake_status, intake_reason))
+
+    monkeypatch.setattr(research, "research", slow_research)
+    monkeypatch.setattr(research, "_require_research_setup", lambda *_: None)
+    app = create_app(workspace_path=tmp_path / "workspace.sqlite3")
+    with TestClient(app, base_url="http://localhost") as client:
+        chat = client.post("/api/chats", json={"title": "Progress test"}).json()
+        other = client.post("/api/chats", json={"title": "Other chat"}).json()
+        run_id = str(uuid4())
+        path = f"/api/chats/{chat['id']}"
+        with ThreadPoolExecutor() as pool:
+            future = pool.submit(
+                client.post,
+                path + "/messages",
+                json={"content": "Find optoelectronic materials", "run_id": run_id},
+            )
+            try:
+                assert started.wait(2)
+                state = client.get(
+                    path + "/research-status", params={"run_id": run_id}
+                ).json()
+                assert state["status"] == "running"
+                assert state["phase"] == "discovery"
+                assert state["run_id"] == run_id
+                assert (
+                    client.get(f"/api/chats/{other['id']}/research-status").json()[
+                        "status"
+                    ]
+                    == "idle"
+                )
+                assert (
+                    client.post(
+                        path + "/messages", json={"content": "Again"}
+                    ).status_code
+                    == 409
+                )
+            finally:
+                finish.set()
+            response = future.result()
+            assert response.status_code == 201
+            assert response.json()["reports"] == []
+            assert response.json()["messages"][-1]["intake"]["status"] == intake_status
+        completed = client.get(path + "/research-status").json()
+        assert completed["status"] == "completed"
+        assert completed["message"] == (
+            "Request finished. The response is ready in this chat."
+        )
+        assert "report" not in completed["message"].casefold()
+        assert (
+            client.get(
+                path + "/research-status", params={"run_id": str(uuid4())}
+            ).json()["status"]
+            == "idle"
+        )
+        assert (
+            client.post(
+                path + "/messages", json={"content": "Again", "run_id": "bad"}
+            ).status_code
+            == 422
+        )
+        assert client.get("/api/chats/missing/research-status").status_code == 404
+        assert client.delete(path).status_code == 204
+        assert client.get(path + "/research-status").status_code == 404
 
 
 def test_slow_admission_reserves_capacity_without_blocking_other_progress():

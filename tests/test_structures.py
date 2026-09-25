@@ -13,10 +13,12 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from fastapi.testclient import TestClient
 
 from labcat import structures
 from labcat.config import load_config
 from labcat.science import sources
+from labcat.web import create_app
 from labcat.workspace import WorkspaceNotFound, WorkspaceStore
 
 NOMAD_FIXTURE = Path(__file__).parent / "fixtures" / "nomad-structure.json"
@@ -440,6 +442,52 @@ def dielectric_geometry():
     return record, {**deepcopy(record), "structure": structure}
 
 
+def test_exact_release_structure_api_keeps_source_atoms_and_report_immutable(
+    tmp_path, monkeypatch, dielectric_geometry
+):
+    candidate, source = dielectric_geometry
+    calls = []
+
+    def retrieve(identity):
+        assert identity == candidate["material_id"]
+        calls.append(identity)
+        return deepcopy(source)
+
+    monkeypatch.setattr(structures.dielectric, "retrieve_structure_source", retrieve)
+    monkeypatch.setattr(
+        structures, "_request_mp_data", lambda *a, **k: pytest.fail("Current MP join")
+    )
+    app = create_app(workspace_path=tmp_path / "workspace.sqlite3")
+    with TestClient(app, base_url="http://127.0.0.1:8123") as client:
+        chat, report = report_fixture(app.state.workspace_store, candidate)
+        original = deepcopy(app.state.workspace_store.get_global_chat(chat))
+        path = f"/api/chats/{chat}/reports/{report}/structures"
+        assert client.get(path).json()["structures"][0]["status"] == "not_loaded"
+        headers = {"X-CSRF-Token": client.get("/api/session").json()["csrf_token"]}
+        response = client.post(path + "/" + candidate["material_id"], headers=headers)
+        assert response.status_code == 200, response.text
+        metadata = response.json()
+        assert metadata["formula"] == "SiO2" and metadata["source_formula"] == "O2Si"
+        assert metadata["representation"] == "public_dielectric_structure"
+        assert "No current Materials Project" in metadata["caveats"][-1]
+        download = client.get(metadata["download_url"])
+        assert download.status_code == 200
+        assert (
+            b"Si1 Si 0.000000000000 0.000000000000 0.000000000000 1" in download.content
+        )
+        assert b"must.never.import" not in download.content
+        assert b"MustNeverInstantiate" not in download.content
+        assert hashlib.sha256(download.content).hexdigest() == metadata["sha256"]
+        assert client.get(metadata["content_url"]).content == download.content
+        assert client.post(path + "/mp-123", headers=headers).status_code == 404
+        assert (
+            client.post(path + "/dielectric:mp-123:row0", headers=headers).status_code
+            == 404
+        )
+        assert app.state.workspace_store.get_global_chat(chat) == original
+        assert calls == [candidate["material_id"]]
+
+
 @pytest.mark.parametrize(
     "mutation",
     [
@@ -496,6 +544,92 @@ def test_dataset_structure_rejects_mismatched_release_or_geometry(
     )
     with pytest.raises(structures.StructureUnavailable):
         structures._dielectric(candidate)
+
+
+def test_structure_api_csrf_content_type_and_cached_download_without_network(
+    tmp_path, monkeypatch, payload, candidate
+):
+    calls = transport(monkeypatch, payload)
+    app = create_app(workspace_path=tmp_path / "workspace.sqlite3")
+    with TestClient(app, base_url="http://127.0.0.1:8123") as client:
+        chat, report = report_fixture(app.state.workspace_store, candidate)
+        path = f"/api/chats/{chat}/reports/{report}/structures"
+        assert client.get(path).json()["structures"][0]["status"] == "not_loaded"
+        assert not calls
+        assert client.post(path + "/" + NOMAD_ID).status_code == 403
+        headers = {"X-CSRF-Token": client.get("/api/session").json()["csrf_token"]}
+        assert (
+            client.post(
+                path + "/" + NOMAD_ID,
+                headers={**headers, "Origin": "https://attacker.invalid"},
+            ).status_code
+            == 403
+        )
+        response = client.post(path + "/" + NOMAD_ID, headers=headers)
+        assert response.status_code == 200
+        ready = response.json()
+        download = client.get(ready["download_url"])
+        assert download.status_code == 200
+        assert download.headers["content-type"] == "chemical/x-cif"
+        assert download.headers["content-disposition"].startswith("attachment;")
+        assert download.headers["x-structure-sha256"] == ready["sha256"]
+        assert client.get(ready["content_url"]).content == download.content
+        assert len(calls) == 1
+        assert client.post(path + "/mp-1", headers=headers).status_code == 404
+
+
+@pytest.mark.parametrize(
+    ("failure", "expected_code"),
+    [
+        (
+            structures.PublicSourceError("PRIVATE_PROVIDER_DIAGNOSTIC"),
+            "structure_source_unavailable",
+        ),
+        (
+            structures.StructureUnavailable(
+                "PRIVATE_PROVIDER_DIAGNOSTIC", code="structure_access_unverified"
+            ),
+            "structure_access_unverified",
+        ),
+        (
+            structures.StructureUnavailable(
+                "PRIVATE_PROVIDER_DIAGNOSTIC", code="unexpected_code"
+            ),
+            "structure_invalid",
+        ),
+        *[
+            (
+                structures.hybrid3.StructureSourceError(
+                    "PRIVATE_PROVIDER_DIAGNOSTIC", code=code
+                ),
+                code,
+            )
+            for code in (
+                "structure_missing",
+                "structure_ambiguous",
+                "structure_search_incomplete",
+            )
+        ],
+    ],
+)
+def test_structure_failure_codes_are_fixed_and_do_not_cache_substitutes(
+    tmp_path, monkeypatch, candidate, failure, expected_code
+):
+    def unavailable(_candidate):
+        raise failure
+
+    monkeypatch.setattr(structures, "_nomad", unavailable)
+    app = create_app(workspace_path=tmp_path / "workspace.sqlite3")
+    with TestClient(app, base_url="http://127.0.0.1:8123") as client:
+        chat, report = report_fixture(app.state.workspace_store, candidate)
+        path = f"/api/chats/{chat}/reports/{report}/structures"
+        headers = {"X-CSRF-Token": client.get("/api/session").json()["csrf_token"]}
+        response = client.post(path + "/" + NOMAD_ID, headers=headers)
+        assert response.status_code == 422
+        assert response.json()["detail"]["code"] == expected_code
+        assert "PRIVATE_PROVIDER_DIAGNOSTIC" not in response.text
+        assert client.get(path).json()["structures"][0]["status"] == "not_loaded"
+        assert client.get(path + "/" + NOMAD_ID + "/download").status_code == 404
 
 
 def test_unverified_public_access_has_distinct_structure_failure(

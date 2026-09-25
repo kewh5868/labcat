@@ -5,10 +5,12 @@ import json
 from types import SimpleNamespace
 
 import pytest
+from fastapi.testclient import TestClient
 
 from labcat import aws
 from labcat.connections import DEFAULT_PROFILE, ConnectionManager
 from labcat.credentials import ConnectionError
+from labcat.web import create_app
 
 
 def account(
@@ -192,6 +194,27 @@ def test_account_provider_cannot_change_and_raw_slots_rejected(tmp_path):
             }
         )
     assert manager.vault.get("account_" + identifier) == "test-key-account-one"
+
+
+def test_account_api_requires_csrf_and_does_not_echo_secret(tmp_path):
+    with TestClient(
+        create_app(workspace_path=tmp_path / "workspace.sqlite3"),
+        base_url="http://127.0.0.1",
+    ) as client:
+        payload = {
+            "label": "Test",
+            "profile": {**DEFAULT_PROFILE, "provider": "openai"},
+            "secret_storage": "session",
+            "api_key": "test-key-api-only",
+        }
+        assert client.post("/api/connections/accounts", json=payload).status_code == 403
+        token = client.get("/api/session").json()["csrf_token"]
+        response = client.post(
+            "/api/connections/accounts", json=payload, headers={"x-csrf-token": token}
+        )
+        assert response.status_code == 200 and "test-key-api-only" not in response.text
+        about = client.get("/api/about").json()
+        assert about["developer"] == "Keith White" and about["github_url"] is None
 
 
 def test_aws_profile_options_only_reads_profile_names(monkeypatch):
