@@ -1,0 +1,78 @@
+.sidebar-chat-identity-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+  width: 100%;
+}
+.sidebar-chat-identity-line > .chat-identity {
+  flex: 1;
+  min-width: 0;
+}
+.running-research-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 20px;
+  line-height: 0;
+  vertical-align: middle;
+}
+.running-research-indicator svg {
+  display: block;
+  width: 16px;
+  height: 20px;
+  flex-shrink: 0;
+  overflow: visible;
+}
+.research-flask-glass {
+  fill: #f3f8ef;
+  stroke: #527967;
+  stroke-width: 1.45;
+  stroke-linejoin: round;
+}
+.research-flask-liquid {
+  fill: #a7c7ac;
+}
+.research-flask-rim {
+  fill: none;
+  stroke: #527967;
+  stroke-width: 1.45;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.research-flask-bubble {
+  fill: #547e68;
+  opacity: 0.75;
+  animation: research-flask-bubble-rise 2.8s ease-in-out infinite;
+}
+.research-flask-bubble-two {
+  animation-delay: -0.95s;
+}
+.research-flask-bubble-three {
+  fill: #bf875c;
+  animation-delay: -1.8s;
+}
+@keyframes research-flask-bubble-rise {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.45;
+  }
+  65% {
+    transform: translateY(-4px);
+    opacity: 0.85;
+  }
+  90% {
+    transform: translateY(-5px);
+    opacity: 0.15;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .research-flask-bubble {
+    animation: none;
+    transform: none;
+    opacity: 0.75;
+  }
+}

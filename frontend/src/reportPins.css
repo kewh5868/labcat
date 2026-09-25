@@ -1,0 +1,67 @@
+.report-pin-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+  max-width: 100%;
+}
+.report-pin-label {
+  font-size: 0.74rem;
+  color: var(--muted, #697b6c);
+  line-height: 1.4;
+}
+.report-pin-latest {
+  color: var(--green, #315d47);
+}
+.report-pin-actions {
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  max-width: 100%;
+}
+.report-pin-actions .pin-button {
+  margin: 0;
+  justify-content: center;
+  max-width: 100%;
+  white-space: normal;
+}
+.report-pin-project-hint,
+.snapshot-update-controls small {
+  font-size: 0.74rem;
+  line-height: 1.5;
+  color: var(--muted, #697b6c);
+}
+.snapshot-update-controls {
+  display: grid;
+  gap: 0.35rem;
+  max-width: 16rem;
+  border-top: 1px solid var(--line, #d7e2d1);
+  padding-top: 0.65rem;
+}
+.snapshot-update-controls button {
+  justify-self: start;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--green, #315d47);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+.report-pin-controls .pin-error {
+  max-width: 24rem;
+  margin: 0;
+}
+@media (max-width: 720px) {
+  .report-pin-controls {
+    align-items: flex-start;
+  }
+  .report-pin-actions {
+    justify-content: flex-start;
+  }
+}

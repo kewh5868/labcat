@@ -1,23 +1,13 @@
-import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { brandName, brandTagline, LabcatMark } from "./Brand";
-import { ConnectionsPanel } from "./Connections";
-import PublicSourcesPanel from "./PublicSources";
-import RankingProfilesPanel from "./RankingProfiles";
-import ReportFormat from "./ReportFormat";
-import "./settingsLayout.css";
-import { canSubmitResearch } from "./setupApi";
-import SetupWizard from "./SetupWizard";
-import "./workspace.css";
-import type { SearchSettings } from "./workspaceApi";
-import { errorMessage, workspaceApi } from "./workspaceApi";
+import type { ReactNode } from "react";
 
-import { ResearchPlanCard } from "./AgentConnections";
-import type { StatusReport } from "./api";
 import { fetchStatus } from "./api";
-import { ConnectionsProvider, useConnections } from "./Connections";
+import type { StatusReport } from "./api";
+import ProjectWorkspace from "./ProjectWorkspace";
 import DeveloperSettings from "./DeveloperSettings";
+import { ConnectionsProvider, useConnections } from "./Connections";
 import { modelConnectionSummary } from "./modelConnectionSummary";
+import { ResearchPlanCard } from "./AgentConnections";
 import { SetupProvider, useSetup } from "./SetupWizard";
 
 type IconName =
@@ -150,7 +140,7 @@ export default function App() {
   return (
     <ConnectionsProvider>
       <SetupProvider>
-        <SettingsWorkspace
+        <ProjectWorkspace
           connectionOverview={<Overview />}
           developerSettings={developer ? <DeveloperSettings /> : undefined}
         />
@@ -435,161 +425,5 @@ function RuntimeCard({
       </div>
       <p>{note}</p>
     </article>
-  );
-}
-
-function WorkspaceShell({
-  children,
-  navigation,
-}: {
-  children: ReactNode;
-  navigation?: ReactNode;
-}) {
-  return (
-    <div className="app-shell project-app prompt-first-app">
-      <a className="skip-link" href="#project-main">
-        Skip to content
-      </a>
-      <aside
-        className="sidebar project-sidebar"
-        aria-label="Workspace navigation"
-      >
-        <div className="brand">
-          <LabcatMark />
-          <span className="brand-copy">
-            {brandName}
-            <span className="brand-subtitle">{brandTagline}</span>
-          </span>
-        </div>
-        {navigation}
-        <div className="sidebar-footer">
-          <span className="connection-dot is-connected" />
-          <span>Local workspace</span>
-        </div>
-      </aside>
-      <div className="workspace project-area">
-        <header className="topbar">
-          <span className="workspace-breadcrumb">Research workspace</span>
-        </header>
-        <main id="project-main" className="project-main" tabIndex={-1}>
-          {children}
-        </main>
-      </div>
-    </div>
-  );
-}
-
-function SettingsWorkspace({
-  connectionOverview,
-  developerSettings,
-}: {
-  connectionOverview?: ReactNode;
-  developerSettings?: ReactNode;
-}) {
-  const [mode, setMode] = useState("connections");
-  const [settings, setSettings] = useState<SearchSettings | null>(null);
-  const [error, setError] = useState("");
-  const [attempt, setAttempt] = useState(0);
-  const [setupOpen, setSetupOpen] = useState(false);
-  const setup = useSetup();
-  useEffect(() => {
-    const controller = new AbortController();
-    setError("");
-    workspaceApi
-      .settings(controller.signal)
-      .then((value) => {
-        if (!controller.signal.aborted) setSettings(value);
-      })
-      .catch((error) => {
-        if (!controller.signal.aborted) setError(errorMessage(error));
-      });
-    return () => controller.abort();
-  }, [attempt]);
-  useEffect(() => {
-    if (
-      setup.status &&
-      !setup.loading &&
-      (!setup.status.completed || !canSubmitResearch(setup.status))
-    )
-      setSetupOpen(true);
-  }, [setup.status, setup.loading]);
-  return (
-    <WorkspaceShell
-      navigation={
-        <nav className="sidebar-bottom-nav" aria-label="Application">
-          <button
-            type="button"
-            aria-current={mode === "format" ? "page" : undefined}
-            onClick={() => setMode("format")}
-          >
-            Report Format
-          </button>
-          <button
-            type="button"
-            aria-current={mode === "settings" ? "page" : undefined}
-            onClick={() => setMode("settings")}
-          >
-            Search Criterion
-          </button>
-          <button
-            type="button"
-            aria-current={mode === "connections" ? "page" : undefined}
-            onClick={() => setMode("connections")}
-          >
-            Connections
-          </button>
-          {developerSettings && (
-            <button
-              type="button"
-              aria-current={mode === "developer" ? "page" : undefined}
-              onClick={() => setMode("developer")}
-            >
-              Developer Settings
-            </button>
-          )}
-        </nav>
-      }
-    >
-      {error && (
-        <div role="alert">
-          <p>{error}</p>
-          <button
-            type="button"
-            onClick={() => setAttempt((value) => value + 1)}
-          >
-            Reload preferences
-          </button>
-        </div>
-      )}
-      {mode === "connections" ? (
-        <ConnectionsPanel
-          overview={connectionOverview}
-          onSetup={() => setSetupOpen(true)}
-        />
-      ) : mode === "settings" ? (
-        <section className="search-settings">
-          <header className="settings-intro">
-            <h1>Search Criterion</h1>
-            <p>
-              Choose a ranking profile and the public sources available to your
-              research.
-            </p>
-          </header>
-          <RankingProfilesPanel />
-          <PublicSourcesPanel onConnections={() => setMode("connections")} />
-        </section>
-      ) : mode === "developer" ? (
-        developerSettings
-      ) : settings ? (
-        <ReportFormat initial={settings} onSaved={setSettings} />
-      ) : (
-        <p role="status">Loading saved format…</p>
-      )}
-      <SetupWizard
-        open={setupOpen}
-        onClose={() => setSetupOpen(false)}
-        onComplete={() => setSetupOpen(false)}
-      />
-    </WorkspaceShell>
   );
 }

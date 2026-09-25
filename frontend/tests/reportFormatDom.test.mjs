@@ -316,9 +316,9 @@ test("server edition alone enables Developer Settings, below Connections, with n
     await act(async () => root.render(createElement(App, { key: "user" })));
     assert.deepEqual(
       [...document.querySelectorAll(".sidebar-bottom-nav button")].map(
-        (button) => button.textContent.trim(),
+        (button) => button.textContent.slice(1),
       ),
-      ["Report Format", "Search Criterion", "Connections"],
+      ["Chat", "Report Format", "Search Criterion", "Connections"],
     );
     assert.equal(requests.includes("/api/developer-settings"), false);
     runtime = { edition: "user", developer_settings_available: true };

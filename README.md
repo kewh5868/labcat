@@ -9,7 +9,7 @@ User prompts and model memory are preferences or search hints, never evidence.
 Only approved public-source adapters can supply scientific records. Missing evidence
 remains unknown; the application provides no private-data or wetlab tools.
 
-The React interface includes model connections, setup, ranking preferences and report settings.
+The React workspace includes searchable project and chat navigation with resizable sidebar sections.
 Build the interface with `npm ci --prefix frontend` and
 `npm run build --prefix frontend`, then open the running backend URL.
 Portable and native launchers are planned separately. This is a local single-user prototype.
