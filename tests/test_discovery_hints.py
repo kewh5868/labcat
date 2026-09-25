@@ -5,7 +5,10 @@ from copy import deepcopy
 
 import pytest
 
+from labcat import science
 from labcat.science.discovery_hints import formula_leads
+from labcat.science.retrieval_budget import bounded_deadline, repository_budget
+from labcat.science.sources import SourceError
 
 
 def reference(formula=None, *, title="TEST ONLY reference", provider="openalex"):
@@ -117,3 +120,126 @@ def test_unread_or_non_wikipedia_excerpt_is_never_scanned():
         item = reference(provider=provider)
         item["metadata"].update(excerpt="TEST ONLY SiO2", excerpt_read=read)
         assert formula_leads([item]) == []
+
+
+@pytest.fixture
+def rows():
+    # Published snapshot is substituted only inside this offline integration test.
+    records, _ = science.load_snapshot()
+    return records
+
+
+def test_lead_lookup_uses_adapter_records_and_still_runs_broad_query(monkeypatch, rows):
+    calls, seeded, broad = [], deepcopy(rows[:12]), deepcopy(rows[12:13])
+
+    def retrieve(_key, filters):
+        calls.append(deepcopy(filters))
+        return (seeded if "formula" in filters else broad), {}
+
+    monkeypatch.setattr(science, "retrieve_live", retrieve)
+    filters = {"elements": "O", "is_metal": "false"}
+    records, metadata = science._retrieve_repositories(
+        filters,
+        mp_api_key="offline-test-key",
+        mode="auto",
+        allow_nomad=False,
+        discovery_references=[reference("SiO2")],
+    )
+    assert calls == [{**filters, "formula": "SiO2"}, filters]
+    assert len(records) == 13
+    assert records[-1]["material_id"] == broad[0]["material_id"]
+    assert metadata["discovery_leads"]["adapter_records_returned"]
+    assert metadata["discovery_leads"]["attempts"][0]["records_retrieved"] == 12
+    assert filters == {"elements": "O", "is_metal": "false"}
+
+
+def test_formula_leads_cannot_supply_properties_without_adapter_records(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        science,
+        "retrieve_nomad",
+        lambda filters: (calls.append(deepcopy(filters)) or [], {}),
+    )
+    item = reference("SiO2")
+    item["metadata"].update(band_gap_ev=999, dielectric_total=999)
+    records, metadata = science._retrieve_repositories(
+        {"elements": "O"},
+        mp_api_key=None,
+        mode="auto",
+        allow_nomad=True,
+        discovery_references=[item],
+    )
+    assert records == []
+    assert calls == [{"elements": "O", "formula": "SiO2"}, {"elements": "O"}]
+    assert not metadata["discovery_leads"]["adapter_records_returned"]
+    assert "band_gap_ev" not in str(metadata["discovery_leads"])
+
+
+@pytest.mark.parametrize(
+    "filters",
+    [
+        {"formula": "SiO2"},
+        {"chemsys": "O-Si"},
+        {"material_ids": "mp-1"},
+    ],
+)
+def test_explicit_scope_never_adds_formula_lookup(monkeypatch, filters):
+    calls = []
+    monkeypatch.setattr(
+        science, "retrieve_live", lambda _, query: (calls.append(query) or [], {})
+    )
+    science._retrieve_repositories(
+        filters,
+        mp_api_key="offline-test-key",
+        mode="auto",
+        allow_nomad=False,
+        discovery_references=[reference("HfO2")],
+    )
+    assert calls == [filters]
+
+
+def test_broad_result_refreshes_same_identity_without_merging_phases(monkeypatch, rows):
+    early = deepcopy(rows[0])
+    later = {**deepcopy(early), "band_gap_ev": early["band_gap_ev"] + 0.1}
+    other = {**deepcopy(early), "material_id": early["material_id"] + "-test-phase"}
+    monkeypatch.setattr(
+        science,
+        "retrieve_live",
+        lambda _, filters: ([early, other] if "formula" in filters else [later], {}),
+    )
+    records, _ = science._retrieve_repositories(
+        {"elements": "O"},
+        mp_api_key="offline-test-key",
+        mode="auto",
+        allow_nomad=False,
+        discovery_references=[reference("SiO2")],
+    )
+    assert len(records) == 2
+    assert records[0]["band_gap_ev"] == later["band_gap_ev"]
+    assert records[1] == other
+
+
+def test_lookup_failure_keeps_broad_query_and_shared_budget(monkeypatch):
+    calls, deadlines = [], []
+
+    def retrieve(_, filters):
+        calls.append(deepcopy(filters))
+        deadlines.append(bounded_deadline(30))
+        if "formula" in filters:
+            raise SourceError("TEST ONLY lookup outage")
+        return [], {}
+
+    monkeypatch.setattr(science, "retrieve_live", retrieve)
+    with repository_budget(seconds=12):
+        original_deadline = bounded_deadline(30)
+        records, metadata = science._retrieve_repositories(
+            {"elements": "O"},
+            mp_api_key="offline-test-key",
+            mode="auto",
+            allow_nomad=False,
+            discovery_references=[reference("SiO2")],
+        )
+    assert records == []
+    assert calls == [{"elements": "O", "formula": "SiO2"}, {"elements": "O"}]
+    assert deadlines[0] < deadlines[1] == original_deadline
+    assert metadata["discovery_leads"]["attempts"][0]["status"] == "unavailable"

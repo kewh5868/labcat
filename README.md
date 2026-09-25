@@ -7,13 +7,13 @@ Level 4 foundation.
 
 ## Current Python capabilities
 
-Deterministic property scoring and experimental/computed evidence comparisons retain
-missing values, conflicts and uncertainty. Bounded public article passages support
-traceable review leads. Profile and request inference supplies preferences only; it
-cannot create evidence.
+The Python science library retrieves approved public records, ranks supported
+properties and renders paired cited summary and technical views. Unknown properties
+and incomplete application evidence stay explicit. Direct library research is
+available; model-connected orchestration is still being assembled.
 
-Cited report rendering, saved workspace, connection lifecycle and the complete
-research/application interface remain planned.
+Saved workspace, connection lifecycle, full research orchestration and the application
+interface remain planned.
 
 The command-line interface currently provides software status, configuration
 validation and an explicit read-only AWS account check. It does not yet expose the

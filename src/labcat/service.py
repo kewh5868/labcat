@@ -28,8 +28,8 @@ def get_status(config: AppConfig, style: str | None = None) -> dict[str, Any]:
         "stage": "scaffold",
         "style": selected,
         "message": (
-            "Python APIs provide evidence-based material ranking. The "
-            "research command and UI are not available yet."
+            "Python APIs provide cited summaries and technical comparisons. "
+            "The research command and UI are not available yet."
         ),
         "provider": config.provider,
         "compute": "local",
@@ -38,8 +38,8 @@ def get_status(config: AppConfig, style: str | None = None) -> dict[str, Any]:
         "limitations": [
             "Status contains no scientific records or ranked candidates.",
             (
-                "Cited report rendering, saved workspace, connection lifecycle "
-                "and the complete research/application interface remain planned."
+                "Saved workspace, connection lifecycle, full research "
+                "orchestration and the application interface remain planned."
             ),
             "Scientific coverage depends on independently validated public evidence.",
         ],
@@ -49,12 +49,12 @@ def get_status(config: AppConfig, style: str | None = None) -> dict[str, Any]:
         report["implemented"] = [
             "Installable Python package and software status commands",
             "Strict local preference configuration",
-            "Evidence-based material ranking",
+            "Cited summaries and technical comparisons",
         ]
         report["next_steps"] = [
             (
-                "Cited report rendering, saved workspace, connection lifecycle "
-                "and the complete research/application interface remain planned."
+                "Saved workspace, connection lifecycle, full research "
+                "orchestration and the application interface remain planned."
             )
         ]
     return report
