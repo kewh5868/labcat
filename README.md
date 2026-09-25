@@ -7,13 +7,13 @@ Level 4 foundation.
 
 ## Current Python capabilities
 
-The Python science library retrieves approved public records, ranks supported
-properties and renders paired cited summary and technical views. Unknown properties
-and incomplete application evidence stay explicit. Direct library research is
-available; model-connected orchestration is still being assembled.
+SQLite stores projects, independent chats, timestamped questions, reports, source
+versions and pins. Transactions and migrations preserve saved identities; recovery and
+removal operations retain their explicit confirmation boundaries. Saved user messages
+and reports do not become new scientific evidence.
 
-Saved workspace, connection lifecycle, full research orchestration and the application
-interface remain planned.
+Saved research preferences, verified connection lifecycle, complete model-connected
+orchestration and the application interface remain planned.
 
 The command-line interface currently provides software status, configuration
 validation and an explicit read-only AWS account check. It does not yet expose the

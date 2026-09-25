@@ -14,10 +14,10 @@ authors = [{ name = "Keith White" }]
 dependencies = []
 
 [project.optional-dependencies]
-web = ["gemmi==0.7.5"]
+web = ["fastapi>=0.115,<1", "uvicorn>=0.30,<1", "gemmi==0.7.5"]
 aws = ["boto3>=1.35,<2"]
 connections = ["cryptography>=50,<51"]
-dev = ["build>=1.2,<2", "pytest>=8,<10", "ruff>=0.11,<1", "pre-commit>=4.3,<5"]
+dev = ["build>=1.2,<2", "pytest>=8,<10", "ruff>=0.11,<1", "pre-commit>=4.3,<5", "httpx>=0.27,<1"]
 
 [project.scripts]
 labcat = "labcat.cli:main"
