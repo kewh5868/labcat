@@ -1,8 +1,11 @@
-import type { FormEvent } from "react";
 import { useEffect, useRef, useState } from "react";
-import "./reportFormat.css";
-import type { PreviewViews, ReportPreview } from "./reportFormatApi";
-import { reportFormatApi } from "./reportFormatApi";
+import type { FormEvent } from "react";
+import {
+  defaultReportLayout,
+  errorMessage,
+  toggleReportOutput,
+  workspaceApi,
+} from "./workspaceApi";
 import type {
   ExportFormat,
   ReportLayout,
@@ -10,12 +13,10 @@ import type {
   ReportView,
   SearchSettings,
 } from "./workspaceApi";
-import {
-  defaultReportLayout,
-  errorMessage,
-  toggleReportOutput,
-  workspaceApi,
-} from "./workspaceApi";
+import { reportFormatApi } from "./reportFormatApi";
+import type { PreviewViews, ReportPreview } from "./reportFormatApi";
+import ReportContent from "./ReportContent";
+import "./reportFormat.css";
 
 const clone = (value: SearchSettings): SearchSettings => ({
   ranking: { ...value.ranking },
@@ -573,21 +574,24 @@ export default function ReportFormat({
             {format === "screen" ? (
               <>
                 <p className="report-preview-note">
-                  Template text previews contain placeholders, without material
-                  claims or scores. PDF and Word previews show the selected
-                  layout.
+                  This uses the same report display as your chats. Placeholder
+                  rows show the layout, without material claims or scores.
                 </p>
                 {preview.documents ? (
                   <div className="report-screen-previews">
                     {(view === "pi" || view === "both") && (
-                      <div className="message-text">
-                        {preview.documents.pi_summary}
-                      </div>
+                      <ReportContent
+                        content={preview.documents.pi_summary}
+                        view="pi"
+                        presentation={preview.presentation}
+                      />
                     )}
                     {(view === "audit" || view === "both") && (
-                      <div className="message-text">
-                        {preview.documents.technical_audit}
-                      </div>
+                      <ReportContent
+                        content={preview.documents.technical_audit}
+                        view="audit"
+                        presentation={preview.presentation}
+                      />
                     )}
                   </div>
                 ) : (

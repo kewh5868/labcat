@@ -9,7 +9,7 @@ User prompts and model memory are preferences or search hints, never evidence.
 Only approved public-source adapters can supply scientific records. Missing evidence
 remains unknown; the application provides no private-data or wetlab tools.
 
-The React workspace supports prompt submission, progress reporting and research that continues when another chat is selected.
+The React workspace presents ranked reports, adaptive property tables, source downloads and timestamped query history.
 Build the interface with `npm ci --prefix frontend` and
 `npm run build --prefix frontend`, then open the running backend URL.
 Portable and native launchers are planned separately. This is a local single-user prototype.

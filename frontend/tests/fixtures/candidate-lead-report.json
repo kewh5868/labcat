@@ -1,0 +1,500 @@
+{
+  "summary": "Summary:\n\nFindings and recommendations:\n\nThe public passages identify Fixture-A [S1] and Fixture-B [S5] as leads for review. Their mention alone does not establish application suitability or a preferred candidate.\n\n\nSource-grounded candidates:\n\n| Review order | Candidate | Source | Supporting quote | Missing measurements |\n| --- | --- | --- | --- | --- |\n| 1 | Fixture-A | TEST ONLY literature record 1 [S1] | \u201cTEST ONLY: Fixture-A appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.\u201d | Thermodynamic stability; Band gap; Custom transport; Room-temperature phase stability; Operational stability |\n| 2 | Fixture-B | TEST ONLY literature record 2 [S5] | \u201cTEST ONLY: Fixture-B appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.\u201d | Thermodynamic stability; Band gap; Custom transport; Room-temperature phase stability; Operational stability |\n| 3 | Fixture-C | TEST ONLY literature record 3 [S6] | \u201cTEST ONLY: Fixture-C appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.\u201d | Thermodynamic stability; Band gap; Custom transport; Room-temperature phase stability; Operational stability |\n| 4 | Fixture-D | TEST ONLY literature record 4 [S7] | \u201cTEST ONLY: Fixture-D appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.\u201d | Thermodynamic stability; Band gap; Custom transport; Room-temperature phase stability; Operational stability |\n| 5 | Fixture-E | TEST ONLY literature record 5 [S8] | \u201cTEST ONLY: Fixture-E appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.\u201d | Thermodynamic stability; Band gap; Custom transport; Room-temperature phase stability; Operational stability |\n\nInterpretation and tradeoffs:\n\n- Fixture-A. What the source describes (quoted context): \u201cTEST ONLY: Fixture-A appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.\u201d [S1]. This is source context, not an assessed suitability finding.\n- Fixture-B. What the source describes (quoted context): \u201cTEST ONLY: Fixture-B appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.\u201d [S5]. This is source context, not an assessed suitability finding.\nReview the cited candidate passages for an actual demonstration of the intended use, then establish the selected properties and stability of the relevant phase under the intended conditions. Keep unsupported attributes unresolved until those observations are available; source counts and material mentions cannot decide suitability.\n\nSearch and analysis details:\n\nThe synthetic retrieval has no quantitative property evidence.\n\nTEST ONLY quantitative adapter unavailable.\n\nThere is not enough validated, relevant property evidence to recommend a ranked material shortlist from this run. The next step is to review the public-source coverage and resolve the missing evidence before selecting candidates for experiments.\n\nHow to read the source-grounded candidates:\n\nPublic sources name 12 candidate leads for further review. These are cited mentions: material identity, properties and suitability for the requested use remain unverified. A passage may describe a comparison or a rejected material. Review order is not a performance ranking; no scores are assigned.\n\n\nMissing measurements and condition-matched evidence remain unresolved. Thermodynamic, room-temperature phase and operational stability are unverified; unknown does not mean stable. No application suitability or experimental recommendation is established by these mentions.\nThis compact table shows 5 of 12 leads. Technical View retains every lead, full supporting quotations and all evidence gaps.\n\nPublic literature:\n12 references were retained. These are review leads, not scored material-property evidence.\n- [S1] TEST ONLY literature record 1 \u00b7 Synthetic OpenAlex protocol fixture\n- [S2] TEST ONLY literature record 10 \u00b7 Synthetic OpenAlex protocol fixture\nThe source list and JSON archive retain all 12 references.\n",
+  "technical": "Technical View:\n\nFindings and recommendations:\n\nThe public passages identify Fixture-A [S1], Fixture-B [S5] and Fixture-C [S6] as leads for review. Their mention alone does not establish application suitability or a preferred candidate.\n\n\nSource-grounded candidates:\n\n| Review order | Candidate | Source | Supporting quote | Missing measurements |\n| --- | --- | --- | --- | --- |\n| 1 | Fixture-A | TEST ONLY literature record 1 [S1] | \u201cTEST ONLY: Fixture-A appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.\u201d | Thermodynamic stability; Band gap; Custom transport; Room-temperature phase stability; Operational stability |\n| 2 | Fixture-B | TEST ONLY literature record 2 [S5] | \u201cTEST ONLY: Fixture-B appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.\u201d | Thermodynamic stability; Band gap; Custom transport; Room-temperature phase stability; Operational stability |\n| 3 | Fixture-C | TEST ONLY literature record 3 [S6] | \u201cTEST ONLY: Fixture-C appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.\u201d | Thermodynamic stability; Band gap; Custom transport; Room-temperature phase stability; Operational stability |\n| 4 | Fixture-D | TEST ONLY literature record 4 [S7] | \u201cTEST ONLY: Fixture-D appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.\u201d | Thermodynamic stability; Band gap; Custom transport; Room-temperature phase stability; Operational stability |\n| 5 | Fixture-E | TEST ONLY literature record 5 [S8] | \u201cTEST ONLY: Fixture-E appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.\u201d | Thermodynamic stability; Band gap; Custom transport; Room-temperature phase stability; Operational stability |\n| 6 | Fixture-F | TEST ONLY literature record 6 [S9] | \u201cTEST ONLY: Fixture-F appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.\u201d | Thermodynamic stability; Band gap; Custom transport; Room-temperature phase stability; Operational stability |\n| 7 | Fixture-G | TEST ONLY literature record 7 [S10] | \u201cTEST ONLY: Fixture-G appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.\u201d | Thermodynamic stability; Band gap; Custom transport; Room-temperature phase stability; Operational stability |\n| 8 | Fixture-H | TEST ONLY literature record 8 [S11] | \u201cTEST ONLY: Fixture-H appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.\u201d | Thermodynamic stability; Band gap; Custom transport; Room-temperature phase stability; Operational stability |\n| 9 | Fixture-I | TEST ONLY literature record 9 [S12] | \u201cTEST ONLY: Fixture-I appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.\u201d | Thermodynamic stability; Band gap; Custom transport; Room-temperature phase stability; Operational stability |\n| 10 | Fixture-J | TEST ONLY literature record 10 [S2] | \u201cTEST ONLY: Fixture-J appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.\u201d | Thermodynamic stability; Band gap; Custom transport; Room-temperature phase stability; Operational stability |\n| 11 | Fixture-K | TEST ONLY literature record 11 [S3] | \u201cTEST ONLY: Fixture-K appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.\u201d | Thermodynamic stability; Band gap; Custom transport; Room-temperature phase stability; Operational stability |\n| 12 | Fixture-L | TEST ONLY literature record 12 [S4] | \u201cTEST ONLY: Fixture-L appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.\u201d | Thermodynamic stability; Band gap; Custom transport; Room-temperature phase stability; Operational stability |\n\nInterpretation and tradeoffs:\n\n- Fixture-A. What the source describes (quoted context): \u201cTEST ONLY: Fixture-A appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.\u201d [S1]. This is source context, not an assessed suitability finding.\n- Fixture-B. What the source describes (quoted context): \u201cTEST ONLY: Fixture-B appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.\u201d [S5]. This is source context, not an assessed suitability finding.\n- Fixture-C. What the source describes (quoted context): \u201cTEST ONLY: Fixture-C appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.\u201d [S6]. This is source context, not an assessed suitability finding.\nReview the cited candidate passages for an actual demonstration of the intended use, then establish the selected properties and stability of the relevant phase under the intended conditions. Keep unsupported attributes unresolved until those observations are available; source counts and material mentions cannot decide suitability.\n\nSearch and analysis details:\n\nScope and outcome:\n\nThe synthetic retrieval has no quantitative property evidence.\n\nNo scored shortlist was produced. No scientific candidate rows were substituted.\nTEST ONLY quantitative adapter unavailable.\n\nHow to read the source-grounded candidates:\n\nPublic sources name 12 candidate leads for further review. These are cited mentions: material identity, properties and suitability for the requested use remain unverified. A passage may describe a comparison or a rejected material. Review order is not a performance ranking; no scores are assigned.\n\n\nMissing measurements and condition-matched evidence remain unresolved. Thermodynamic, room-temperature phase and operational stability are unverified; unknown does not mean stable. No application suitability or experimental recommendation is established by these mentions.\n\nCandidate evidence gaps:\n\nReview 1 \u00b7 Fixture-A:\nSource: TEST ONLY literature record 1 [S1]\n\u201cTEST ONLY: Fixture-A appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.\u201d\nMissing measurements: Thermodynamic stability; Band gap; Custom transport; Room-temperature phase stability; Operational stability.\n- This is a literal cited mention, not verified material identity, phase, property evidence or suitability for the requested application.\n- The source may discuss a comparison, limitation or rejected material; mention alone does not establish a recommendation.\n- Thermodynamic, room-temperature phase and operational stability remain unverified; unknown is not stable.\n\nReview 2 \u00b7 Fixture-B:\nSource: TEST ONLY literature record 2 [S5]\n\u201cTEST ONLY: Fixture-B appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.\u201d\nMissing measurements: Thermodynamic stability; Band gap; Custom transport; Room-temperature phase stability; Operational stability.\n- This is a literal cited mention, not verified material identity, phase, property evidence or suitability for the requested application.\n- The source may discuss a comparison, limitation or rejected material; mention alone does not establish a recommendation.\n- Thermodynamic, room-temperature phase and operational stability remain unverified; unknown is not stable.\n\nReview 3 \u00b7 Fixture-C:\nSource: TEST ONLY literature record 3 [S6]\n\u201cTEST ONLY: Fixture-C appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.\u201d\nMissing measurements: Thermodynamic stability; Band gap; Custom transport; Room-temperature phase stability; Operational stability.\n- This is a literal cited mention, not verified material identity, phase, property evidence or suitability for the requested application.\n- The source may discuss a comparison, limitation or rejected material; mention alone does not establish a recommendation.\n- Thermodynamic, room-temperature phase and operational stability remain unverified; unknown is not stable.\n\nReview 4 \u00b7 Fixture-D:\nSource: TEST ONLY literature record 4 [S7]\n\u201cTEST ONLY: Fixture-D appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.\u201d\nMissing measurements: Thermodynamic stability; Band gap; Custom transport; Room-temperature phase stability; Operational stability.\n- This is a literal cited mention, not verified material identity, phase, property evidence or suitability for the requested application.\n- The source may discuss a comparison, limitation or rejected material; mention alone does not establish a recommendation.\n- Thermodynamic, room-temperature phase and operational stability remain unverified; unknown is not stable.\n\nReview 5 \u00b7 Fixture-E:\nSource: TEST ONLY literature record 5 [S8]\n\u201cTEST ONLY: Fixture-E appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.\u201d\nMissing measurements: Thermodynamic stability; Band gap; Custom transport; Room-temperature phase stability; Operational stability.\n- This is a literal cited mention, not verified material identity, phase, property evidence or suitability for the requested application.\n- The source may discuss a comparison, limitation or rejected material; mention alone does not establish a recommendation.\n- Thermodynamic, room-temperature phase and operational stability remain unverified; unknown is not stable.\n\nReview 6 \u00b7 Fixture-F:\nSource: TEST ONLY literature record 6 [S9]\n\u201cTEST ONLY: Fixture-F appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.\u201d\nMissing measurements: Thermodynamic stability; Band gap; Custom transport; Room-temperature phase stability; Operational stability.\n- This is a literal cited mention, not verified material identity, phase, property evidence or suitability for the requested application.\n- The source may discuss a comparison, limitation or rejected material; mention alone does not establish a recommendation.\n- Thermodynamic, room-temperature phase and operational stability remain unverified; unknown is not stable.\n\nReview 7 \u00b7 Fixture-G:\nSource: TEST ONLY literature record 7 [S10]\n\u201cTEST ONLY: Fixture-G appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.\u201d\nMissing measurements: Thermodynamic stability; Band gap; Custom transport; Room-temperature phase stability; Operational stability.\n- This is a literal cited mention, not verified material identity, phase, property evidence or suitability for the requested application.\n- The source may discuss a comparison, limitation or rejected material; mention alone does not establish a recommendation.\n- Thermodynamic, room-temperature phase and operational stability remain unverified; unknown is not stable.\n\nReview 8 \u00b7 Fixture-H:\nSource: TEST ONLY literature record 8 [S11]\n\u201cTEST ONLY: Fixture-H appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.\u201d\nMissing measurements: Thermodynamic stability; Band gap; Custom transport; Room-temperature phase stability; Operational stability.\n- This is a literal cited mention, not verified material identity, phase, property evidence or suitability for the requested application.\n- The source may discuss a comparison, limitation or rejected material; mention alone does not establish a recommendation.\n- Thermodynamic, room-temperature phase and operational stability remain unverified; unknown is not stable.\n\nReview 9 \u00b7 Fixture-I:\nSource: TEST ONLY literature record 9 [S12]\n\u201cTEST ONLY: Fixture-I appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.\u201d\nMissing measurements: Thermodynamic stability; Band gap; Custom transport; Room-temperature phase stability; Operational stability.\n- This is a literal cited mention, not verified material identity, phase, property evidence or suitability for the requested application.\n- The source may discuss a comparison, limitation or rejected material; mention alone does not establish a recommendation.\n- Thermodynamic, room-temperature phase and operational stability remain unverified; unknown is not stable.\n\nReview 10 \u00b7 Fixture-J:\nSource: TEST ONLY literature record 10 [S2]\n\u201cTEST ONLY: Fixture-J appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.\u201d\nMissing measurements: Thermodynamic stability; Band gap; Custom transport; Room-temperature phase stability; Operational stability.\n- This is a literal cited mention, not verified material identity, phase, property evidence or suitability for the requested application.\n- The source may discuss a comparison, limitation or rejected material; mention alone does not establish a recommendation.\n- Thermodynamic, room-temperature phase and operational stability remain unverified; unknown is not stable.\n\nReview 11 \u00b7 Fixture-K:\nSource: TEST ONLY literature record 11 [S3]\n\u201cTEST ONLY: Fixture-K appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.\u201d\nMissing measurements: Thermodynamic stability; Band gap; Custom transport; Room-temperature phase stability; Operational stability.\n- This is a literal cited mention, not verified material identity, phase, property evidence or suitability for the requested application.\n- The source may discuss a comparison, limitation or rejected material; mention alone does not establish a recommendation.\n- Thermodynamic, room-temperature phase and operational stability remain unverified; unknown is not stable.\n\nReview 12 \u00b7 Fixture-L:\nSource: TEST ONLY literature record 12 [S4]\n\u201cTEST ONLY: Fixture-L appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.\u201d\nMissing measurements: Thermodynamic stability; Band gap; Custom transport; Room-temperature phase stability; Operational stability.\n- This is a literal cited mention, not verified material identity, phase, property evidence or suitability for the requested application.\n- The source may discuss a comparison, limitation or rejected material; mention alone does not establish a recommendation.\n- Thermodynamic, room-temperature phase and operational stability remain unverified; unknown is not stable.\n\nRanking method:\nSelected importance: Thermodynamic stability 50.0%; Band gap 50.0%.\nSelected importance coverage is the fraction of the profile's total weight with usable evidence. It is shown separately for each candidate.\nThe scoring rules convert supported source properties into preference utilities. The strongest available score does not demonstrate fitness for the intended use.\n\nRetrieval and methods:\n\nPublic literature:\n12 references were retained. These are review leads, not scored material-property evidence.\n- [S1] TEST ONLY literature record 1 \u00b7 Synthetic OpenAlex protocol fixture\n- [S2] TEST ONLY literature record 10 \u00b7 Synthetic OpenAlex protocol fixture\n- [S3] TEST ONLY literature record 11 \u00b7 Synthetic OpenAlex protocol fixture\n- [S4] TEST ONLY literature record 12 \u00b7 Synthetic OpenAlex protocol fixture\n- [S5] TEST ONLY literature record 2 \u00b7 Synthetic OpenAlex protocol fixture\n- [S6] TEST ONLY literature record 3 \u00b7 Synthetic OpenAlex protocol fixture\nThe source list and JSON archive retain all 12 references.\n\nAudit archive:\nRecord identifiers, full source URLs, raw source fields, response hashes, complete passages and execution metadata are retained in Audit details and the JSON archive. They are not additional scientific evidence.\n",
+  "leads": [
+    {
+      "id": "lead-c2b0a6e3acbe0629d869b1c4",
+      "name": "Fixture-A",
+      "quote": "TEST ONLY: Fixture-A appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.",
+      "source_id": "openalex",
+      "record_id": "W1",
+      "url": "https://openalex.org/W1",
+      "title": "TEST ONLY literature record 1",
+      "status": "candidate_lead",
+      "properties_verified": false,
+      "suitability_verified": false,
+      "missing_criteria": [
+        "stability",
+        "band_gap",
+        "custom_transport",
+        "ambient_phase_stability",
+        "operational_stability"
+      ],
+      "cautions": [
+        "This is a literal cited mention, not verified material identity, phase, property evidence or suitability for the requested application.",
+        "The source may discuss a comparison, limitation or rejected material; mention alone does not establish a recommendation.",
+        "Thermodynamic, room-temperature phase and operational stability remain unverified; unknown is not stable."
+      ],
+      "citations": [
+        {
+          "document_id": "doc-3aa771e0b864874c44f546dc",
+          "source_id": "openalex",
+          "record_id": "W1",
+          "url": "https://openalex.org/W1",
+          "title": "TEST ONLY literature record 1",
+          "quote": "TEST ONLY: Fixture-A appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability."
+        }
+      ]
+    },
+    {
+      "id": "lead-3db62944beed878b28b3d3ee",
+      "name": "Fixture-B",
+      "quote": "TEST ONLY: Fixture-B appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.",
+      "source_id": "openalex",
+      "record_id": "W2",
+      "url": "https://openalex.org/W2",
+      "title": "TEST ONLY literature record 2",
+      "status": "candidate_lead",
+      "properties_verified": false,
+      "suitability_verified": false,
+      "missing_criteria": [
+        "stability",
+        "band_gap",
+        "custom_transport",
+        "ambient_phase_stability",
+        "operational_stability"
+      ],
+      "cautions": [
+        "This is a literal cited mention, not verified material identity, phase, property evidence or suitability for the requested application.",
+        "The source may discuss a comparison, limitation or rejected material; mention alone does not establish a recommendation.",
+        "Thermodynamic, room-temperature phase and operational stability remain unverified; unknown is not stable."
+      ],
+      "citations": [
+        {
+          "document_id": "doc-b63f4491296034fcfd115828",
+          "source_id": "openalex",
+          "record_id": "W2",
+          "url": "https://openalex.org/W2",
+          "title": "TEST ONLY literature record 2",
+          "quote": "TEST ONLY: Fixture-B appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability."
+        }
+      ]
+    },
+    {
+      "id": "lead-043fbeb740326d94a9081a24",
+      "name": "Fixture-C",
+      "quote": "TEST ONLY: Fixture-C appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.",
+      "source_id": "openalex",
+      "record_id": "W3",
+      "url": "https://openalex.org/W3",
+      "title": "TEST ONLY literature record 3",
+      "status": "candidate_lead",
+      "properties_verified": false,
+      "suitability_verified": false,
+      "missing_criteria": [
+        "stability",
+        "band_gap",
+        "custom_transport",
+        "ambient_phase_stability",
+        "operational_stability"
+      ],
+      "cautions": [
+        "This is a literal cited mention, not verified material identity, phase, property evidence or suitability for the requested application.",
+        "The source may discuss a comparison, limitation or rejected material; mention alone does not establish a recommendation.",
+        "Thermodynamic, room-temperature phase and operational stability remain unverified; unknown is not stable."
+      ],
+      "citations": [
+        {
+          "document_id": "doc-642dc3196afc9ead899998a2",
+          "source_id": "openalex",
+          "record_id": "W3",
+          "url": "https://openalex.org/W3",
+          "title": "TEST ONLY literature record 3",
+          "quote": "TEST ONLY: Fixture-C appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability."
+        }
+      ]
+    },
+    {
+      "id": "lead-d2d904998ba6db73d259a69c",
+      "name": "Fixture-D",
+      "quote": "TEST ONLY: Fixture-D appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.",
+      "source_id": "openalex",
+      "record_id": "W4",
+      "url": "https://openalex.org/W4",
+      "title": "TEST ONLY literature record 4",
+      "status": "candidate_lead",
+      "properties_verified": false,
+      "suitability_verified": false,
+      "missing_criteria": [
+        "stability",
+        "band_gap",
+        "custom_transport",
+        "ambient_phase_stability",
+        "operational_stability"
+      ],
+      "cautions": [
+        "This is a literal cited mention, not verified material identity, phase, property evidence or suitability for the requested application.",
+        "The source may discuss a comparison, limitation or rejected material; mention alone does not establish a recommendation.",
+        "Thermodynamic, room-temperature phase and operational stability remain unverified; unknown is not stable."
+      ],
+      "citations": [
+        {
+          "document_id": "doc-f78ce22adaf076867d46a81a",
+          "source_id": "openalex",
+          "record_id": "W4",
+          "url": "https://openalex.org/W4",
+          "title": "TEST ONLY literature record 4",
+          "quote": "TEST ONLY: Fixture-D appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability."
+        }
+      ]
+    },
+    {
+      "id": "lead-5f11ceadd8efbb961f85c316",
+      "name": "Fixture-E",
+      "quote": "TEST ONLY: Fixture-E appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.",
+      "source_id": "openalex",
+      "record_id": "W5",
+      "url": "https://openalex.org/W5",
+      "title": "TEST ONLY literature record 5",
+      "status": "candidate_lead",
+      "properties_verified": false,
+      "suitability_verified": false,
+      "missing_criteria": [
+        "stability",
+        "band_gap",
+        "custom_transport",
+        "ambient_phase_stability",
+        "operational_stability"
+      ],
+      "cautions": [
+        "This is a literal cited mention, not verified material identity, phase, property evidence or suitability for the requested application.",
+        "The source may discuss a comparison, limitation or rejected material; mention alone does not establish a recommendation.",
+        "Thermodynamic, room-temperature phase and operational stability remain unverified; unknown is not stable."
+      ],
+      "citations": [
+        {
+          "document_id": "doc-647e8b2cc580cf1dbd4bb3e9",
+          "source_id": "openalex",
+          "record_id": "W5",
+          "url": "https://openalex.org/W5",
+          "title": "TEST ONLY literature record 5",
+          "quote": "TEST ONLY: Fixture-E appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability."
+        }
+      ]
+    },
+    {
+      "id": "lead-e475a2669c5f3ee7c34fd6a3",
+      "name": "Fixture-F",
+      "quote": "TEST ONLY: Fixture-F appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.",
+      "source_id": "openalex",
+      "record_id": "W6",
+      "url": "https://openalex.org/W6",
+      "title": "TEST ONLY literature record 6",
+      "status": "candidate_lead",
+      "properties_verified": false,
+      "suitability_verified": false,
+      "missing_criteria": [
+        "stability",
+        "band_gap",
+        "custom_transport",
+        "ambient_phase_stability",
+        "operational_stability"
+      ],
+      "cautions": [
+        "This is a literal cited mention, not verified material identity, phase, property evidence or suitability for the requested application.",
+        "The source may discuss a comparison, limitation or rejected material; mention alone does not establish a recommendation.",
+        "Thermodynamic, room-temperature phase and operational stability remain unverified; unknown is not stable."
+      ],
+      "citations": [
+        {
+          "document_id": "doc-4db5b2d1cec5e3e66e6b9939",
+          "source_id": "openalex",
+          "record_id": "W6",
+          "url": "https://openalex.org/W6",
+          "title": "TEST ONLY literature record 6",
+          "quote": "TEST ONLY: Fixture-F appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability."
+        }
+      ]
+    },
+    {
+      "id": "lead-7afb160a236a20e00f0c0f17",
+      "name": "Fixture-G",
+      "quote": "TEST ONLY: Fixture-G appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.",
+      "source_id": "openalex",
+      "record_id": "W7",
+      "url": "https://openalex.org/W7",
+      "title": "TEST ONLY literature record 7",
+      "status": "candidate_lead",
+      "properties_verified": false,
+      "suitability_verified": false,
+      "missing_criteria": [
+        "stability",
+        "band_gap",
+        "custom_transport",
+        "ambient_phase_stability",
+        "operational_stability"
+      ],
+      "cautions": [
+        "This is a literal cited mention, not verified material identity, phase, property evidence or suitability for the requested application.",
+        "The source may discuss a comparison, limitation or rejected material; mention alone does not establish a recommendation.",
+        "Thermodynamic, room-temperature phase and operational stability remain unverified; unknown is not stable."
+      ],
+      "citations": [
+        {
+          "document_id": "doc-eadb056b7b3f989401b67730",
+          "source_id": "openalex",
+          "record_id": "W7",
+          "url": "https://openalex.org/W7",
+          "title": "TEST ONLY literature record 7",
+          "quote": "TEST ONLY: Fixture-G appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability."
+        }
+      ]
+    },
+    {
+      "id": "lead-80d6b77eef27532d56835b88",
+      "name": "Fixture-H",
+      "quote": "TEST ONLY: Fixture-H appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.",
+      "source_id": "openalex",
+      "record_id": "W8",
+      "url": "https://openalex.org/W8",
+      "title": "TEST ONLY literature record 8",
+      "status": "candidate_lead",
+      "properties_verified": false,
+      "suitability_verified": false,
+      "missing_criteria": [
+        "stability",
+        "band_gap",
+        "custom_transport",
+        "ambient_phase_stability",
+        "operational_stability"
+      ],
+      "cautions": [
+        "This is a literal cited mention, not verified material identity, phase, property evidence or suitability for the requested application.",
+        "The source may discuss a comparison, limitation or rejected material; mention alone does not establish a recommendation.",
+        "Thermodynamic, room-temperature phase and operational stability remain unverified; unknown is not stable."
+      ],
+      "citations": [
+        {
+          "document_id": "doc-4db687328dc3d4bfd5428d0a",
+          "source_id": "openalex",
+          "record_id": "W8",
+          "url": "https://openalex.org/W8",
+          "title": "TEST ONLY literature record 8",
+          "quote": "TEST ONLY: Fixture-H appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability."
+        }
+      ]
+    },
+    {
+      "id": "lead-381e0c772a1774fc3c615252",
+      "name": "Fixture-I",
+      "quote": "TEST ONLY: Fixture-I appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.",
+      "source_id": "openalex",
+      "record_id": "W9",
+      "url": "https://openalex.org/W9",
+      "title": "TEST ONLY literature record 9",
+      "status": "candidate_lead",
+      "properties_verified": false,
+      "suitability_verified": false,
+      "missing_criteria": [
+        "stability",
+        "band_gap",
+        "custom_transport",
+        "ambient_phase_stability",
+        "operational_stability"
+      ],
+      "cautions": [
+        "This is a literal cited mention, not verified material identity, phase, property evidence or suitability for the requested application.",
+        "The source may discuss a comparison, limitation or rejected material; mention alone does not establish a recommendation.",
+        "Thermodynamic, room-temperature phase and operational stability remain unverified; unknown is not stable."
+      ],
+      "citations": [
+        {
+          "document_id": "doc-61d3664dd56f73242e9d883e",
+          "source_id": "openalex",
+          "record_id": "W9",
+          "url": "https://openalex.org/W9",
+          "title": "TEST ONLY literature record 9",
+          "quote": "TEST ONLY: Fixture-I appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability."
+        }
+      ]
+    },
+    {
+      "id": "lead-a25f6fe04e8d0fbeebf19ef3",
+      "name": "Fixture-J",
+      "quote": "TEST ONLY: Fixture-J appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.",
+      "source_id": "openalex",
+      "record_id": "W10",
+      "url": "https://openalex.org/W10",
+      "title": "TEST ONLY literature record 10",
+      "status": "candidate_lead",
+      "properties_verified": false,
+      "suitability_verified": false,
+      "missing_criteria": [
+        "stability",
+        "band_gap",
+        "custom_transport",
+        "ambient_phase_stability",
+        "operational_stability"
+      ],
+      "cautions": [
+        "This is a literal cited mention, not verified material identity, phase, property evidence or suitability for the requested application.",
+        "The source may discuss a comparison, limitation or rejected material; mention alone does not establish a recommendation.",
+        "Thermodynamic, room-temperature phase and operational stability remain unverified; unknown is not stable."
+      ],
+      "citations": [
+        {
+          "document_id": "doc-0d501cd9c0f31043d1720f99",
+          "source_id": "openalex",
+          "record_id": "W10",
+          "url": "https://openalex.org/W10",
+          "title": "TEST ONLY literature record 10",
+          "quote": "TEST ONLY: Fixture-J appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability."
+        }
+      ]
+    },
+    {
+      "id": "lead-084cf744c39d140961e859f7",
+      "name": "Fixture-K",
+      "quote": "TEST ONLY: Fixture-K appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.",
+      "source_id": "openalex",
+      "record_id": "W11",
+      "url": "https://openalex.org/W11",
+      "title": "TEST ONLY literature record 11",
+      "status": "candidate_lead",
+      "properties_verified": false,
+      "suitability_verified": false,
+      "missing_criteria": [
+        "stability",
+        "band_gap",
+        "custom_transport",
+        "ambient_phase_stability",
+        "operational_stability"
+      ],
+      "cautions": [
+        "This is a literal cited mention, not verified material identity, phase, property evidence or suitability for the requested application.",
+        "The source may discuss a comparison, limitation or rejected material; mention alone does not establish a recommendation.",
+        "Thermodynamic, room-temperature phase and operational stability remain unverified; unknown is not stable."
+      ],
+      "citations": [
+        {
+          "document_id": "doc-7ad45c6953935129bdc49084",
+          "source_id": "openalex",
+          "record_id": "W11",
+          "url": "https://openalex.org/W11",
+          "title": "TEST ONLY literature record 11",
+          "quote": "TEST ONLY: Fixture-K appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability."
+        }
+      ]
+    },
+    {
+      "id": "lead-83202dd00080178b4d248bce",
+      "name": "Fixture-L",
+      "quote": "TEST ONLY: Fixture-L appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability.",
+      "source_id": "openalex",
+      "record_id": "W12",
+      "url": "https://openalex.org/W12",
+      "title": "TEST ONLY literature record 12",
+      "status": "candidate_lead",
+      "properties_verified": false,
+      "suitability_verified": false,
+      "missing_criteria": [
+        "stability",
+        "band_gap",
+        "custom_transport",
+        "ambient_phase_stability",
+        "operational_stability"
+      ],
+      "cautions": [
+        "This is a literal cited mention, not verified material identity, phase, property evidence or suitability for the requested application.",
+        "The source may discuss a comparison, limitation or rejected material; mention alone does not establish a recommendation.",
+        "Thermodynamic, room-temperature phase and operational stability remain unverified; unknown is not stable."
+      ],
+      "citations": [
+        {
+          "document_id": "doc-d83e145a6564d13486efe798",
+          "source_id": "openalex",
+          "record_id": "W12",
+          "url": "https://openalex.org/W12",
+          "title": "TEST ONLY literature record 12",
+          "quote": "TEST ONLY: Fixture-L appears as a comparison in this synthetic passage. This fixture establishes no material performance or suitability."
+        }
+      ]
+    }
+  ],
+  "references": [
+    {
+      "id": "S1",
+      "title": "TEST ONLY literature record 1",
+      "url": "https://openalex.org/W1",
+      "source_name": "Synthetic OpenAlex protocol fixture",
+      "kind": "discovery_reference"
+    },
+    {
+      "id": "S2",
+      "title": "TEST ONLY literature record 10",
+      "url": "https://openalex.org/W10",
+      "source_name": "Synthetic OpenAlex protocol fixture",
+      "kind": "discovery_reference"
+    },
+    {
+      "id": "S3",
+      "title": "TEST ONLY literature record 11",
+      "url": "https://openalex.org/W11",
+      "source_name": "Synthetic OpenAlex protocol fixture",
+      "kind": "discovery_reference"
+    },
+    {
+      "id": "S4",
+      "title": "TEST ONLY literature record 12",
+      "url": "https://openalex.org/W12",
+      "source_name": "Synthetic OpenAlex protocol fixture",
+      "kind": "discovery_reference"
+    },
+    {
+      "id": "S5",
+      "title": "TEST ONLY literature record 2",
+      "url": "https://openalex.org/W2",
+      "source_name": "Synthetic OpenAlex protocol fixture",
+      "kind": "discovery_reference"
+    },
+    {
+      "id": "S6",
+      "title": "TEST ONLY literature record 3",
+      "url": "https://openalex.org/W3",
+      "source_name": "Synthetic OpenAlex protocol fixture",
+      "kind": "discovery_reference"
+    },
+    {
+      "id": "S7",
+      "title": "TEST ONLY literature record 4",
+      "url": "https://openalex.org/W4",
+      "source_name": "Synthetic OpenAlex protocol fixture",
+      "kind": "discovery_reference"
+    },
+    {
+      "id": "S8",
+      "title": "TEST ONLY literature record 5",
+      "url": "https://openalex.org/W5",
+      "source_name": "Synthetic OpenAlex protocol fixture",
+      "kind": "discovery_reference"
+    },
+    {
+      "id": "S9",
+      "title": "TEST ONLY literature record 6",
+      "url": "https://openalex.org/W6",
+      "source_name": "Synthetic OpenAlex protocol fixture",
+      "kind": "discovery_reference"
+    },
+    {
+      "id": "S10",
+      "title": "TEST ONLY literature record 7",
+      "url": "https://openalex.org/W7",
+      "source_name": "Synthetic OpenAlex protocol fixture",
+      "kind": "discovery_reference"
+    },
+    {
+      "id": "S11",
+      "title": "TEST ONLY literature record 8",
+      "url": "https://openalex.org/W8",
+      "source_name": "Synthetic OpenAlex protocol fixture",
+      "kind": "discovery_reference"
+    },
+    {
+      "id": "S12",
+      "title": "TEST ONLY literature record 9",
+      "url": "https://openalex.org/W9",
+      "source_name": "Synthetic OpenAlex protocol fixture",
+      "kind": "discovery_reference"
+    }
+  ]
+}

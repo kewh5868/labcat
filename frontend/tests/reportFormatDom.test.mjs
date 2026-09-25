@@ -193,9 +193,14 @@ test("report format previews and saves appearance without research, preserving r
       "screen",
     );
     await settle();
-    assert.ok(document.querySelector(".report-screen-previews"));
+    assert.ok(
+      document.querySelector(
+        ".report-document-audit.report-font-serif.report-accent-teal",
+      ),
+      "on-screen preview uses the same report component and appearance",
+    );
     assert.match(
-      document.querySelector(".report-screen-previews").textContent,
+      document.querySelector(".report-document").textContent,
       /Property comparison placeholder/,
     );
     assert.equal(document.querySelector("iframe"), null);
@@ -348,6 +353,192 @@ test("server edition alone enables Developer Settings, below Connections, with n
       1,
     );
     assert.equal(document.querySelector("textarea"), null);
+  } finally {
+    await env.close();
+  }
+});
+
+test("connection cards and workspace notice agree on verified login and account changes", async (t) => {
+  const env = await environment();
+  const { root, createElement, act } = env;
+  const { WorkspaceServices } = await env.module("App");
+  const { ConnectionsProvider, ConnectionNotice, useConnections } =
+    await env.module("Connections");
+  const { SetupProvider, useSetup } = await env.module("SetupWizard");
+  const base = {
+    configured: true,
+    using_local_defaults: true,
+    profile: {
+      provider: "none",
+      model: "",
+      ollama_url: "http://localhost:11434",
+      aws_profile: "",
+      aws_region: "",
+      allow_paid_inference: false,
+    },
+    credentials: {
+      materials_project: "missing",
+      openai: "missing",
+      anthropic: "missing",
+      kimi: "missing",
+      gemini: "missing",
+      deepseek: "missing",
+      xai: "missing",
+      openrouter: "missing",
+    },
+    vault: {
+      available: false,
+      locked: false,
+      exists: false,
+      can_create: true,
+      key_source: "unavailable",
+    },
+    warnings: [],
+    accounts: [],
+    active_account_id: null,
+  };
+  let next = base,
+    readiness = "not_connected",
+    configured = 0;
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async (path, options = {}) => {
+    calls.push({ path, method: options.method ?? "GET" });
+    if (path === "/api/connections") return Response.json(next);
+    if (path === "/api/connections/setup")
+      return Response.json({
+        version: 1,
+        required: true,
+        completed: true,
+        current_step: "review",
+        can_research: readiness === "ready",
+        model: {
+          status: readiness,
+          provider: next.profile.provider,
+          model: next.profile.model,
+          account_id: next.active_account_id,
+          message: "Synthetic readiness only.",
+          checked_at: readiness === "ready" ? "2026-09-11T12:00:00Z" : null,
+        },
+        optional: {
+          compute: "local",
+          aws_required: false,
+          data_apis_required: false,
+        },
+      });
+    assert.fail(`Unexpected request ${path}`);
+  });
+  function Cards() {
+    const { reload } = useConnections();
+    const setup = useSetup();
+    return createElement(
+      "div",
+      null,
+      createElement(WorkspaceServices),
+      createElement(ConnectionNotice, {
+        readiness: setup.status,
+        checking: setup.loading || setup.busy,
+        unavailable: Boolean(setup.error),
+        onConfigure: () => configured++,
+      }),
+      createElement(
+        "button",
+        { id: "refresh-selection", onClick: reload },
+        "Refresh selection",
+      ),
+    );
+  }
+  const refresh = () =>
+    act(async () => document.getElementById("refresh-selection").click());
+  const model = () => document.querySelectorAll(".runtime-card")[1];
+  const notice = () => document.querySelector(".connection-notice");
+  const expectStatus = (label, available = false) => {
+    assert.equal(model().querySelector(".runtime-value").textContent, label);
+    assert.equal(notice().querySelector("strong").textContent, label);
+    assert.equal(Boolean(model().querySelector(".is-connected")), available);
+    assert.doesNotMatch(
+      model().textContent + notice().textContent,
+      /account sign-in|Verify the connection below/,
+    );
+  };
+  try {
+    await act(async () =>
+      root.render(
+        createElement(
+          ConnectionsProvider,
+          null,
+          createElement(SetupProvider, null, createElement(Cards)),
+        ),
+      ),
+    );
+    expectStatus("No account selected");
+    const profile = {
+      ...base.profile,
+      provider: "chatgpt",
+      model: "fixture-small",
+      allow_paid_inference: true,
+    };
+    next = {
+      ...base,
+      profile,
+      active_account_id: "test-one",
+      accounts: [
+        {
+          id: "test-one",
+          label: "Synthetic account",
+          profile,
+          credential_state: "locked",
+        },
+      ],
+    };
+    readiness = "credentials_locked";
+    await refresh();
+    expectStatus("ChatGPT · Connection locked");
+    assert.match(model().textContent, /fixture-small/);
+    next.accounts[0].credential_state = "session";
+    readiness = "verification_required";
+    await refresh();
+    expectStatus("ChatGPT · Check connection");
+    readiness = "ready";
+    await refresh();
+    expectStatus("ChatGPT · Signed in", true);
+    assert.match(
+      notice().textContent,
+      /fixture-small.*Account and model verified/,
+    );
+    readiness = "error";
+    await refresh();
+    expectStatus("ChatGPT · Connection needs attention");
+    next.accounts[0].credential_state = "missing";
+    readiness = "not_connected";
+    await refresh();
+    expectStatus("ChatGPT · Not signed in");
+    next = {
+      ...base,
+      profile: {
+        ...base.profile,
+        provider: "bedrock",
+        model: "fixture-bedrock",
+        allow_paid_inference: true,
+      },
+    };
+    readiness = "ready";
+    await refresh();
+    expectStatus("Amazon Bedrock · Connected", true);
+    assert.match(model().textContent, /fixture-bedrock/);
+    assert.match(
+      document.querySelector(".runtime-card").textContent,
+      /Local research pipeline/,
+    );
+    assert.match(
+      document.querySelector(".runtime-card").textContent,
+      /Amazon Bedrock/,
+    );
+    await act(async () => notice().querySelector("button").click());
+    assert.equal(configured, 1);
+    assert.ok(
+      calls.every((call) => call.method === "GET"),
+      "status rendering never triggers sign-in, verification or model inference",
+    );
   } finally {
     await env.close();
   }

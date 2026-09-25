@@ -2,9 +2,11 @@
 sources."""
 
 import io
+import json
 import zipfile
 from copy import deepcopy
 from dataclasses import replace
+from pathlib import Path
 from xml.etree import ElementTree
 
 import pytest
@@ -20,7 +22,7 @@ from labcat.science.candidate_leads import (
     discovery_documents,
     validate_candidate_leads,
 )
-from labcat.science.reporting import render_reports
+from labcat.science.reporting import citation_references, render_reports
 
 
 def lead_report():
@@ -172,6 +174,19 @@ def test_every_export_keeps_lead_names_quotes_gaps_and_approved_links(format):
     assert "Review order" in text
     assert "no material performance or suitability" in text
     assert "unknown does not mean stable" in text
+
+
+def test_frontend_fixture_is_the_actual_python_report_contract():
+    report = lead_report()
+    path = (
+        Path(__file__).parents[1] / "frontend/tests/fixtures/candidate-lead-report.json"
+    )
+    assert json.loads(path.read_text()) == {
+        "summary": report["pi_summary"],
+        "technical": report["technical_audit"],
+        "leads": report["result"]["candidate_leads"],
+        "references": citation_references(report["result"], report["sources"]),
+    }
 
 
 def test_casefold_merged_citations_revalidate_without_changing_selected_name():

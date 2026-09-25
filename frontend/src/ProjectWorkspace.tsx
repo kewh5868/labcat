@@ -1,5 +1,5 @@
 import type { DragEvent, FormEvent, KeyboardEvent, ReactNode } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { brandName, brandTagline, LabcatMark } from "./Brand";
 import ChatIdentity, { chatLabel } from "./ChatIdentity";
@@ -12,9 +12,11 @@ import {
 } from "./Connections";
 import MoveChatDialog from "./MoveChatDialog";
 import PublicSourcesPanel from "./PublicSources";
+import QueryHistory, { queryHistory, QueryTime } from "./QueryHistory";
 import RankingProfilesPanel from "./RankingProfiles";
 import type { ItemAction, ManagedItem } from "./RemovedItems";
 import RemovedItemsPanel, { ItemActionDialog } from "./RemovedItems";
+import ReportContent from "./ReportContent";
 import ReportFormat from "./ReportFormat";
 import type { ReportPinAction } from "./ReportPinControls";
 import ReportPinControls from "./ReportPinControls";
@@ -25,6 +27,16 @@ import SetupWizard, { useSetup } from "./SetupWizard";
 import SidebarSections from "./SidebarSections";
 import { SidebarViewControls, useSidebarView } from "./SidebarView";
 import WorkspaceSearch from "./WorkspaceSearch";
+import type { MaterialName } from "./chemicalNamesApi";
+import { chemicalNamesApi } from "./chemicalNamesApi";
+import type { PresentedReport } from "./reportPresentationApi";
+import { reportPresentationApi } from "./reportPresentationApi";
+import type { ProfileSnapshot, ReportTable } from "./reportTables";
+import {
+  savedProfileSnapshot,
+  savedReportPresentation,
+  savedReportTables,
+} from "./reportTables";
 import "./settingsLayout.css";
 import { canSubmitResearch } from "./setupApi";
 import type { WorkspaceResearch } from "./useResearchRuns";
@@ -35,11 +47,14 @@ import type {
   Chat,
   ChatDetail,
   ChatSearchMatch,
+  ExportFormat,
   PinKind,
   Project,
   ProjectContents,
+  ReportExportSection,
   ReportPin,
   ReportPresentation,
+  ReportView,
   ResearchReport,
   SearchSettings,
   Source,
@@ -49,6 +64,7 @@ import {
   errorMessage,
   GeneralChatsChangedError,
   publicLink,
+  reportExportUrl,
   ResearchRequestError,
   workspaceApi,
 } from "./workspaceApi";
@@ -2423,10 +2439,42 @@ function ChatView({
       else onBusyChange(chatId, false, busyOwner);
     }
   }
+  const latestReport =
+    data?.reports
+      .filter((report) => ["complete", "partial"].includes(report.stage))
+      .at(-1) ?? data?.reports.at(-1);
   const snapshotPins =
     data?.reports.flatMap((report) =>
       report.snapshot_pin ? [report.snapshot_pin] : [],
     ) ?? [];
+  const latestMessage = latestReport
+    ? data?.messages.find((message) => message.id === latestReport.message_id)
+    : null;
+  const latestRequest = latestMessage
+    ? data?.messages
+        .slice(0, data.messages.indexOf(latestMessage))
+        .filter((message) => message.role === "user")
+        .at(-1)
+    : null;
+  const latestMessageIndex =
+    latestMessage && data ? data.messages.indexOf(latestMessage) : -1;
+  const olderMessages =
+    latestMessageIndex >= 0
+      ? data!.messages
+          .slice(0, latestMessageIndex)
+          .filter((message) => message.id !== latestRequest?.id)
+      : [];
+  const currentMessages = data?.messages.slice(latestMessageIndex + 1) ?? [];
+  const pastQueries = queryHistory(olderMessages, data?.reports ?? []);
+  const groupedMessageIds = new Set(
+    pastQueries.flatMap((turn) => [
+      turn.question.id,
+      ...turn.responses.map((message) => message.id),
+    ]),
+  );
+  const ungroupedMessages = olderMessages.filter(
+    (message) => !groupedMessageIds.has(message.id),
+  );
   function renderMessage(
     message: ChatDetail["messages"][number],
     includeReport = true,
@@ -2495,6 +2543,20 @@ function ChatView({
         </div>
         <div className="mascot-conversation-meta">
           <span className="neutral-badge">Saved history</span>
+          {pastQueries.length > 0 && (
+            <button
+              type="button"
+              className="query-history-link"
+              onClick={() => {
+                const target =
+                  history.current?.querySelector<HTMLElement>(".query-history");
+                target?.scrollIntoView?.({ block: "start" });
+                target?.focus({ preventScroll: true });
+              }}
+            >
+              Earlier questions ({pastQueries.length})
+            </button>
+          )}
         </div>
       </header>
       <div
@@ -2521,7 +2583,80 @@ function ChatView({
             </p>
           </div>
         )}
-        {!loading && data?.messages.map((message) => renderMessage(message))}
+        {!loading && latestReport && (
+          <section
+            className="latest-report-section"
+            aria-label="Latest research report"
+            data-search-report={latestReport.id}
+            data-search-message={latestMessage?.id}
+          >
+            <div className="latest-report-label">
+              <span className="status-square" />
+              <span>LATEST RESEARCH REPORT</span>
+            </div>
+            {latestRequest && (
+              <details
+                key={`question-${latestReport.id}`}
+                className="latest-question"
+                open
+                data-search-message={latestRequest.id}
+              >
+                <summary>
+                  Research question{" "}
+                  <QueryTime value={latestRequest.created_at} />
+                </summary>
+                <p>{latestRequest.content}</p>
+              </details>
+            )}
+            <ReportCard
+              key={latestReport.id}
+              report={latestReport}
+              sources={data?.sources ?? []}
+              onPin={pin}
+              onReportPin={reportPin}
+              trackingPin={data?.report_tracking}
+              snapshotPins={snapshotPins}
+              disabled={sending || mutating || uncertain || sidebarMoving}
+              presentation={presentation}
+              requiresProject={!data?.chat.project_id}
+            />
+            {latestMessage &&
+              !["complete", "partial"].includes(latestReport.stage) && (
+                <p className="latest-response-note">{latestMessage.content}</p>
+              )}
+          </section>
+        )}
+        {!loading && (
+          <QueryHistory
+            turns={pastQueries}
+            searchReportId={
+              searchMatch?.match_field === "report"
+                ? searchMatch.report_id
+                : null
+            }
+            renderMessage={(message) => renderMessage(message, false)}
+            renderReport={(report) => (
+              <ReportCard
+                savedFormat
+                report={report}
+                sources={data?.sources ?? []}
+                onPin={pin}
+                onReportPin={reportPin}
+                trackingPin={data?.report_tracking}
+                snapshotPins={snapshotPins}
+                disabled={sending || mutating || uncertain || sidebarMoving}
+                requiresProject={!data?.chat.project_id}
+              />
+            )}
+          />
+        )}
+        {!loading && ungroupedMessages.length > 0 && (
+          <details className="earlier-history">
+            <summary>Other saved messages</summary>
+            {ungroupedMessages.map((message) => renderMessage(message))}
+          </details>
+        )}
+        {!loading && currentMessages.map((message) => renderMessage(message))}
         {sending && run?.prompt && (
           <div className="message message-user pending-research-question">
             <strong>Research question</strong>
@@ -2641,6 +2776,12 @@ function PinButton({
   );
 }
 
+const reportSections: { id: ReportExportSection; label: string }[] = [
+  { id: "pi", label: "Summary" },
+  { id: "audit", label: "Technical View" },
+  { id: "sources", label: "Sources" },
+];
+
 export function ReportCard({
   report,
   sources,
@@ -2652,7 +2793,10 @@ export function ReportCard({
   chatTitle,
   chatNumber,
   onOpenChat,
+  loadSources,
+  presentation = defaultSettings.presentation,
   requiresProject = false,
+  savedFormat = false,
 }: {
   report: ResearchReport;
   sources: Source[];
@@ -2669,8 +2813,174 @@ export function ReportCard({
   requiresProject?: boolean;
   savedFormat?: boolean;
 }) {
+  const cardId = useId();
+  const card = useRef<HTMLElement>(null);
+  const [nameLookupVisible, setNameLookupVisible] = useState(false);
+  useEffect(() => {
+    const check = () =>
+      setNameLookupVisible(
+        Boolean(card.current && !card.current.closest("details:not([open])")),
+      );
+    check();
+    document.addEventListener("toggle", check, true);
+    return () => document.removeEventListener("toggle", check, true);
+  }, []);
+  const recordedPresentation =
+    savedReportPresentation(report.result) ?? presentation;
+  const formatSource =
+    savedFormat || report.pin?.mode === "snapshot" ? "saved" : "current";
+  const preferredPresentation =
+    formatSource === "saved" ? recordedPresentation : presentation;
+  const presentationKey =
+    formatSource === "current" ? JSON.stringify(presentation) : "";
+  const [presented, setPresented] = useState<PresentedReport | null>(null);
+  const [presentationBusy, setPresentationBusy] = useState(false);
+  const [presentationError, setPresentationError] = useState("");
+  const [presentationRetry, setPresentationRetry] = useState(0);
+  const display =
+    presented?.chat_id === report.chat_id &&
+    presented.report_id === report.id &&
+    presented.format_source === formatSource
+      ? presented
+      : null;
+  const activePresentation = display?.presentation ?? recordedPresentation;
+  const nameScope = `${report.chat_id}:${report.id}`;
+  const [enabledNameScope, setEnabledNameScope] = useState("");
+  const [lookedUpNames, setLookedUpNames] = useState<{
+    scope: string;
+    names: MaterialName[];
+  } | null>(null);
+  const namesSupported = display?.material_names !== undefined;
+  useEffect(() => {
+    if (namesSupported && nameLookupVisible) setEnabledNameScope(nameScope);
+  }, [namesSupported, nameScope, nameLookupVisible]);
+  useEffect(() => {
+    if (enabledNameScope !== nameScope) return;
+    const controller = new AbortController();
+    chemicalNamesApi
+      .load(report.chat_id, report.id, controller.signal)
+      .then((names) => {
+        if (!controller.signal.aborted)
+          setLookedUpNames({ scope: nameScope, names });
+      })
+      .catch(() => {
+        /* Names are optional; retained names and the report stay visible. */
+      });
+    return () => controller.abort();
+  }, [enabledNameScope, nameScope, report.chat_id, report.id]);
+  const materialNames = [
+    ...new Map(
+      [
+        ...(display?.material_names ?? []),
+        ...(lookedUpNames?.scope === nameScope ? lookedUpNames.names : []),
+      ].map((item) => [
+        `${item.kind}:${item.id}:${item.component_index ?? ""}`,
+        item,
+      ]),
+    ).values(),
+  ];
+  const tables = savedReportTables(
+      display ? { report_tables: display.report_tables } : report.result,
+    ),
+    snapshot = savedProfileSnapshot(report.result);
+  const [outputs, setOutputs] = useState<ReportExportSection[]>(() => [
+    ...preferredPresentation.outputs,
+    "sources",
+  ]);
+  const [format, setFormat] = useState<ExportFormat>(
+    preferredPresentation.format,
+  );
+  const [style, setStyle] = useState<ReportView | "sources">(() =>
+    preferredPresentation.outputs.includes(preferredPresentation.style)
+      ? preferredPresentation.style
+      : preferredPresentation.outputs[0],
+  );
+  const [loadedSources, setLoadedSources] = useState<Source[] | null>(null);
+  const [sourceLoading, setSourceLoading] = useState(false);
+  const [sourceError, setSourceError] = useState("");
+  const [sourceRetry, setSourceRetry] = useState(0);
+  useEffect(() => {
+    if (!report.result && formatSource === "saved") {
+      setPresented(null);
+      setPresentationBusy(false);
+      setPresentationError("");
+      return;
+    }
+    const controller = new AbortController();
+    setPresented(null);
+    setPresentationBusy(true);
+    setPresentationError("");
+    reportPresentationApi
+      .load(report.chat_id, report.id, formatSource, controller.signal)
+      .then((next) => {
+        if (controller.signal.aborted) return;
+        setPresented(next);
+        setFormat(next.presentation.format);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted)
+          setPresentationError(
+            "The updated layout is unavailable. The original saved report remains visible below.",
+          );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setPresentationBusy(false);
+      });
+    return () => controller.abort();
+  }, [
+    report.chat_id,
+    report.id,
+    Boolean(report.result),
+    formatSource,
+    presentationKey,
+    presentationRetry,
+  ]);
+  useEffect(() => {
+    if (style !== "sources" || !loadSources || !report.source_ids.length)
+      return;
+    const controller = new AbortController();
+    setSourceLoading(true);
+    setSourceError("");
+    loadSources(controller.signal)
+      .then((items) => {
+        if (!controller.signal.aborted) setLoadedSources(items);
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) setSourceError(errorMessage(error));
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setSourceLoading(false);
+      });
+    return () => controller.abort();
+  }, [style, report.id, report.source_ids.length, loadSources, sourceRetry]);
+  function toggleOutput(view: ReportExportSection) {
+    setOutputs((current) =>
+      current.includes(view)
+        ? current.filter((item) => item !== view)
+        : [...current, view],
+    );
+  }
+  const selectedSources = (loadedSources ?? sources).filter((source) =>
+    report.source_ids.includes(source.id),
+  );
+  const exportUrl = outputs.length
+    ? reportExportUrl(report.chat_id, report.id, format, outputs) +
+      (display?.format_source === "current" ? "&format_source=current" : "")
+    : undefined;
+  const downloadDisabled = presentationBusy || !outputs.length;
+  const selectedSectionNames = reportSections
+    .filter(({ id }) => outputs.includes(id))
+    .map(({ label }) => label)
+    .join(", ");
+  const result =
+    report.result && typeof report.result === "object"
+      ? (report.result as Record<string, unknown>)
+      : null;
+  const hasCandidates = [result?.candidates, result?.candidate_leads].some(
+    (items) => Array.isArray(items) && items.length > 0,
+  );
   return (
-    <section className="research-report" aria-label={report.title}>
+    <section ref={card} className="research-report" aria-label={report.title}>
       <header className="report-heading">
         <div>
           <p className="eyebrow">
@@ -2687,7 +2997,8 @@ export function ReportCard({
               <ChatIdentity
                 title={chatTitle ?? "conversation"}
                 number={chatNumber}
-              />
+              />{" "}
+              <span aria-hidden="true">↗</span>
             </button>
           )}
         </div>
@@ -2701,22 +3012,274 @@ export function ReportCard({
           requiresProject={requiresProject}
         />
       </header>
-      <details open>
-        <summary>Summary</summary>
-        <div className="message-text">{report.pi_summary}</div>
-      </details>
-      <details>
-        <summary>Technical View</summary>
-        <div className="message-text">{report.technical_audit}</div>
-      </details>
-      <SourceTable
-        sources={sources.filter((source) =>
-          report.source_ids.includes(source.id),
+      {presentationBusy && (
+        <p className="report-reformat-note" role="status">
+          Formatting the saved evidence…
+        </p>
+      )}
+      {presentationError && (
+        <div className="report-appearance-toolbar">
+          <span role="status">{presentationError}</span>
+          <button
+            type="button"
+            disabled={presentationBusy}
+            onClick={() => setPresentationRetry((value) => value + 1)}
+          >
+            Retry report layout
+          </button>
+        </div>
+      )}
+      <div className="report-output-toolbar">
+        <div
+          className="report-tabs"
+          role="group"
+          aria-label={`View and download sections for ${report.title}`}
+        >
+          {reportSections.map(({ id, label }) => (
+            <div
+              className={`report-tab${style === id ? " is-active" : ""}`}
+              key={id}
+            >
+              <input
+                type="checkbox"
+                checked={outputs.includes(id)}
+                onChange={() => toggleOutput(id)}
+                aria-label={`Include ${label} in download`}
+                title={`Include ${label} in download`}
+              />
+              <button
+                type="button"
+                aria-pressed={style === id}
+                onClick={() => setStyle(id)}
+              >
+                {label}
+                {id === "sources" && (
+                  <>
+                    {" "}
+                    <span>{report.source_ids.length}</span>
+                  </>
+                )}
+              </button>
+            </div>
+          ))}
+        </div>
+        <div className="report-download-controls">
+          <label className="sr-only" htmlFor={`download-format-${cardId}`}>
+            Download format for {report.title}
+          </label>
+          <select
+            id={`download-format-${cardId}`}
+            value={format}
+            onChange={(event) => setFormat(event.target.value as ExportFormat)}
+          >
+            <option value="text">Plain text</option>
+            <option value="json">JSON</option>
+            <option value="pdf">PDF</option>
+            <option value="docx">Word (.docx)</option>
+          </select>
+          <a
+            className="report-download-link"
+            href={exportUrl}
+            aria-disabled={downloadDisabled}
+            title={
+              !outputs.length
+                ? "Select at least one section to download"
+                : undefined
+            }
+            onClick={(event) => {
+              if (downloadDisabled) event.preventDefault();
+            }}
+            download
+          >
+            Download <span aria-hidden="true">↓</span>
+            <span className="sr-only">
+              {selectedSectionNames} as {format}
+            </span>
+          </a>
+        </div>
+      </div>
+      <div className="report-body">
+        {style === "sources" ? (
+          sourceLoading ? (
+            <Loading label="Loading source records…" />
+          ) : sourceError ? (
+            <Notice
+              error={sourceError}
+              onRetry={() => setSourceRetry((value) => value + 1)}
+            />
+          ) : (
+            <>
+              <SourceTable
+                sources={selectedSources}
+                onPin={onPin}
+                disabled={disabled}
+                requiresProject={requiresProject}
+              />
+              {selectedSources.length !== report.source_ids.length && (
+                <p className="missing-sources">
+                  Some source records are missing. Those references cannot be
+                  verified.
+                </p>
+              )}
+            </>
+          )
+        ) : (
+          <>
+            <ReportContent
+              content={
+                style === "pi"
+                  ? (display?.pi_summary ?? report.pi_summary)
+                  : (display?.technical_audit ?? report.technical_audit)
+              }
+              view={style}
+              table={style === "pi" ? tables?.summary : tables?.technical}
+              candidateLeads={result?.candidate_leads}
+              materialNames={materialNames}
+              references={display?.references}
+              presentation={activePresentation}
+              structureScope={
+                hasCandidates
+                  ? { chatId: report.chat_id, reportId: report.id }
+                  : undefined
+              }
+            />
+          </>
         )}
-        onPin={onPin}
-        disabled={disabled}
-      />
+      </div>
+      <div className="report-disclosures">
+        {style !== "sources" && (
+          <details className="report-audit-disclosure">
+            <summary>Full saved audit & original report</summary>
+            <div>
+              <p>
+                Original evidence, identifiers, ranking inputs and generated
+                report text. Reformatting does not change this archive.
+              </p>
+              <details>
+                <summary>Original Summary</summary>
+                <pre>{report.pi_summary}</pre>
+              </details>
+              <details>
+                <summary>Original Technical View</summary>
+                <pre>{report.technical_audit}</pre>
+              </details>
+              <details>
+                <summary>Evidence and execution data (JSON)</summary>
+                <pre tabIndex={0}>
+                  {JSON.stringify(
+                    report.result ?? {
+                      note: "Structured evidence data is unavailable for this historical report.",
+                    },
+                    null,
+                    activePresentation.layout?.json_indent ?? 2,
+                  )}
+                </pre>
+              </details>
+            </div>
+          </details>
+        )}
+        <ReportProfile snapshot={snapshot} table={tables?.technical} />
+      </div>
+      <footer className="report-footer">
+        <span>
+          {report.source_ids.length === 0
+            ? "No cited sources · No verified material recommendations"
+            : "Downloads preserve source references and caveats"}{" "}
+          ·{" "}
+          {outputs.length
+            ? `${selectedSectionNames} selected for download`
+            : "Select at least one section to download"}
+        </span>
+        <SavedTime value={report.created_at} />
+      </footer>
     </section>
+  );
+}
+
+function ReportProfile({
+  snapshot,
+  table,
+}: {
+  snapshot: ProfileSnapshot | null;
+  table?: ReportTable;
+}) {
+  if (!snapshot)
+    return (
+      <p className="report-profile-unavailable">
+        Ranking profile snapshot unavailable for this saved report. Its recorded
+        report text is preserved.
+      </p>
+    );
+  const selected = Object.entries(snapshot.importance).filter(
+    ([, weight]) => weight > 0,
+  );
+  return (
+    <details className="report-profile-snapshot">
+      <summary>
+        <span>Ranking profile used</span>
+        <strong>{snapshot.name}</strong>
+        <small>Saved with this report</small>
+      </summary>
+      <div>
+        <p>
+          These are the criteria submitted for this report. Changes in Search
+          Criterion apply to future research.
+        </p>
+        {snapshot.selection_reason && <p>{snapshot.selection_reason}</p>}
+        {snapshot.minimum_band_gap_ev !== undefined && (
+          <p>
+            Minimum band gap:{" "}
+            {snapshot.minimum_band_gap_ev === null ? (
+              "Not set"
+            ) : (
+              <>
+                {snapshot.minimum_band_gap_ev} eV ·{" "}
+                {(snapshot.importance.band_gap ?? 0) > 0
+                  ? "Screening preference"
+                  : "Inactive; Band gap importance is zero or unselected"}
+              </>
+            )}
+            . Only validated source values are compared; unknown values remain
+            unknown.
+          </p>
+        )}
+        {snapshot.target_band_gap_ev != null && (
+          <p className="report-target-preference">
+            Target band gap: {snapshot.target_band_gap_ev} eV · Ranking
+            preference for this report.{" "}
+            {snapshot.band_gap_tolerance_ev != null && (
+              <>
+                Preference tolerance: {snapshot.band_gap_tolerance_ev} eV, used
+                as a soft ranking scale.{" "}
+              </>
+            )}
+            These preferences are separate from measured material properties.
+            {(snapshot.importance.band_gap ?? 0) <= 0 &&
+              " Inactive; Band gap importance is zero or unselected."}
+          </p>
+        )}
+        <dl>
+          {selected.map(([id, weight]) => (
+            <div key={id}>
+              <dt>
+                {table?.columns.find((column) => column.id === id)?.label ??
+                  id.replaceAll("_", " ")}
+              </dt>
+              <dd>
+                Importance {weight.toFixed(2)}
+                {snapshot.normalized_weights?.[id] !== undefined && (
+                  <>
+                    {" "}
+                    · {(snapshot.normalized_weights[id] * 100).toFixed(1)}% of
+                    ranking weight
+                  </>
+                )}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </details>
   );
 }
 
