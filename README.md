@@ -7,14 +7,14 @@ Level 4 foundation.
 
 ## Current Python capabilities
 
-Model/source connection checks, first-run readiness and supported account login
-preserve encrypted or session-only credential handling. A successful metadata check is
-not proof that inference will succeed. Private worker channel/status and login
-transport support the connection lifecycle; worker research execution is introduced
-separately.
+Goose worker and provider-network boundaries expose a fixed set of research actions.
+The parent validates requests and creates scientific reports from approved sources;
+model prose cannot establish facts. Worker channels, authentication handoff, budgets
+and partial report signals have offline test coverage.
 
-Isolated research-tool execution, full connected orchestration and the application
-interface remain planned.
+Connected top-level orchestration, the application interface and packaged container
+deployment remain planned. Offline transport/process fixtures do not establish live
+provider or deployment isolation behavior.
 
 The command-line interface currently provides software status, configuration
 validation and an explicit read-only AWS account check. It does not yet expose the

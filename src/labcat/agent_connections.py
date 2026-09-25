@@ -21,6 +21,8 @@ from labcat.credentials import (
     read_private_file,
     unique_json_object,
 )
+from labcat.models import ModelError
+from labcat.provider_catalog import API_KEY_PROVIDERS
 
 
 def _safe_run_record(value):
@@ -116,7 +118,7 @@ class AgentConnections:
                 "Goose can call only the configured public-source and ranking stages."
                 if self.uses_goose
                 else "This Python installation uses bounded model planning. "
-                "Worker execution is introduced separately."
+                "The Docker application includes Goose."
             ),
         }
 
@@ -380,3 +382,78 @@ class AgentConnections:
                 saved = {}
             saved[identifier or provider] = record
             atomic_write(self.usage_path, saved)
+
+    def run(self, prompt, context, tool_session):
+        # Serialize credential consumers with metadata refresh and sign-out.
+        # Reject a competing run rather than queueing a later billable request.
+        if not self._auth_lock.acquire(blocking=False):
+            from labcat.models import ModelBusy
+
+            raise ModelBusy("A model connection operation is already in progress.")
+        try:
+            return self._run_locked(prompt, context, tool_session)
+        finally:
+            self._auth_lock.release()
+
+    def _run_locked(self, prompt, context, tool_session):
+        from labcat.goose_worker_client import run_remote_goose
+
+        self.manager.setup.require_ready()
+        with self.manager._lock:
+            status = self.manager.status()
+            profile, identifier = status["profile"], status["active_account_id"]
+            provider = profile["provider"]
+            secret = (
+                self.manager.vault.get(self.manager._model_slot(provider))
+                if provider in API_KEY_PROVIDERS
+                else None
+            )
+        if provider not in {"none", "ollama"} and not profile["allow_paid_inference"]:
+            raise ModelError(
+                "Allow the selected provider to receive research context first."
+            )
+        tokens, old, storage = None, None, None
+        if provider == "chatgpt":
+            from labcat.chatgpt_auth import goose_token_cache
+
+            document, old, storage = self._credential_snapshot(identifier)
+            tokens = goose_token_cache(document)
+        try:
+            result = run_remote_goose(
+                profile,
+                secret,
+                prompt,
+                context=context,
+                tool_session=tool_session,
+                chatgpt_tokens=tokens,
+            )
+        except ModelError as error:
+            # Bind this diagnostic to the profile actually sent to the worker;
+            # never recover model identity from provider prose or a later selection.
+            error.research_attempt = {"provider": provider, "model": profile["model"]}
+            refreshed = getattr(error, "refreshed_chatgpt_tokens", None)
+            if refreshed is not None and provider == "chatgpt":
+                from labcat.chatgpt_auth import update_from_goose_tokens
+
+                self._save_refreshed(
+                    identifier,
+                    old,
+                    update_from_goose_tokens(document, refreshed),
+                    storage,
+                )
+            raise
+        result = dict(result)
+        refreshed = result.pop("refreshed_chatgpt_tokens", None)
+        if refreshed is not None:
+            from labcat.chatgpt_auth import update_from_goose_tokens
+
+            self._save_refreshed(
+                identifier, old, update_from_goose_tokens(document, refreshed), storage
+            )
+        self._record_usage(identifier, provider, profile["model"], result)
+        return {
+            **result,
+            "account_id": identifier,
+            "provider": provider,
+            "model": profile["model"],
+        }

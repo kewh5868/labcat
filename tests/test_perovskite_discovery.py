@@ -310,6 +310,57 @@ def test_validated_role_scope_is_authoritative_and_all_perovskite_is_not_silicon
     )
 
 
+def test_agent_gets_complete_body_with_publication_and_method_heading(monkeypatch):
+    from labcat.agent_tools import ResearchToolSession
+    from labcat.config import load_config
+    from labcat.source_preferences import default_source_preferences
+
+    monkeypatch.setattr(
+        property_research,
+        "_fetch_full_text",
+        lambda identity, deadline: (
+            xml(),
+            f"https://www.ebi.ac.uk/europepmc/webservices/rest/{identity}/fullTextXML",
+        ),
+    )
+    item = reference()
+    discovery.retain_device_passages([item], time.monotonic() + 1)
+    monkeypatch.setattr(
+        public_sources,
+        "search_public_sources",
+        lambda *args, **kwargs: {
+            "references": [item],
+            "source_statuses": [],
+            "caveats": [],
+        },
+    )
+    session = ResearchToolSession(
+        PROMPT,
+        load_config(),
+        ranking_profile={"importance": {"band_gap": 1}},
+        source_preferences={
+            **default_source_preferences(),
+            "enabled_sources": ["europe_pmc"],
+            "materials_project_mode": "off",
+        },
+    )
+    session.call("assess_research_intent", {"decision": "materials_research"})
+    result = session.call(
+        "search_public_references", {"topic": "perovskite silicon tandem"}
+    )
+    bodies = [
+        document for document in result["public_documents"] if "section" in document
+    ]
+    assert len(bodies) == 1
+    assert bodies[0]["source_title"] == item["title"]
+    assert bodies[0]["section"] == "Device fabrication"
+    assert (
+        bodies[0]["text"]
+        == "Device fabrication " + item["metadata"]["discovery_passages"][0]["text"]
+    )
+    assert "response_sha256" not in bodies[0]
+
+
 def test_body_budget_honors_controls_and_shares_total_across_discovery_and_followup(
     monkeypatch,
 ):
@@ -402,6 +453,73 @@ def test_tandem_fabrication_paragraph_precedes_generic_and_simulated_recipes(
         "WBG PSC fabrication",
         "Proton irradiation simulation",
     ]
+
+
+def test_compact_reply_preserves_both_articles_before_long_abstract_tail(
+    monkeypatch,
+):
+    from test_goose_candidate_transport import source
+
+    from labcat.agent_tools import MAX_TOOL_REPLY_BYTES, ResearchToolSession
+    from labcat.config import load_config
+    from labcat.source_preferences import default_source_preferences
+
+    monkeypatch.setattr(
+        property_research,
+        "_fetch_full_text",
+        lambda identity, deadline: (
+            xml(
+                identity,
+                paragraph="TEST ONLY perovskite composition TESTONLY-"
+                + identity
+                + " was fabricated as a tandem device. "
+                + "Synthetic context. " * 60,
+            ),
+            f"https://www.ebi.ac.uk/europepmc/webservices/rest/{identity}/fullTextXML",
+        ),
+    )
+    bodies = [reference("PMC123"), reference("PMC456")]
+    discovery.retain_device_passages(bodies, time.monotonic() + 1)
+    refs = [
+        source(i, provider, "TEST ONLY public abstract. " * 85)
+        for provider in ("openalex", "arxiv")
+        for i in range(1, 11)
+    ]
+    refs += bodies
+    monkeypatch.setattr(
+        public_sources,
+        "search_public_sources",
+        lambda *args, **kwargs: {
+            "references": refs,
+            "source_statuses": [],
+            "caveats": [],
+        },
+    )
+    session = ResearchToolSession(
+        PROMPT,
+        load_config(),
+        ranking_profile={"importance": {"band_gap": 1}},
+        source_preferences={
+            **default_source_preferences(),
+            "enabled_sources": ["openalex", "arxiv", "europe_pmc"],
+            "materials_project_mode": "off",
+            "max_results_per_source": 10,
+        },
+    )
+    session.call("assess_research_intent", {"decision": "materials_research"})
+    reply = session.call(
+        "search_public_references", {"topic": "perovskite silicon tandem"}
+    )
+    import json
+
+    assert len(json.dumps(reply).encode()) <= MAX_TOOL_REPLY_BYTES
+    body_docs = [d for d in reply["public_documents"] if "section" in d]
+    assert len(body_docs) == 2
+    assert all(
+        any(name in d["text"] for d in body_docs)
+        for name in ("TESTONLY-PMC123", "TESTONLY-PMC456")
+    )
+    assert reply["public_documents_shown"] < reply["public_documents_total"]
 
 
 def test_new_body_heading_is_quote_bound_and_old_document_ids_remain_unchanged(
