@@ -28,8 +28,8 @@ def get_status(config: AppConfig, style: str | None = None) -> dict[str, Any]:
         "stage": "scaffold",
         "style": selected,
         "message": (
-            "Python APIs provide saved research preferences. The research "
-            "command and UI are not available yet."
+            "Python APIs provide verified connections and first-run setup. "
+            "The research command and UI are not available yet."
         ),
         "provider": config.provider,
         "compute": "local",
@@ -38,8 +38,8 @@ def get_status(config: AppConfig, style: str | None = None) -> dict[str, Any]:
         "limitations": [
             "Status contains no scientific records or ranked candidates.",
             (
-                "Verified model connection lifecycle, complete model-connected "
-                "orchestration and the application interface remain planned."
+                "Isolated research-tool execution, full connected orchestration "
+                "and the application interface remain planned."
             ),
             "Scientific coverage depends on independently validated public evidence.",
         ],
@@ -49,12 +49,12 @@ def get_status(config: AppConfig, style: str | None = None) -> dict[str, Any]:
         report["implemented"] = [
             "Installable Python package and software status commands",
             "Strict local preference configuration",
-            "Saved research preferences",
+            "Verified connections and first-run setup",
         ]
         report["next_steps"] = [
             (
-                "Verified model connection lifecycle, complete model-connected "
-                "orchestration and the application interface remain planned."
+                "Isolated research-tool execution, full connected orchestration "
+                "and the application interface remain planned."
             )
         ]
     return report

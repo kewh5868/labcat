@@ -7,13 +7,14 @@ Level 4 foundation.
 
 ## Current Python capabilities
 
-Validated ranking profiles, material-class inference, source selections and report-
-format preferences now persist alongside projects and reports. Bounded developer
-controls can narrow research actions but cannot add sources, tools or evidence
-authority.
+Model/source connection checks, first-run readiness and supported account login
+preserve encrypted or session-only credential handling. A successful metadata check is
+not proof that inference will succeed. Private worker channel/status and login
+transport support the connection lifecycle; worker research execution is introduced
+separately.
 
-Verified model connection lifecycle, complete model-connected orchestration and the
-application interface remain planned.
+Isolated research-tool execution, full connected orchestration and the application
+interface remain planned.
 
 The command-line interface currently provides software status, configuration
 validation and an explicit read-only AWS account check. It does not yet expose the

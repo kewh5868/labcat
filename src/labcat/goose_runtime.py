@@ -11,6 +11,10 @@ sessions)   crates/goose-cli/src/session/mod.rs (JSON usage metadata)
 crates/goose/src/config/paths.rs (isolated GOOSE_PATH_ROOT)
 """
 
+GOOSE_VERSION = "1.50.0"
+MAX_RUNTIME_SECONDS = 180
+
+
 MAX_TOOL_CALLS = 8
 
 

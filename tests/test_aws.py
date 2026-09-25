@@ -40,6 +40,7 @@ def test_bedrock_profile_catalog_uses_returned_ids_for_model_verification(
     bedrock_catalog,
 ):
     from labcat.aws import model_options
+    from labcat.connections import ConnectionManager
 
     bedrock_catalog.list_inference_profiles.side_effect = [
         {
@@ -69,6 +70,7 @@ def test_bedrock_profile_catalog_uses_returned_ids_for_model_verification(
         "us.anthropic.claude-base-v1",
         "anthropic.claude-base-v1",
     }
+    ConnectionManager._check_model(models, "us.anthropic.claude-base-v1", "id")
     assert "private-account-arn" not in json.dumps(models)
     assert bedrock_catalog.list_inference_profiles.call_args_list[1].kwargs == {
         "maxResults": 100,
