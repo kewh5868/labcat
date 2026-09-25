@@ -22,7 +22,12 @@ const state = (phase, sequence, run_id = firstRun, status = "running") => ({
 
 async function harness(t) {
   const output = await mkdtemp(join(tmpdir(), "labcat-progress-dom-"));
-  for (const name of ["ResearchProgress.tsx", "workspaceApi.ts"]) {
+  for (const name of [
+    "ResearchProgress.tsx",
+    "workspaceApi.ts",
+    "LabcatMascot.tsx",
+    "labcatMascotConfig.ts",
+  ]) {
     const source = await readFile(
       new URL(`../src/${name}`, import.meta.url),
       "utf8",
@@ -184,6 +189,11 @@ test("research progress shows only reported stages and elapsed time while pollin
     assert.match(
       document.querySelector(".research-last-update").textContent,
       /Waiting for the saved response/,
+    );
+    assert.equal(
+      document.querySelector('[data-scene="beaker"]').dataset.animation,
+      "beaker",
+      "terminal status alone must not celebrate a clarification or refusal",
     );
     assert.ok(
       requests.every(

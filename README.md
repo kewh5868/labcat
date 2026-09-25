@@ -9,7 +9,7 @@ User prompts and model memory are preferences or search hints, never evidence.
 Only approved public-source adapters can supply scientific records. Missing evidence
 remains unknown; the application provides no private-data or wetlab tools.
 
-The React workspace displays validated candidate and component reference structures inline with the shortlist.
+The React workspace includes optional Labcat animations and materials curiosities, with developer controls to turn them off.
 Build the interface with `npm ci --prefix frontend` and
 `npm run build --prefix frontend`, then open the running backend URL.
 Portable and native launchers are planned separately. This is a local single-user prototype.

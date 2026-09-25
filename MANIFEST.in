@@ -6,7 +6,7 @@ recursive-include src/labcat/data *.json *.md *.txt
 recursive-include src/labcat/science/data *.json *.md *.txt
 recursive-include src/labcat/fonts *.ttf *.txt
 recursive-include frontend *.json *.ts *.tsx *.html *.css *.md
-recursive-include frontend/tests *.mjs
+recursive-include frontend/tests *.mjs *.js
 recursive-include frontend/public/structure-viewer *
 recursive-include frontend/public/assets *.png
 recursive-include src/labcat/static/structure-viewer *

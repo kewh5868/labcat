@@ -1,0 +1,70 @@
+/* Decorative placements only. No positioning rule covers an interactive control. */
+.mascot-settings-header:has(> .mascot-header) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 18px;
+}
+.mascot-settings-header > :not(.mascot-header) {
+  grid-column: 1;
+}
+.mascot-settings-header > .mascot-header {
+  grid-column: 2;
+  grid-row: 1 / span 4;
+  align-self: start;
+}
+.mascot-settings-header > button {
+  justify-self: start;
+}
+.mascot-header {
+  width: 104px;
+  flex: 0 0 104px;
+}
+.mascot-conversation-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.mascot-progress-panel:has(> .mascot-progress) {
+  display: flow-root;
+}
+.mascot-progress {
+  float: right;
+  width: 88px;
+  margin: 0 0 4px 16px;
+}
+@media (max-width: 600px) {
+  .mascot-header {
+    width: 72px;
+    flex-basis: 72px;
+  }
+  .mascot-settings-header:has(> .mascot-header) {
+    column-gap: 10px;
+  }
+  .mascot-conversation-meta {
+    gap: 0;
+  }
+  .mascot-progress {
+    width: 64px;
+    margin-left: 10px;
+  }
+}
+@media (max-width: 400px) {
+  .mascot-header {
+    width: 56px;
+    flex-basis: 56px;
+  }
+  .mascot-progress {
+    width: 48px;
+    margin-left: 8px;
+  }
+}
+@media print {
+  .mascot-header,
+  .mascot-progress {
+    display: none !important;
+  }
+  .mascot-settings-header:has(> .mascot-header) {
+    display: block;
+  }
+}

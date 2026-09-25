@@ -1,0 +1,76 @@
+.materials-fact {
+  max-width: 565px;
+  margin: 30px auto 20px;
+  text-align: left;
+  padding: 0 4px;
+}
+.materials-fact-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 7px;
+  color: #55705e;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.045em;
+}
+.materials-fact-label span {
+  color: #71865c;
+  font-size: 19px;
+  font-weight: 400;
+  line-height: 1;
+}
+.materials-fact-copy {
+  min-height: 3.4em;
+  margin: 0;
+  color: #68796e;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.materials-fact-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 8px;
+}
+.materials-fact-footer > a {
+  padding: 5px 0;
+  color: #547762;
+  font-size: 10px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.materials-fact-controls {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+}
+.materials-fact-controls button {
+  min-height: 30px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #5d7565;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.materials-fact-controls button:hover {
+  background: #e9eee4;
+  color: #2e5d4c;
+}
+.materials-fact :is(button, a):focus-visible {
+  outline: 2px solid #5b826c;
+  outline-offset: 3px;
+}
+@media (max-width: 480px) {
+  .materials-fact {
+    margin-top: 24px;
+  }
+  .materials-fact-copy {
+    min-height: 5.1em;
+  }
+}

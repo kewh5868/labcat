@@ -467,8 +467,17 @@ test("project, new chat and Connections switches never leave duplicate prompt fi
       "structure lookup can be disabled without submitting",
     );
     assert.equal(messageRequests.length, 0);
-    await change(composers()[0], "A saved local draft");
+    const curiosity = () =>
+      document.querySelector(".materials-fact-copy").textContent;
+    const initialFact = curiosity();
+    await change(composers()[0], "A draft should keep its fact");
+    assert.equal(curiosity(), initialFact);
     await click(document.querySelector(".sidebar-new-chat"));
+    assert.notEqual(
+      curiosity(),
+      initialFact,
+      "New chat resets the fact even while already on the welcome screen",
+    );
     assert.equal(composers()[0].value, "");
     assert.equal(
       structureChoice().checked,

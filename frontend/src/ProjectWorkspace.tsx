@@ -1,73 +1,76 @@
-import type { DragEvent, FormEvent, KeyboardEvent, ReactNode } from "react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+import type { FormEvent, ReactNode, KeyboardEvent, DragEvent } from "react";
 
-import { brandName, brandTagline, LabcatMark } from "./Brand";
-import ChatIdentity, { chatLabel } from "./ChatIdentity";
-import ClearGeneralChatsDialog from "./ClearGeneralChatsDialog";
-import ComposerControls from "./ComposerControls";
 import {
-  ConnectionNotice,
-  ConnectionsPanel,
-  useConnections,
-} from "./Connections";
-import MoveChatDialog from "./MoveChatDialog";
-import PublicSourcesPanel from "./PublicSources";
-import QueryHistory, { queryHistory, QueryTime } from "./QueryHistory";
-import RankingProfilesPanel from "./RankingProfiles";
-import type { ItemAction, ManagedItem } from "./RemovedItems";
-import RemovedItemsPanel, { ItemActionDialog } from "./RemovedItems";
-import ReportContent from "./ReportContent";
-import ReportFormat from "./ReportFormat";
-import type { ReportPinAction } from "./ReportPinControls";
-import ReportPinControls from "./ReportPinControls";
-import type { ResearchSubmission } from "./ResearchProgress";
-import ResearchProgress, { beginResearchSubmission } from "./ResearchProgress";
-import RunningResearchIndicator from "./RunningResearchIndicator";
-import SetupWizard, { useSetup } from "./SetupWizard";
-import SidebarSections from "./SidebarSections";
-import { SidebarViewControls, useSidebarView } from "./SidebarView";
-import WorkspaceSearch from "./WorkspaceSearch";
-import type { MaterialName } from "./chemicalNamesApi";
-import { chemicalNamesApi } from "./chemicalNamesApi";
-import type { PresentedReport } from "./reportPresentationApi";
-import { reportPresentationApi } from "./reportPresentationApi";
-import type { ProfileSnapshot, ReportTable } from "./reportTables";
-import {
-  savedProfileSnapshot,
-  savedReportPresentation,
-  savedReportTables,
-} from "./reportTables";
-import "./settingsLayout.css";
-import { canSubmitResearch } from "./setupApi";
-import type { WorkspaceResearch } from "./useResearchRuns";
-import { completedResearchKey, useResearchRuns } from "./useResearchRuns";
-import "./workspace.css";
+  defaultSettings,
+  errorMessage,
+  publicLink,
+  reportExportUrl,
+  workspaceApi,
+  ResearchRequestError,
+  GeneralChatsChangedError,
+} from "./workspaceApi";
 import type {
   About,
   Chat,
   ChatDetail,
   ChatSearchMatch,
-  ExportFormat,
   PinKind,
   Project,
   ProjectContents,
-  ReportExportSection,
+  ResearchReport,
   ReportPin,
   ReportPresentation,
   ReportView,
-  ResearchReport,
+  ReportExportSection,
+  ExportFormat,
   SearchSettings,
   Source,
 } from "./workspaceApi";
+import RankingProfilesPanel from "./RankingProfiles";
+import ComposerControls from "./ComposerControls";
+import ResearchProgress, { beginResearchSubmission } from "./ResearchProgress";
+import { useResearchRuns, completedResearchKey } from "./useResearchRuns";
+import type { WorkspaceResearch } from "./useResearchRuns";
+import RunningResearchIndicator from "./RunningResearchIndicator";
+import type { ResearchSubmission } from "./ResearchProgress";
+import ReportContent from "./ReportContent";
+import QueryHistory, { queryHistory, QueryTime } from "./QueryHistory";
+import ReportPinControls from "./ReportPinControls";
+import type { ReportPinAction } from "./ReportPinControls";
+import { reportPresentationApi } from "./reportPresentationApi";
+import type { PresentedReport } from "./reportPresentationApi";
+import { chemicalNamesApi } from "./chemicalNamesApi";
+import type { MaterialName } from "./chemicalNamesApi";
+import MaterialsFact from "./MaterialsFact";
+import { brandName, brandTagline, LabcatMark } from "./Brand";
 import {
-  defaultSettings,
-  errorMessage,
-  GeneralChatsChangedError,
-  publicLink,
-  reportExportUrl,
-  ResearchRequestError,
-  workspaceApi,
-} from "./workspaceApi";
+  savedProfileSnapshot,
+  savedReportPresentation,
+  savedReportTables,
+} from "./reportTables";
+import type { ProfileSnapshot, ReportTable } from "./reportTables";
+import ReportFormat from "./ReportFormat";
+import PublicSourcesPanel from "./PublicSources";
+import {
+  ConnectionNotice,
+  ConnectionsPanel,
+  useConnections,
+} from "./Connections";
+import SetupWizard, { useSetup } from "./SetupWizard";
+import { canSubmitResearch } from "./setupApi";
+import RemovedItemsPanel, { ItemActionDialog } from "./RemovedItems";
+import type { ManagedItem, ItemAction } from "./RemovedItems";
+import ChatIdentity, { chatLabel } from "./ChatIdentity";
+import MoveChatDialog from "./MoveChatDialog";
+import WorkspaceSearch from "./WorkspaceSearch";
+import { SidebarViewControls, useSidebarView } from "./SidebarView";
+import SidebarSections from "./SidebarSections";
+import ClearGeneralChatsDialog from "./ClearGeneralChatsDialog";
+import LabcatMascot, { ResearchCompletionMascot } from "./LabcatMascot";
+import "./workspace.css";
+import "./settingsLayout.css";
+import "./mascotPlacements.css";
 
 type ComposerLinks = {
   onOpenSettings: () => void;
@@ -2191,6 +2194,7 @@ function DraftChat({
       {error && (
         <Notice error={error} onRetry={onReload} label="Reload chat history" />
       )}
+      {!compact && <MaterialsFact />}
     </section>
   );
 }
@@ -2233,7 +2237,7 @@ function ChatView({
 }) {
   const setup = useSetup();
   const [failureNotice, setFailureNotice] = useState(initialResearchError);
-  const [, setCompletionKey] = useState(initialCompletionKey);
+  const [completionKey, setCompletionKey] = useState(initialCompletionKey);
   useEffect(() => {
     if (initialCompletionKey) onCompletionConsumed();
   }, [initialCompletionKey, onCompletionConsumed]);
@@ -2557,6 +2561,10 @@ function ChatView({
               Earlier questions ({pastQueries.length})
             </button>
           )}
+          <ResearchCompletionMascot
+            className="mascot-header"
+            completionKey={completionKey}
+          />
         </div>
       </header>
       <div
@@ -2703,6 +2711,7 @@ function SearchCriterionPanel({
   return (
     <section className="search-settings">
       <header className="settings-intro mascot-settings-header">
+        <LabcatMascot scene="crystal" className="mascot-header" />
         <p className="eyebrow">RESEARCH PRIORITIES</p>
         <h1>Search Criterion</h1>
         <p>

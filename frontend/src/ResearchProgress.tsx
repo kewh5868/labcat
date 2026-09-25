@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { workspaceApi } from "./workspaceApi";
 import type { ResearchStatus } from "./workspaceApi";
+import LabcatMascot from "./LabcatMascot";
+import "./mascotPlacements.css";
 
 export interface ResearchSubmission {
   runId: string;
@@ -103,6 +105,7 @@ export default function ResearchProgress({
       className={`research-progress-panel mascot-progress-panel ${connectionError ? "connection-waiting" : ""}`}
       aria-label="Research progress"
     >
+      <LabcatMascot scene="beaker" className="mascot-progress" />
       <div className="research-progress-heading">
         <span className="loading-ring" aria-hidden="true" />
         <div

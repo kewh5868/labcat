@@ -1,0 +1,22 @@
+{
+  "status": "retained asset; not mounted or requested by the app",
+  "sheet": "nap.png",
+  "characterReference": "computer.png",
+  "columns": 4,
+  "rows": 2,
+  "frameCount": 8,
+  "order": "row-major",
+  "durationMs": 4800,
+  "playback": "once, then hold final frame",
+  "previousIdleDelayMs": 120000,
+  "frames": [
+    "At the computer, looking toward the monitor",
+    "Climbing onto the desk",
+    "Reaching a paw toward the monitor",
+    "Batting and tilting the monitor",
+    "Monitor falling off the desk",
+    "Monitor on the floor, cat settling on the desk",
+    "Curling up on the desk",
+    "Sleeping on the desk"
+  ]
+}

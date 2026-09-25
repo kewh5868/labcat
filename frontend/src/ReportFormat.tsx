@@ -16,7 +16,9 @@ import type {
 import { reportFormatApi } from "./reportFormatApi";
 import type { PreviewViews, ReportPreview } from "./reportFormatApi";
 import ReportContent from "./ReportContent";
+import LabcatMascot from "./LabcatMascot";
 import "./reportFormat.css";
+import "./mascotPlacements.css";
 
 const clone = (value: SearchSettings): SearchSettings => ({
   ranking: { ...value.ranking },
@@ -227,6 +229,7 @@ export default function ReportFormat({
   return (
     <section className="report-format-page">
       <header className="settings-intro mascot-settings-header">
+        <LabcatMascot scene="typewriter" className="mascot-header" />
         <p className="eyebrow">PRESENTATION & EXPORTS</p>
         <h1>Report Format</h1>
         <p>

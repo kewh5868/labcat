@@ -26,7 +26,9 @@ import MaterialsProjectConnection from "./MaterialsProjectConnection";
 import { AgentConnectionsCard, ChatGPTSignIn } from "./AgentConnections";
 import { modelConnectionSummary } from "./modelConnectionSummary";
 import type { SetupStatus } from "./setupApi";
+import LabcatMascot from "./LabcatMascot";
 import "./connections.css";
+import "./mascotPlacements.css";
 
 interface ConnectionContextValue {
   status: ConnectionStatus | null;
@@ -864,6 +866,9 @@ function ConnectionForm({
     >
       {section === "all" && (
         <header className="connections-intro mascot-settings-header">
+          {!onboarding && (
+            <LabcatMascot scene="wires" className="mascot-header" />
+          )}
           <p className="eyebrow">LOCAL WORKSPACE · CONNECTIONS</p>
           <h1>Your sources and model connections.</h1>
           <p>

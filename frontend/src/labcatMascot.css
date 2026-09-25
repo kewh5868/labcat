@@ -1,0 +1,210 @@
+/* Each transparent sheet has four columns and two rows of square cells.
+   The viewport never changes size while the sheet moves behind it. */
+.labcat-mascot {
+  --labcat-mascot-size: 7rem;
+  display: inline-block;
+  position: relative;
+  flex: 0 0 auto;
+  width: var(--labcat-mascot-size);
+  height: auto;
+  aspect-ratio: 1;
+  max-width: 100%;
+  overflow: hidden;
+  contain: layout paint;
+  pointer-events: none;
+  user-select: none;
+  vertical-align: middle;
+}
+.labcat-mascot .labcat-mascot-sheet,
+.labcat-mascot .labcat-mascot-liquid-sheet {
+  display: block;
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 400%;
+  height: 200%;
+  max-width: none;
+  margin: 0;
+  transform: translate(0, 0);
+}
+.labcat-mascot .labcat-mascot-sheet {
+  animation: labcat-eight-frames 4.8s steps(1, end) infinite;
+}
+.labcat-mascot[data-animation="wires"] .labcat-mascot-sheet {
+  animation-duration: 8s;
+}
+.labcat-mascot[data-animation="crystal"] .labcat-mascot-sheet {
+  animation: labcat-crystal-frames 6.4s steps(1, end) infinite;
+}
+/* Processing uses one fixed pose. Generated frames vary in flask geometry;
+   changing only a clipped copy of the liquid keeps the vessel and cat steady. */
+.labcat-mascot[data-animation="beaker"] .labcat-mascot-sheet {
+  animation: none;
+  transform: translate(0, 0);
+}
+.labcat-mascot-liquid {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  clip-path: polygon(
+    42% 70.4%,
+    46% 71%,
+    52% 71%,
+    57.3% 70.4%,
+    58.3% 74%,
+    60.5% 77%,
+    59.8% 80.6%,
+    57% 82.7%,
+    52% 83.5%,
+    47% 83.5%,
+    42.6% 82.4%,
+    40% 80.3%,
+    39.2% 77%,
+    41.3% 74.2%
+  );
+}
+.labcat-mascot .labcat-mascot-liquid-sheet {
+  animation: labcat-liquid-color 8s linear infinite;
+}
+.labcat-mascot[data-animation="beaker-complete"] .labcat-mascot-sheet {
+  animation: labcat-beaker-complete 1.6s steps(1, end) forwards;
+}
+.labcat-mascot[data-animation="nap"] .labcat-mascot-sheet {
+  animation: labcat-nap-frames 4.8s steps(1, end) forwards;
+}
+.labcat-mascot[data-paused="true"] .labcat-mascot-sheet,
+.labcat-mascot[data-paused="true"] .labcat-mascot-liquid-sheet {
+  animation-play-state: paused;
+}
+.labcat-mascot[data-reduced-motion="true"] .labcat-mascot-sheet,
+.labcat-mascot[data-reduced-motion="true"] .labcat-mascot-liquid-sheet {
+  animation: none;
+  transform: translate(0, 0);
+  filter: none;
+}
+
+@keyframes labcat-eight-frames {
+  0% {
+    transform: translate(0, 0);
+  }
+  12.5% {
+    transform: translate(-25%, 0);
+  }
+  25% {
+    transform: translate(-50%, 0);
+  }
+  37.5% {
+    transform: translate(-75%, 0);
+  }
+  50% {
+    transform: translate(0, -50%);
+  }
+  62.5% {
+    transform: translate(-25%, -50%);
+  }
+  75% {
+    transform: translate(-50%, -50%);
+  }
+  87.5% {
+    transform: translate(-75%, -50%);
+  }
+  100% {
+    transform: translate(0, 0);
+  }
+}
+/* Register each crystal pose to frame 1's table center/front edge. The source
+   is 1774 x 887 (443.5px cells); second-row artwork sits 32.5–37.5px higher.
+   Translations are percentages of the entire sheet so all display sizes align.
+   Clip to the source cell before translating: shifting row 2 downward must not
+   expose row 1's feet. Keep the original poses and illustration untouched. */
+@keyframes labcat-crystal-frames {
+  0%,
+  100% {
+    transform: translate(0, 0);
+    clip-path: inset(0 75% 50% 0);
+  }
+  12.5% {
+    transform: translate(-25.028185%, -0.11274%);
+    clip-path: inset(0 50% 50% 25%);
+  }
+  25% {
+    transform: translate(-49.88726%, -0.11274%);
+    clip-path: inset(0 25% 50% 50%);
+  }
+  37.5% {
+    transform: translate(-74.802706%, -0.11274%);
+    clip-path: inset(0 0 50% 75%);
+  }
+  50% {
+    transform: translate(-0.169109%, -45.997745%);
+    clip-path: inset(50% 75% 0 0);
+  }
+  62.5% {
+    transform: translate(-25.11274%, -45.772266%);
+    clip-path: inset(50% 50% 0 25%);
+  }
+  75% {
+    transform: translate(-49.971815%, -46.335964%);
+    clip-path: inset(50% 25% 0 50%);
+  }
+  87.5% {
+    transform: translate(-74.689966%, -46.110485%);
+    clip-path: inset(50% 0 0 75%);
+  }
+}
+@keyframes labcat-liquid-color {
+  from {
+    filter: hue-rotate(0deg) saturate(1.4);
+  }
+  to {
+    filter: hue-rotate(360deg) saturate(1.4);
+  }
+}
+@keyframes labcat-beaker-complete {
+  0% {
+    transform: translate(-50%, -50%);
+  }
+  50%,
+  100% {
+    transform: translate(-75%, -50%);
+  }
+}
+@keyframes labcat-nap-frames {
+  0% {
+    transform: translate(0, 0);
+  }
+  12.5% {
+    transform: translate(-25%, 0);
+  }
+  25% {
+    transform: translate(-50%, 0);
+  }
+  37.5% {
+    transform: translate(-75%, 0);
+  }
+  50% {
+    transform: translate(0, -50%);
+  }
+  62.5% {
+    transform: translate(-25%, -50%);
+  }
+  75% {
+    transform: translate(-50%, -50%);
+  }
+  87.5%,
+  100% {
+    transform: translate(-75%, -50%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .labcat-mascot[data-animation] .labcat-mascot-sheet,
+  .labcat-mascot[data-animation] .labcat-mascot-liquid-sheet {
+    animation: none;
+    transform: translate(0, 0);
+    filter: none;
+  }
+}
+@media print {
+  .labcat-mascot {
+    display: none;
+  }
+}
