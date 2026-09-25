@@ -15,7 +15,7 @@ Connect a supported model in Connections before starting research. Optional publ
 source API credentials can be entered in the same screen.
 
 The portable launchers (`labcat.sh`, `labcat.ps1`, and `Start Labcat.command`)
-manage the local Docker services. The native desktop wrapper is planned separately.
+manage the local Docker services. The optional Tauri desktop wrapper is available under `desktop/`; see its README for platform build instructions.
 
 The app, model worker and egress service run separately with bounded public-source
 access. See [deployment](docs/deployment.md) for setup and [source policy](docs/public-sources.md)

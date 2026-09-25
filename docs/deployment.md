@@ -27,9 +27,11 @@ services; `./labcat.sh stop` or `labcat.cmd stop` stops only those services.
 Closing the browser leaves the backend running. No host Python, Node or compiler
 is required once the image has been built.
 
-The native desktop wrapper, install-ZIP builder and native/container artifact
-workflows are planned additions. This snapshot supplies the image build and
-portable browser launchers. Windows and Linux host behavior requires testing on
+The optional [native desktop wrapper](../desktop/README.md) now displays the
+same Docker-served workspace in the operating system webview. Build it for the
+target host using its guide; native signing and per-host validation remain
+release work. The install-ZIP builder and native/container artifact workflows
+are planned additions. Windows and Linux host behavior requires testing on
 those systems; an implementation or workflow definition alone does not establish
 that validation passed.
 

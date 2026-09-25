@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Labcat</title>
+    <link rel="stylesheet" href="startup.css" />
+  </head>
+  <body>
+    <main>
+      <div class="brand">
+        <img src="labcat-mark.png" width="86" height="86" alt="" />
+        <div>
+          <p class="brand-name">Labcat</p>
+          <p class="tagline">Curious. Clever. Companionable.</p>
+        </div>
+      </div>
+      <h1 id="title">Opening your research workspace.</h1>
+      <p id="message" role="status">
+        Starting the local Docker application and checking that it is ready.
+        This can take up to 90 seconds.
+      </p>
+      <div class="notice">
+        <strong>Runs in the operating system's webview.</strong><br />No Chrome
+        window or separate browser is required.
+      </div>
+      <pre id="details" hidden></pre>
+      <p id="recovery" hidden>
+        Start Docker, load the supplied image if needed, then close and reopen
+        Labcat. You can also run the host launcher with
+        <code>start --no-open</code> to inspect startup errors.
+      </p>
+      <footer>
+        Native shell 0.1.0 · The scientific application reports its own
+        version.<br />Closing this window does not stop an already running
+        backend.
+      </footer>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,23 @@
+[package]
+name = "labcat-desktop"
+version = "0.1.0"
+description = "Native OS-webview shell for the local Labcat application"
+authors = ["Keith White"]
+license = "BSD-3-Clause"
+edition = "2021"
+rust-version = "1.85"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde_json = "1"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+strip = true
+lto = "thin"

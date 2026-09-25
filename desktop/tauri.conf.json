@@ -1,0 +1,52 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Labcat",
+  "version": "0.1.0",
+  "identifier": "org.labcat.desktop",
+  "build": {
+    "frontendDist": "ui"
+  },
+  "app": {
+    "windows": [],
+    "withGlobalTauri": false,
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'",
+      "capabilities": [
+        {
+          "identifier": "no-native-access",
+          "description": "No frontend, including localhost, can invoke native APIs.",
+          "windows": ["startup", "main", "status-export"],
+          "local": false,
+          "permissions": []
+        }
+      ]
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "useLocalToolsDir": true,
+    "shortDescription": "Local materials research application shell",
+    "category": "Productivity",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": {
+      "../labcat.sh": "launcher/labcat.sh",
+      "../labcat.ps1": "launcher/labcat.ps1",
+      "../compose.yaml": "launcher/compose.yaml"
+    },
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    },
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": false
+      }
+    }
+  }
+}
