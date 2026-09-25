@@ -1,0 +1,108 @@
+name: labcat
+services:
+  labcat:
+    image: labcat:0.1.0.dev0
+    pull_policy: never
+    environment:
+      LABCAT_GOOSE_REMOTE: "1"
+      LABCAT_GOOSE_BROWSER_AUTH: "1"
+      LABCAT_OAUTH_CALLBACK_PORT: "${LABCAT_OAUTH_CALLBACK_PORT:-1455}"
+      LABCAT_EDITION: "${LABCAT_EDITION:-user}"
+    depends_on:
+      goose-worker:
+        condition: service_started
+    networks:
+      - default
+      - agent-private
+    ports:
+      # Docker chooses a free host port; the host launcher discovers it.
+      - target: 8000
+        host_ip: 127.0.0.1
+      # Goose's browser OAuth has a fixed localhost:1455 redirect. The callback
+      # listener exposes only that route, never the workspace or worker API.
+      - target: 1456
+        published: "${LABCAT_OAUTH_CALLBACK_PORT:-1455}"
+        host_ip: 127.0.0.1
+    read_only: true
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - workspace-data:/var/lib/labcat
+      - agent-channel:/run/labcat-channel
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    restart: "no"
+  goose-worker:
+    # One distributed image; this process receives only the selected run context.
+    image: labcat:0.1.0.dev0
+    pull_policy: never
+    entrypoint: ["python", "-m", "labcat.goose_worker"]
+    command: []
+    environment:
+      LABCAT_GOOSE_ISOLATED: "1"
+    depends_on:
+      goose-egress:
+        condition: service_started
+    networks:
+      - agent-private
+    read_only: true
+    volumes:
+      - agent-channel:/run/labcat-channel:ro
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    healthcheck:
+      test: ["CMD", "python", "-m", "labcat.goose_worker", "--health"]
+      interval: 10s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
+    restart: "no"
+  goose-egress:
+    # Worker traffic can leave its private network only through this fixed proxy.
+    image: labcat:0.1.0.dev0
+    pull_policy: never
+    entrypoint: ["python", "-m", "labcat.goose_egress"]
+    command: []
+    networks:
+      - default
+      - agent-private
+    read_only: true
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    healthcheck:
+      test: ["CMD", "python", "-m", "labcat.goose_egress", "--health"]
+      interval: 10s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
+    restart: "no"
+networks:
+  default:
+  agent-private:
+    internal: true
+volumes:
+  workspace-data:
+  agent-channel:
+    # Shared authentication channel is memory-backed, never a host bind mount.
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=1m,uid=10001,gid=10001,mode=0700

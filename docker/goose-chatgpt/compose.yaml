@@ -1,0 +1,22 @@
+name: goose-chatgpt-probe
+services:
+  goose:
+    image: goose-chatgpt-standalone:1.50.0
+    build:
+      context: ../..
+      dockerfile: docker/goose-chatgpt/Dockerfile
+    user: "10001:10001"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 96
+    mem_limit: 768m
+    cpus: 1
+    ulimits:
+      core: 0
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=192m,mode=1777
+    ports:
+      - "127.0.0.1:1455:1456"
+      - "127.0.0.1::8080"
+    restart: "no"

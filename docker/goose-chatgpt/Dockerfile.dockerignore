@@ -1,0 +1,7 @@
+# This diagnostic build context excludes all app code and private files.
+**
+!scripts/
+!scripts/install_goose.py
+!scripts/goose_chatgpt_standalone.py
+!third_party/
+!third_party/GOOSE-LICENSE
