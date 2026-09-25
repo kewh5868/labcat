@@ -15,9 +15,15 @@ import hashlib
 import json
 import math
 import re
+import sqlite3
 from copy import deepcopy
+from datetime import UTC, datetime
+from uuid import uuid4
+
+from fastapi import APIRouter, HTTPException
 
 from labcat.config import DEFAULT_TARGET_BAND_GAP_TOLERANCE_EV
+from labcat.workspace import WorkspaceStore
 
 SUPPORTED_ATTRIBUTES = frozenset(
     {
@@ -37,7 +43,7 @@ SUPPORTED_ATTRIBUTES = frozenset(
     }
 )
 
-
+# These are catalog labels, not claims that any particular material has a value.
 _ATTRIBUTES = (
     (
         "stability",
@@ -307,7 +313,10 @@ _ATTRIBUTES = (
     ),
 )
 
-
+# UI starting points only: these selected fields are not claims about a class,
+# recommendations for its application, or an extension of retrieval coverage.
+# Material-property importance starts at zero except the stability baseline
+# applied to all shipped defaults below. Users can edit these preferences.
 EXPLORATORY_CLASSES = (
     (
         "polymers",
@@ -491,8 +500,6 @@ def catalog() -> dict:
 
 
 ATTRIBUTE_IDS = frozenset(item[0] for item in _ATTRIBUTES)
-
-
 PRESETS = (
     (
         "preset-oxide-thin-film",
@@ -574,14 +581,10 @@ PRESETS = (
     )
     for identifier, label, attributes in EXPLORATORY_CLASSES
 )
-
-
+# Preserve exact earlier defaults for conservative, idempotent migrations. New
+# defaults consider every stability scope without inventing the missing evidence.
 _PRE_STABILITY_PRESETS = PRESETS
-
-
 STABILITY_DEFAULT_IMPORTANCE = 0.3
-
-
 PRESETS = tuple(
     (
         identifier,
@@ -600,11 +603,9 @@ PRESETS = tuple(
     )
     for identifier, value in _PRE_STABILITY_PRESETS
 )
-
-
+# An optical application alone supplies neither a desired gap nor an optimum.
+# Preserve old defaults for an exact-value migration; custom profiles stay intact.
 _PRE_OPTICAL_PRESETS = PRESETS
-
-
 PRESETS = tuple(
     (
         identifier,
@@ -619,14 +620,14 @@ PRESETS = tuple(
     )
     for identifier, value in _PRE_OPTICAL_PRESETS
 )
-
-
+# The first-run Search Criterion uses the existing high-k preset. Persisted
+# selections (including custom and migrated preferences) remain authoritative.
 DEFAULT_PROFILE_ID = "preset-oxide-high-k"
-
-
 INFERENCE_VERSION = "catalog-goals-v3"
 
-
+# These aliases describe request preferences, never material identity or properties.
+# Inference selects validated saved preferences or composes catalog class and
+# application defaults. Explicit targets are preferences only, never measurements.
 _CLASS_ALIASES = {
     "oxide_dielectrics": ("oxide dielectric", "oxide dielectrics"),
     "structural_ceramics": (
@@ -712,8 +713,6 @@ _CLASS_ALIASES = {
     "thermosets": ("thermoset", "thermosets"),
     "thermoplastics": ("thermoplastic", "thermoplastics"),
 }
-
-
 _APPLICATION_ALIASES = {
     "thin_film_insulation": (
         "thin film",
@@ -758,7 +757,6 @@ _APPLICATION_ALIASES = {
     ),
     "property_exploration": ("property exploration",),
 }
-
 
 _APPLICATION_TEMPLATES = {
     "thin_film_insulation": "preset-oxide-thin-film",
@@ -1515,3 +1513,338 @@ def validate_profile(value: object) -> dict:
             )
         cleaned["band_gap_tolerance_ev"] = tolerance
     return cleaned
+
+
+class RankingProfileStore:
+    """Preference-only tables, sharing the workspace's transactions and
+    lifecycle."""
+
+    def __init__(self, workspace: WorkspaceStore):
+        self.workspace = workspace
+
+    def initialize(self, legacy_importance: dict | None = None):
+        if legacy_importance is not None:
+            normalize_importance(legacy_importance)
+        with self.workspace._connection(write=True) as connection:
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS ranking_profiles ("
+                "id TEXT PRIMARY KEY,value TEXT NOT NULL,preset INTEGER NOT NULL "
+                "CHECK(preset IN (0,1)),created_at TEXT NOT NULL,"
+                "updated_at TEXT NOT NULL)"
+            )
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS active_ranking_profile ("
+                "id INTEGER PRIMARY KEY CHECK(id=1),profile_id TEXT NOT NULL,"
+                "FOREIGN KEY(profile_id) REFERENCES ranking_profiles(id))"
+            )
+            timestamp = datetime.now(UTC).isoformat()
+            for identifier, value in PRESETS:
+                connection.execute(
+                    "INSERT OR IGNORE INTO ranking_profiles VALUES(?,?,1,?,?)",
+                    (
+                        identifier,
+                        json.dumps(validate_profile(value)),
+                        timestamp,
+                        timestamp,
+                    ),
+                )
+            # Upgrade only the exact untouched earlier default. Customized
+            # profiles and the preference snapshots inside saved reports stay
+            # unchanged. Total permittivity already includes electronic response;
+            # completeness is now reported separately from application utility.
+            earlier_high_k = {
+                "name": "Oxide dielectrics · High-k screening",
+                "material_class": "oxide_dielectrics",
+                "application": "high_k_screening",
+                "importance": {
+                    "stability": 0.5,
+                    "band_gap": 0.5,
+                    "dielectric_total": 1.0,
+                    "dielectric_electronic": 0.4,
+                    "element_screen": 0.3,
+                    "simplicity": 0.2,
+                    "evidence_quality": 0.5,
+                },
+            }
+            saved_high_k = connection.execute(
+                "SELECT value,preset FROM ranking_profiles WHERE id=?",
+                ("preset-oxide-high-k",),
+            ).fetchone()
+            current_high_k = dict(PRESETS)["preset-oxide-high-k"]
+            intermediate_high_k = {
+                key: value
+                for key, value in current_high_k.items()
+                if key != "minimum_band_gap_ev"
+            }
+            previous_high_k = dict(_PRE_STABILITY_PRESETS)["preset-oxide-high-k"]
+            previous_intermediate_high_k = {
+                key: value
+                for key, value in previous_high_k.items()
+                if key != "minimum_band_gap_ev"
+            }
+            saved_value = None
+            if saved_high_k and saved_high_k["preset"]:
+                try:
+                    decoded = json.loads(saved_high_k["value"])
+                    validate_profile(decoded)
+                    saved_value = decoded
+                except (ValueError, TypeError, RecursionError):
+                    # Keep corrupt saved data for the existing read-time error;
+                    # migration must neither crash startup nor reset user data.
+                    pass
+            if isinstance(saved_value, dict) and any(
+                saved_value == previous
+                and list(saved_value["importance"].items())
+                == list(previous["importance"].items())
+                for previous in (
+                    earlier_high_k,
+                    intermediate_high_k,
+                    previous_high_k,
+                    previous_intermediate_high_k,
+                )
+            ):
+                connection.execute(
+                    "UPDATE ranking_profiles SET value=?,updated_at=? WHERE id=?",
+                    (
+                        json.dumps(current_high_k),
+                        timestamp,
+                        "preset-oxide-high-k",
+                    ),
+                )
+            # Class and application defaults gain explicit stability priorities
+            # only when every saved field and its preference order is untouched.
+            current_presets = dict(PRESETS)
+            for identifier, previous in (
+                *_PRE_STABILITY_PRESETS,
+                *_PRE_OPTICAL_PRESETS,
+            ):
+                if previous == current_presets[identifier]:
+                    continue
+                saved = connection.execute(
+                    "SELECT value,preset FROM ranking_profiles WHERE id=?",
+                    (identifier,),
+                ).fetchone()
+                if not saved or not saved["preset"]:
+                    continue
+                try:
+                    decoded = json.loads(saved["value"])
+                    validate_profile(decoded)
+                except (ValueError, TypeError, RecursionError):
+                    continue
+                if decoded != previous or list(decoded["importance"].items()) != list(
+                    previous["importance"].items()
+                ):
+                    continue
+                connection.execute(
+                    "UPDATE ranking_profiles SET value=?,updated_at=? WHERE id=?",
+                    (json.dumps(current_presets[identifier]), timestamp, identifier),
+                )
+            existing = connection.execute(
+                "SELECT profile_id FROM active_ranking_profile WHERE id=1"
+            ).fetchone()
+            selected = DEFAULT_PROFILE_ID
+            # Recognize the old five-weight configuration independently of the
+            # current first-run profile, so genuine legacy edits survive upgrade.
+            default_importance = {
+                name: value
+                for name, value in _PRE_STABILITY_PRESETS[0][1]["importance"].items()
+                if name != "dielectric_total"
+            }
+            if (
+                existing is None
+                and legacy_importance is not None
+                and legacy_importance != default_importance
+            ):
+                selected = "migrated-ranking-preferences"
+                migrated = {
+                    "name": "Saved ranking preferences",
+                    "material_class": "oxide_dielectrics",
+                    "application": "thin_film_insulation",
+                    "importance": dict(legacy_importance),
+                }
+                connection.execute(
+                    "INSERT OR IGNORE INTO ranking_profiles VALUES(?,?,0,?,?)",
+                    (
+                        selected,
+                        json.dumps(migrated, allow_nan=False),
+                        timestamp,
+                        timestamp,
+                    ),
+                )
+            connection.execute(
+                "INSERT OR IGNORE INTO active_ranking_profile VALUES(1,?)",
+                (selected,),
+            )
+
+    @staticmethod
+    def _decode(row) -> dict:
+        try:
+            value = validate_profile(json.loads(row["value"]))
+        except (ValueError, TypeError, RecursionError):
+            raise sqlite3.DatabaseError("Saved ranking profile is invalid.") from None
+        return {
+            "id": row["id"],
+            **value,
+            "normalized_weights": normalize_importance(value["importance"]),
+            "preset": bool(row["preset"]),
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
+
+    def list(self) -> dict:
+        with self.workspace._connection() as connection:
+            rows = connection.execute(
+                "SELECT * FROM ranking_profiles ORDER BY preset DESC,created_at,id"
+            ).fetchall()
+            active = connection.execute(
+                "SELECT profile_id FROM active_ranking_profile WHERE id=1"
+            ).fetchone()
+        if active is None or not any(row["id"] == active[0] for row in rows):
+            raise sqlite3.DatabaseError("The active ranking profile is unavailable.")
+        return {
+            "catalog": catalog(),
+            "profiles": [self._decode(row) for row in rows],
+            "active_profile_id": active[0],
+        }
+
+    def active(self) -> dict:
+        with self.workspace._connection() as connection:
+            row = connection.execute(
+                "SELECT ranking_profiles.* FROM ranking_profiles "
+                "JOIN active_ranking_profile ON profile_id=ranking_profiles.id "
+                "WHERE active_ranking_profile.id=1"
+            ).fetchone()
+        if row is None:
+            raise sqlite3.DatabaseError("The active ranking profile is unavailable.")
+        return self._decode(row)
+
+    def select(self, identifier: str | None, prompt: str) -> tuple[dict, dict]:
+        """Snapshot one run's preferences without changing the active
+        profile."""
+        adjustments = []
+        if identifier is None:
+            profile = self.active()
+            mode, reason = "active", "Used the active ranking profile."
+        elif identifier == "infer":
+            saved = self.list()
+            active = next(
+                p for p in saved["profiles"] if p["id"] == saved["active_profile_id"]
+            )
+            profile, mode, reason = _infer_profile(prompt, saved["profiles"], active)
+            if mode == "inferred":
+                profile, adjustments = prompt_preferences(profile, prompt)
+        else:
+            with self.workspace._connection() as connection:
+                row = connection.execute(
+                    "SELECT * FROM ranking_profiles WHERE id=?", (identifier,)
+                ).fetchone()
+            if row is None:
+                raise RankingProfileNotFound("Ranking profile not found.")
+            profile = self._decode(row)
+            mode, reason = (
+                "explicit",
+                "Used the ranking profile selected for this message.",
+            )
+        selection = {
+            "mode": mode,
+            "reason": reason,
+            "requested_profile_id": identifier,
+            "selected_profile_id": profile["id"],
+            "inference_version": INFERENCE_VERSION if identifier == "infer" else None,
+        }
+        if adjustments:
+            selection["preference_adjustments"] = adjustments
+        return profile, selection
+
+    def create(self, request: object) -> dict:
+        value = validate_profile(request)
+        identifier = str(uuid4())
+        timestamp = datetime.now(UTC).isoformat()
+        with self.workspace._connection(write=True) as connection:
+            count = connection.execute(
+                "SELECT COUNT(*) FROM ranking_profiles WHERE preset=0"
+            ).fetchone()[0]
+            if count >= 100:
+                raise ValueError("This workspace has reached its custom profile limit.")
+            connection.execute(
+                "INSERT INTO ranking_profiles VALUES(?,?,0,?,?)",
+                (identifier, json.dumps(value, allow_nan=False), timestamp, timestamp),
+            )
+            row = connection.execute(
+                "SELECT * FROM ranking_profiles WHERE id=?", (identifier,)
+            ).fetchone()
+        return self._decode(row)
+
+    def update(self, identifier: str, request: object) -> dict:
+        value = validate_profile(request)
+        with self.workspace._connection(write=True) as connection:
+            row = connection.execute(
+                "SELECT * FROM ranking_profiles WHERE id=?", (identifier,)
+            ).fetchone()
+            if row is None:
+                raise RankingProfileNotFound("Ranking profile not found.")
+            if row["preset"]:
+                raise ValueError("Create a custom copy to change a built-in preset.")
+            connection.execute(
+                "UPDATE ranking_profiles SET value=?,updated_at=? WHERE id=?",
+                (
+                    json.dumps(value, allow_nan=False),
+                    datetime.now(UTC).isoformat(),
+                    identifier,
+                ),
+            )
+            row = connection.execute(
+                "SELECT * FROM ranking_profiles WHERE id=?", (identifier,)
+            ).fetchone()
+        return self._decode(row)
+
+    def activate(self, identifier: str) -> dict:
+        with self.workspace._connection(write=True) as connection:
+            row = connection.execute(
+                "SELECT * FROM ranking_profiles WHERE id=?", (identifier,)
+            ).fetchone()
+            if row is None:
+                raise RankingProfileNotFound("Ranking profile not found.")
+            profile = self._decode(row)
+            connection.execute(
+                "UPDATE active_ranking_profile SET profile_id=? WHERE id=1",
+                (identifier,),
+            )
+        return {"active_profile_id": identifier, "profile": profile}
+
+
+def create_ranking_profiles_router(store: RankingProfileStore) -> APIRouter:
+    """The app supplies its same-origin local mutation boundary."""
+    router = APIRouter(prefix="/api/ranking-profiles")
+
+    def call(function, *args):
+        try:
+            return function(*args)
+        except RankingProfileNotFound as error:
+            raise HTTPException(404, str(error)) from None
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from None
+        except sqlite3.Error:
+            raise HTTPException(
+                503, "Saved ranking profiles are unavailable."
+            ) from None
+
+    @router.get("")
+    def profiles():
+        return call(store.list)
+
+    @router.post("", status_code=201)
+    def create(request: dict):
+        return call(store.create, request)
+
+    @router.put("/{profile_id}")
+    def update(profile_id: str, request: dict):
+        return call(store.update, profile_id, request)
+
+    @router.post("/{profile_id}/activate")
+    def activate(profile_id: str, request: dict):
+        if request:
+            raise HTTPException(422, "Activation accepts an empty object only.")
+        return call(store.activate, profile_id)
+
+    return router

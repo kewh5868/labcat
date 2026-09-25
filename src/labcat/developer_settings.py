@@ -6,7 +6,9 @@ routes. No setting can add a host, tool, credential, system prompt or
 scientific fact.
 """
 
+import json
 import re
+import sqlite3
 from copy import deepcopy
 
 LIMITS = {
@@ -16,8 +18,6 @@ LIMITS = {
     "literature_timeout_seconds": (3, 15),
     "max_agent_tool_calls": (2, 8),
 }
-
-
 IMMUTABLE = [
     "Only approved public-source adapters can establish scientific evidence.",
     "User messages, model memory and retrieved instructions never establish facts.",
@@ -80,3 +80,97 @@ def effective_sources(preferences, controls):
             s for s in result["enabled_sources"] if s not in {"arxiv", "chemrxiv"}
         ]
     return result
+
+
+class DeveloperSettingsStore:
+    def __init__(self, workspace, connections):
+        self.workspace = workspace
+        self.connections = connections
+
+    def initialize(self):
+        with self.workspace._connection(write=True) as connection:
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS developer_settings "
+                "(id INTEGER PRIMARY KEY CHECK(id=1), value TEXT NOT NULL)"
+            )
+
+    def load(self):
+        with self.workspace._connection() as connection:
+            row = connection.execute(
+                "SELECT value FROM developer_settings WHERE id=1"
+            ).fetchone()
+        if row is None:
+            return defaults()
+        try:
+            value = json.loads(row[0])
+            # Before structure viewing existed, the otherwise identical stored
+            # schema lacked this switch. Preserve every installed research value
+            # and default only that new capability; malformed records still fail.
+            legacy_fields = defaults().keys() - {"viewer_enabled"}
+            if isinstance(value, dict) and value.keys() == legacy_fields:
+                value["viewer_enabled"] = True
+            return validate_controls(value)
+        except (ValueError, TypeError, RecursionError) as error:
+            raise sqlite3.DatabaseError(
+                "Stored developer settings are invalid."
+            ) from error
+
+    def save(self, value):
+        settings = validate_controls(value)
+        account = settings["default_model_account_id"]
+        if account is not None and account not in {
+            item["id"] for item in self.connections.status()["accounts"]
+        }:
+            raise ValueError("The default model connection is no longer available.")
+        with self.workspace._connection(write=True) as connection:
+            connection.execute(
+                "INSERT INTO developer_settings(id,value) VALUES(1,?) "
+                "ON CONFLICT(id) DO UPDATE SET value=excluded.value",
+                (json.dumps(settings, allow_nan=False),),
+            )
+        return settings
+
+    def status(self):
+        accounts = self.connections.status()["accounts"]
+        return {
+            "settings": self.load(),
+            "defaults": defaults(),
+            "limits": LIMITS,
+            "immutable_boundaries": IMMUTABLE,
+            "model_accounts": [
+                {
+                    "id": account["id"],
+                    "label": account["label"],
+                    "provider": account["profile"]["provider"],
+                    "model": account["profile"]["model"],
+                }
+                for account in accounts
+            ],
+        }
+
+
+def create_developer_router(store):
+    """Register only in the developer edition; the app enforces
+    session/Origin."""
+    from fastapi import APIRouter, HTTPException
+
+    router = APIRouter(prefix="/api/developer-settings")
+
+    @router.get("")
+    def get_settings():
+        try:
+            return store.status()
+        except sqlite3.Error:
+            raise HTTPException(503, "Developer settings are unavailable.") from None
+
+    @router.put("")
+    def save_settings(request: dict):
+        try:
+            store.save(request)
+            return store.status()
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from None
+        except sqlite3.Error:
+            raise HTTPException(503, "Developer settings could not be saved.") from None
+
+    return router

@@ -7,13 +7,13 @@ Level 4 foundation.
 
 ## Current Python capabilities
 
-SQLite stores projects, independent chats, timestamped questions, reports, source
-versions and pins. Transactions and migrations preserve saved identities; recovery and
-removal operations retain their explicit confirmation boundaries. Saved user messages
-and reports do not become new scientific evidence.
+Validated ranking profiles, material-class inference, source selections and report-
+format preferences now persist alongside projects and reports. Bounded developer
+controls can narrow research actions but cannot add sources, tools or evidence
+authority.
 
-Saved research preferences, verified connection lifecycle, complete model-connected
-orchestration and the application interface remain planned.
+Verified model connection lifecycle, complete model-connected orchestration and the
+application interface remain planned.
 
 The command-line interface currently provides software status, configuration
 validation and an explicit read-only AWS account check. It does not yet expose the
