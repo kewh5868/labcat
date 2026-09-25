@@ -4,6 +4,7 @@ credentials."""
 import hashlib
 import json
 import time
+from copy import deepcopy
 
 import pytest
 from test_public_sources import Response, network
@@ -11,6 +12,7 @@ from test_public_sources import Response, network
 from labcat import chemical_names as names
 from labcat import public_sources
 from labcat.config import load_config
+from labcat.report_exports import prepare_presentation, render_download
 from labcat.science.candidate_leads import discovery_documents, validate_candidate_leads
 from labcat.science.rebuild_snapshot import canonical
 from labcat.science.reporting import render_reports
@@ -190,6 +192,46 @@ def test_unsupported_formula_never_contacts_a_source(monkeypatch, formula):
     assert calls == []
 
 
+def test_failure_timeout_and_negative_cache_leave_report_intact(monkeypatch):
+    report = prepare_presentation(report_fixture())
+    before = deepcopy(report)
+    calls = mock_pubchem(monkeypatch, error=public_sources.PublicSourceError("404"))
+    resolver = names.ChemicalNameResolver()
+    assert resolver.names(report, lookup=True, allow_literature=False) == []
+    assert resolver.names(report, lookup=True, allow_literature=False) == []
+    assert len(calls) == 2
+    assert names.lookup_pubchem("Na3PS4", time.monotonic() - 1) is None
+    assert report == before
+
+
+def test_cache_returns_only_target_bound_names_without_ranking_mutation(monkeypatch):
+    original = report_fixture()
+    before = deepcopy(original)
+    report = prepare_presentation(original)
+    calls = mock_pubchem(monkeypatch)
+    resolver = names.ChemicalNameResolver()
+    found = resolver.names(report, lookup=True, allow_literature=False)
+    assert found == [
+        {
+            "kind": "lead",
+            "id": original["result"]["candidate_leads"][0]["id"],
+            "formula": "Na3PS4",
+            "name": "Fixture sulfide",
+            "url": "https://pubchem.ncbi.nlm.nih.gov/compound/123",
+            "source_name": "PubChem",
+        }
+    ]
+    assert resolver.names(report, allow_literature=False) == found
+    assert len(calls) == 3
+    report["material_names"] = found
+    exported = json.loads(render_download(report, "json")[0])
+    assert exported["result"] == before["result"]
+    assert exported["presentation"]["material_names"] == found
+    assert original == before
+    wrong = prepare_presentation(report_fixture("Li3BS3"))
+    assert resolver.names(wrong, allow_literature=False) == []
+
+
 def test_cache_is_bounded_and_expired_receipts_are_removed(monkeypatch):
     resolver = names.ChemicalNameResolver()
     monkeypatch.setattr(names, "MAX_CACHE", 2)
@@ -263,6 +305,104 @@ def test_transport_never_reads_redirect_or_error_bodies(
     assert response.reads == 0
 
 
+def test_admitted_cited_pair_supplies_offline_name_without_new_lookup(monkeypatch):
+    original = report_fixture(
+        abstract=(
+            "TEST ONLY: sodium thiophosphate (Na3PS4) "
+            "appears in this synthetic fixture."
+        )
+    )
+    before = deepcopy(original)
+    calls = mock_pubchem(monkeypatch)
+    prepared = prepare_presentation(original)
+    assert prepared["material_names"] == [
+        {
+            "kind": "lead",
+            "id": original["result"]["candidate_leads"][0]["id"],
+            "formula": "Na3PS4",
+            "name": "sodium thiophosphate",
+            "url": "https://openalex.org/W1",
+            "source_name": "Test source",
+        }
+    ]
+    assert (
+        names.ChemicalNameResolver().names(prepared, lookup=True)
+        == prepared["material_names"]
+    )
+    assert calls == []
+    assert original == before
+
+
+def test_unrelated_or_conflicting_offline_names_are_not_attached():
+    other = prepare_presentation(
+        report_fixture(
+            abstract="TEST ONLY: Na3PS4 is compared with lithium sulfide (Li2S)."
+        )
+    )
+    assert other["material_names"] == []
+    conflicting = prepare_presentation(
+        report_fixture(
+            abstract=(
+                "TEST ONLY: sodium thiophosphate (Na3PS4) and sodium sulfide (Na3PS4)."
+            )
+        )
+    )
+    assert conflicting["material_names"] == []
+
+
+def test_literature_fallback_prefers_explicit_name_and_respects_selection(monkeypatch):
+    from labcat.science import chemical_name_literature
+
+    report = prepare_presentation(report_fixture())
+    mock_pubchem(
+        monkeypatch,
+        row={
+            "CID": 123,
+            "MolecularFormula": "Na3PS4",
+            "Title": "Fixture cation;systematic anion",
+        },
+    )
+    calls = []
+
+    def written(formula, deadline):
+        calls.append((formula, deadline))
+        return {
+            "formula": formula,
+            "name": "sodium thiophosphate",
+            "url": "https://europepmc.org/article/MED/123",
+            "source_name": "Europe PMC",
+            "provenance": {"scope": "composition_name_only"},
+        }
+
+    monkeypatch.setattr(chemical_name_literature, "lookup_formula", written)
+    resolver = names.ChemicalNameResolver()
+    assert (
+        resolver.names(report, lookup=True, allow_literature=False)[0]["name"]
+        == "Fixture cation;systematic anion"
+    )
+    assert calls == []
+    before = time.monotonic()
+    assert (
+        resolver.names(report, lookup=True, allow_literature=True)[0]["name"]
+        == "sodium thiophosphate"
+    )
+    assert len(calls) == 1
+    assert calls[0][1] <= before + 6.1
+
+
+def test_two_busy_name_requests_prevent_extra_network_work(monkeypatch):
+    report = prepare_presentation(report_fixture())
+    calls = mock_pubchem(monkeypatch)
+    assert names._NETWORK_SLOTS.acquire(blocking=False)
+    assert names._NETWORK_SLOTS.acquire(blocking=False)
+    try:
+        assert names.ChemicalNameResolver().names(report, lookup=True) == []
+        assert calls == []
+    finally:
+        names._NETWORK_SLOTS.release()
+        names._NETWORK_SLOTS.release()
+
+
 @pytest.mark.parametrize(
     "route,params",
     [("pubchem_formula", {"formula": "Na3PS4"}), ("pubchem_names", {"cid": 123})],
@@ -293,6 +433,37 @@ def test_name_transport_uses_fixed_paths_and_small_response_limit(monkeypatch):
     assert not {"pubchem_formula", "pubchem_names"} & {
         row["id"] for row in public_sources.catalog()
     }
+
+
+def test_optional_malformed_fallback_does_not_make_report_unreadable(monkeypatch):
+    from labcat.science import chemical_name_literature
+
+    report = prepare_presentation(report_fixture())
+    before = deepcopy(report)
+    monkeypatch.setattr(names, "lookup_pubchem", lambda *args: None)
+
+    def broken(*args):
+        raise RecursionError("TEST ONLY: hostile nested response")
+
+    monkeypatch.setattr(chemical_name_literature, "lookup_formula", broken)
+    assert names.ChemicalNameResolver().names(report, lookup=True) == []
+    assert report == before
+
+
+def test_digit_free_inorganic_formula_is_an_eligible_name_target(monkeypatch):
+    report = prepare_presentation(report_fixture("CdS"))
+    mock_pubchem(
+        monkeypatch,
+        row={
+            "CID": 123,
+            "MolecularFormula": "CdS",
+            "Title": "Fixture sulfide",
+        },
+    )
+    resolved = names.ChemicalNameResolver().names(report, lookup=True)
+    assert [(item["formula"], item["name"]) for item in resolved] == [
+        ("CdS", "Fixture sulfide")
+    ]
 
 
 @pytest.mark.parametrize(
@@ -332,6 +503,89 @@ def test_ambiguous_component_names_are_not_queried(label):
     assert names.component_formulas(label) == []
 
 
+def test_component_name_receipts_are_independent_and_parent_bound(monkeypatch):
+    original = report_fixture("InAs/ZnSe")
+    before = deepcopy(original)
+    report = prepare_presentation(original)
+    calls = []
+
+    def lookup(formula, deadline):
+        calls.append(formula)
+        return {
+            "formula": formula,
+            "name": "Fixture component name",
+            "url": "https://pubchem.ncbi.nlm.nih.gov/compound/123",
+            "source_name": "PubChem",
+        }
+
+    monkeypatch.setattr(names, "lookup_pubchem", lookup)
+    result = names.ChemicalNameResolver().names(report, lookup=True)
+    assert set(calls) == {"InAs", "ZnSe"}
+    assert [item["component_index"] for item in result] == [1, 2]
+    assert all(item["parent_formula"] == "InAs/ZnSe" for item in result)
+    assert all(
+        item["id"] == original["result"]["candidate_leads"][0]["id"] for item in result
+    )
+    assert [item["formula"] for item in result] == ["InAs", "ZnSe"]
+    assert not any("core" in str(item) or "shell" in str(item) for item in result)
+    assert original == before
+
+
+def test_component_lookup_deduplicates_shared_formulas_and_preserves_partial_success(
+    monkeypatch,
+):
+    original = report_fixture("ZnSeTe/ZnSe/ZnSe")
+    calls = []
+
+    def lookup(formula, deadline):
+        calls.append(formula)
+        if formula == "ZnTeSe":
+            return None
+        return {
+            "formula": formula,
+            "name": "Fixture selenide",
+            "url": "https://pubchem.ncbi.nlm.nih.gov/compound/123",
+            "source_name": "PubChem",
+        }
+
+    monkeypatch.setattr(names, "lookup_pubchem", lookup)
+    resolver = names.ChemicalNameResolver()
+    result = resolver.names(
+        prepare_presentation(original), lookup=True, allow_literature=False
+    )
+    assert sorted(calls) == ["ZnSe", "ZnTeSe"]
+    assert [item["component_index"] for item in result] == [2, 3]
+    assert (
+        resolver.names(prepare_presentation(original), allow_literature=False) == result
+    )
+    assert len(calls) == 2
+
+
+def test_slow_first_name_lookup_does_not_block_starting_other_components(monkeypatch):
+    import threading
+
+    report = prepare_presentation(report_fixture("InAs/ZnSe"))
+    second_started = threading.Event()
+
+    def lookup(formula, deadline):
+        if formula == "InAs":
+            assert second_started.wait(timeout=2), "later component lookup was starved"
+        else:
+            second_started.set()
+        return {
+            "formula": formula,
+            "name": "Fixture name",
+            "url": "https://pubchem.ncbi.nlm.nih.gov/compound/123",
+            "source_name": "PubChem",
+        }
+
+    monkeypatch.setattr(names, "lookup_pubchem", lookup)
+    result = names.ChemicalNameResolver().names(
+        report, lookup=True, allow_literature=False
+    )
+    assert [item["formula"] for item in result] == ["InAs", "ZnSe"]
+
+
 def mock_exact_pubchem(monkeypatch, *, rows=None, returned=None, wrong_url=False):
     rows = [{"CID": 123, "MolecularFormula": "AsIn"}] if rows is None else rows
     returned = (
@@ -362,6 +616,26 @@ def mock_exact_pubchem(monkeypatch, *, rows=None, returned=None, wrong_url=False
 
     monkeypatch.setattr(names, "_fetch", fetch)
     return calls
+
+
+def test_exact_public_formula_synonym_has_unique_cid_and_two_formula_checks(
+    monkeypatch,
+):
+    calls = mock_exact_pubchem(monkeypatch)
+    started = time.monotonic()
+    found = names.lookup_pubchem_exact("InAs", started + 10)
+    assert found["name"] == "Fixture arsenide"
+    assert found["provenance"]["identity_method"] == "exact_public_formula_synonym"
+    assert [route for route, _, _ in calls] == ["pubchem_identity", "pubchem_names"]
+    assert all(deadline <= started + 3.1 for _, _, deadline in calls)
+    resolver = names.ChemicalNameResolver()
+    assert (
+        resolver.names(prepare_presentation(report_fixture("InAs")), lookup=True)[0][
+            "name"
+        ]
+        == "Fixture arsenide"
+    )
+    assert not any(route == "pubchem_formula" for route, _, _ in calls)
 
 
 @pytest.mark.parametrize(
@@ -406,6 +680,47 @@ def test_exact_synonym_receipt_is_fixed_route_and_never_organic_guess(monkeypatc
     assert names.lookup_pubchem_exact("InAs", time.monotonic() + 5) is None
     calls.clear()
     assert names.lookup_pubchem_exact("C2H6O", time.monotonic() + 5) is None
+    assert calls == []
+
+
+def test_literal_literature_fallback_precedes_ambiguous_formula_search(monkeypatch):
+    from labcat.science import chemical_name_literature
+
+    calls = []
+    monkeypatch.setattr(names, "lookup_pubchem_exact", lambda *_: calls.append("exact"))
+
+    def broad(*args):
+        calls.append("broad")
+        return None
+
+    def written(formula, deadline):
+        calls.append("literature")
+        return {
+            "formula": formula,
+            "name": "Fixture sulfide",
+            "url": "https://europepmc.org/article/MED/123",
+            "source_name": "Europe PMC",
+        }
+
+    monkeypatch.setattr(names, "lookup_pubchem", broad)
+    monkeypatch.setattr(chemical_name_literature, "lookup_formula", written)
+    report = prepare_presentation(report_fixture("CdS"))
+    assert (
+        names.ChemicalNameResolver().names(report, lookup=True)[0]["name"]
+        == "Fixture sulfide"
+    )
+    assert calls == ["exact", "literature"]
+
+
+@pytest.mark.parametrize("label", ["PI", "NO", "CO", "CDs"])
+def test_untyped_all_capital_abbreviations_do_not_trigger_name_lookup(
+    monkeypatch, label
+):
+    report = prepare_presentation(report_fixture(label))
+    calls = []
+    monkeypatch.setattr(names, "lookup_pubchem_exact", lambda *args: calls.append(args))
+    monkeypatch.setattr(names, "lookup_pubchem", lambda *args: calls.append(args))
+    assert names.ChemicalNameResolver().names(report, lookup=True) == []
     assert calls == []
 
 

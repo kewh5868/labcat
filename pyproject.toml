@@ -14,10 +14,11 @@ authors = [{ name = "Keith White" }]
 dependencies = []
 
 [project.optional-dependencies]
+exports = ["reportlab>=4.4,<5", "python-docx>=1.2,<2"]
 web = ["fastapi>=0.115,<1", "uvicorn>=0.30,<1", "gemmi==0.7.5"]
 aws = ["boto3>=1.35,<2"]
 connections = ["cryptography>=50,<51"]
-dev = ["build>=1.2,<2", "pytest>=8,<10", "ruff>=0.11,<1", "pre-commit>=4.3,<5", "httpx>=0.27,<1"]
+dev = ["build>=1.2,<2", "pytest>=8,<10", "ruff>=0.11,<1", "pre-commit>=4.3,<5", "httpx>=0.27,<1", "pypdf>=5,<7"]
 
 [project.scripts]
 labcat = "labcat.cli:main"
@@ -27,7 +28,7 @@ where = ["src"]
 include = ["labcat*"]
 
 [tool.setuptools.package-data]
-labcat = ["default.toml", "py.typed"]
+labcat = ["default.toml", "py.typed", "fonts/*.ttf", "fonts/*.txt"]
 "labcat.science" = ["data/*.json", "data/*.md", "data/*.txt"]
 
 [tool.pytest.ini_options]

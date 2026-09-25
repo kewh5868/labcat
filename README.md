@@ -12,8 +12,8 @@ approved public retrieval, deterministic ranking and cited reports. An in-proces
 background registry preserves accepted research across navigation and retains partial
 results. It is not a persistent queue that resumes after process or machine restarts.
 
-Chemical names and validated reference structures are available as backend APIs.
-Report downloads, the complete CLI/API/UI and packaged deployment remain planned.
+Chemical names, validated reference structures and multi-format report exports are available as backend APIs.
+The complete CLI/API/UI and packaged deployment remain planned.
 
 The command-line interface currently provides software status, configuration
 validation and an explicit read-only AWS account check. It does not yet expose the

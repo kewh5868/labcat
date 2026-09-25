@@ -37,10 +37,7 @@ def get_status(config: AppConfig, style: str | None = None) -> dict[str, Any]:
         "candidates": [],
         "limitations": [
             "Status contains no scientific records or ranked candidates.",
-            (
-                "Report downloads, the complete CLI/API/UI and packaged "
-                "deployment remain planned."
-            ),
+            ("The complete CLI/API/UI and packaged deployment remain planned."),
             "Scientific coverage depends on independently validated public evidence.",
         ],
     }
@@ -52,10 +49,7 @@ def get_status(config: AppConfig, style: str | None = None) -> dict[str, Any]:
             "Bounded research orchestration",
         ]
         report["next_steps"] = [
-            (
-                "Report downloads, the complete CLI/API/UI and packaged "
-                "deployment remain planned."
-            )
+            "The complete CLI/API/UI and packaged deployment remain planned."
         ]
     return report
 

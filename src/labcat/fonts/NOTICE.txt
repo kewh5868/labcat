@@ -1,0 +1,16 @@
+DejaVu fonts for portable PDF export
+
+These unmodified DejaVu Sans regular, bold and mono fonts and Serif regular/bold fonts are bundled with
+their upstream license. They were obtained from the Codex bundled LibreOffice
+distribution; their redistribution terms were verified against the official
+DejaVu font project on 2026-09-09.
+
+License source: https://github.com/dejavu-fonts/dejavu-fonts/blob/master/LICENSE
+Project: https://dejavu-fonts.github.io/
+
+SHA-256 checksums:
+e6476c1b80502924294eed40894c5b18e06c181444ca953e5334262df9c27724  DejaVuSans-Bold.ttf
+7da195a74c55bef988d0d48f9508bd5d849425c1770dba5d7bfc6ce9ed848954  DejaVuSans.ttf
+b4a6c3e4faab8773f4ff761d56451646409f29abedd68f05d38c2df667d3c582  DejaVuSansMono.ttf
+42d1edeb7952f31b1f96d767ed7030b08a39e0c372b0071641518864e2bffb51  DejaVuSerif.ttf
+c47b5527bcdc8dcf9ea8c77054454c5a884beaca2f44851a2a823ee639cbf07f  DejaVuSerif-Bold.ttf

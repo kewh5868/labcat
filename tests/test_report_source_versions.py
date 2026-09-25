@@ -9,6 +9,11 @@ import pytest
 from test_candidate_leads import reference
 
 from labcat.config import load_config
+from labcat.report_exports import (
+    ExportError,
+    prepare_presentation,
+    render_download,
+)
 from labcat.science.candidate_leads import (
     discovery_documents,
     validate_candidate_leads,
@@ -152,6 +157,16 @@ def assert_replays(report):
     assert (
         validated_literature_evaluation(report["result"], report["sources"])
         == report["result"]["literature_evaluation"]
+    )
+    prepared = prepare_presentation(report)
+    assert (
+        prepared["result"]["literature_evaluation"]
+        == report["result"]["literature_evaluation"]
+    )
+    assert b"TESTONLY-Alpha" in render_download(report, "text")[0]
+    assert (
+        "TESTONLY-Alpha" in prepared["pi_summary"]
+        and "TESTONLY-Alpha" in prepared["technical_audit"]
     )
     assert report == before
 
@@ -325,6 +340,8 @@ def test_inconsistent_source_bound_tampering_fails_closed(tmp_path, mutation):
         ref[key] = value
     with pytest.raises((ValueError, TypeError)):
         validated_literature_evaluation(saved["result"], saved["sources"])
+    with pytest.raises(ExportError):
+        render_download(saved, "text")
 
 
 def test_legacy_overlay_cannot_replace_membership_and_pin_fields(tmp_path):
@@ -347,6 +364,26 @@ def test_legacy_overlay_cannot_replace_membership_and_pin_fields(tmp_path):
     for key in ("id", "project_id", "chat_ids", "report_ids", "pinned"):
         assert resolved[key] == saved["sources"][0][key]
     assert "evidence_version" not in resolved
+
+
+def test_legacy_structure_list_replays_saved_ranks_without_network(tmp_path):
+    from test_structures import structure_store
+
+    structures = structure_store(tmp_path)
+    store = structures.workspace
+    project = store.create_project("TEST ONLY")["id"]
+    chat = store.create_global_chat("TEST ONLY", project)["id"]
+    first, second = [append(store, project, chat, version) for version in (0, 1)]
+    force_legacy_collision(store, project, first, second)
+    before = immutable_bytes(store)
+    for report in (first, second):
+        saved = report_with_sources(store, chat, report["id"])
+        listed = structures.list(chat, report["id"])["literature_candidates"]
+        ranked = saved["result"]["literature_evaluation"]["ranked_candidates"]
+        assert [(row["lead_id"], row["rank"]) for row in listed] == [
+            (row["lead_id"], row["rank"]) for row in ranked
+        ]
+    assert immutable_bytes(store) == before
 
 
 @pytest.mark.parametrize("mutation", ["quote", "digest", "candidate_binding"])
@@ -386,6 +423,27 @@ def test_purge_one_chat_does_not_remove_other_versions_or_pinned_source(tmp_path
         assert list(conn.execute("PRAGMA foreign_key_check")) == []
 
 
+def test_direct_exports_reject_identical_evidence_from_an_unlinked_project(tmp_path):
+    store = WorkspaceStore(tmp_path / "workspace.sqlite3")
+    saved = []
+    for label in ("First", "Second"):
+        project = store.create_project(label)["id"]
+        chat = store.create_global_chat(label, project)["id"]
+        report = append(store, project, chat, 1)
+        saved.append(report_with_sources(store, chat, report["id"]))
+    assert (
+        saved[0]["sources"][0]["evidence_version"]
+        == saved[1]["sources"][0]["evidence_version"]
+    )
+    saved[0]["sources"] = saved[1]["sources"]
+    for export in (
+        prepare_presentation,
+        lambda report: render_download(report, "text"),
+    ):
+        with pytest.raises(ExportError, match="membership"):
+            export(saved[0])
+
+
 @pytest.mark.parametrize(
     "field,value",
     [
@@ -404,6 +462,8 @@ def test_malformed_export_membership_has_safe_validation_error(tmp_path, field, 
     report = append(store, project, chat, 1)
     saved = report_with_sources(store, chat, report["id"])
     saved["sources"][0][field] = value
+    with pytest.raises(ExportError, match="membership"):
+        render_download(saved, "text")
 
 
 @pytest.mark.parametrize("linked", [False, True])
