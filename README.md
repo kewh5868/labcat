@@ -9,7 +9,7 @@ User prompts and model memory are preferences or search hints, never evidence.
 Only approved public-source adapters can supply scientific records. Missing evidence
 remains unknown; the application provides no private-data or wetlab tools.
 
-The React interface displays the application identity and backend status.
+The React interface includes model connections, setup, ranking preferences and report settings.
 Build the interface with `npm ci --prefix frontend` and
 `npm run build --prefix frontend`, then open the running backend URL.
 Portable and native launchers are planned separately. This is a local single-user prototype.
@@ -32,7 +32,7 @@ Choose an available local port. `python -m labcat` supports the same commands.
 `labcat research --help` describes direct-workspace and running-backend research.
 New research requires an explicitly verified model connection; hosted inference
 also requires explicit consent. Status and configuration validation are offline.
-API connection and setup routes are implemented. The onboarding UI is planned.
+API connection and setup routes are implemented. The connection and onboarding UI are available.
 No API key or user account is bundled.
 
 TOML settings can change bounded ranking/presentation preferences, but cannot

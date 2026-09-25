@@ -1,0 +1,69 @@
+/* Align the three main settings pages without resizing setup dialogs. */
+#project-main > :is(.search-settings, .report-format-page, .connections-page) {
+  width: 100%;
+  max-width: 1060px;
+  min-width: 0;
+  margin-inline: auto;
+}
+
+#project-main
+  > :is(.search-settings, .report-format-page, .connections-page)
+  :is(
+    .settings-card,
+    .connection-card,
+    .public-sources-panel,
+    .report-format-preview
+  ) {
+  padding: 24px 26px;
+}
+
+/* Native macOS selects ignore padding; explicit appearance and height keep
+   dropdowns aligned with text fields. Compact importance controls stay separate. */
+#project-main
+  > :is(.search-settings, .report-format-page, .connections-page)
+  :is(
+    select:not([multiple]):not([size]),
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(
+        .attribute-importance input
+      )
+  ) {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  border: 1px solid #d8e0d4;
+  border-radius: 6px;
+  padding: 11px 12px;
+  background-color: #fffefb;
+  color: #425647;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+#project-main
+  > :is(.search-settings, .report-format-page, .connections-page)
+  select:not([multiple]):not([size]) {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: 34px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='m3 4.5 3 3 3-3' fill='none' stroke='%23506d58' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 650px) {
+  #project-main
+    > :is(.search-settings, .report-format-page, .connections-page)
+    :is(
+      .settings-card,
+      .connection-card,
+      .public-sources-panel,
+      .report-format-preview
+    ) {
+    padding: 21px 18px;
+  }
+}

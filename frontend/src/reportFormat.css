@@ -1,0 +1,111 @@
+.report-format-page {
+  max-width: 1060px;
+}
+.report-format-page .settings-card {
+  margin-top: 22px;
+}
+.report-format-page .settings-card h2 {
+  margin-bottom: 18px;
+}
+.report-format-scope {
+  max-width: 80ch;
+  margin-bottom: 22px;
+  color: #71816f;
+  font-size: 11px;
+  line-height: 1.75;
+}
+.report-screen-previews {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+}
+.report-preview-content[aria-busy="true"] {
+  opacity: 0.6;
+}
+.report-page-number-toggle {
+  display: flex !important;
+  gap: 10px;
+  align-items: center;
+}
+.report-page-number-toggle input {
+  width: 15px !important;
+  margin: 0;
+  padding: 0 !important;
+}
+.report-format-preview {
+  margin-top: 28px;
+  padding: 25px;
+  min-width: 0;
+}
+.report-format-preview > header {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  justify-content: space-between;
+}
+.report-format-preview > header p:last-child {
+  color: #7b8979;
+  font-size: 11px;
+  margin-top: 11px;
+}
+.report-format-preview > header button {
+  flex-shrink: 0;
+}
+.report-preview-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  padding-bottom: 20px;
+}
+.report-preview-controls label select {
+  margin-top: 9px;
+}
+.report-preview-content {
+  min-width: 0;
+  border-top: 1px solid #e0e7db;
+  padding-top: 18px;
+}
+.report-preview-content iframe {
+  display: block;
+  width: 100%;
+  min-height: 640px;
+  border: 1px solid #e0e7db;
+  border-radius: 7px;
+  background: white;
+}
+.report-preview-content pre {
+  white-space: pre;
+  overflow: auto;
+  max-height: 720px;
+  max-width: 100%;
+  background: #f5f8f1;
+  border: 1px solid #e0e7db;
+  border-radius: 7px;
+  padding: 20px;
+  font-size: 11px;
+  line-height: 1.8;
+}
+.report-preview-note {
+  font-size: 11px;
+  color: #788571;
+}
+@media (max-width: 650px) {
+  .report-format-preview {
+    padding: 18px;
+  }
+  .report-format-preview > header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .report-preview-controls {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .report-format-preview > header button {
+    justify-content: center;
+  }
+  .report-preview-content iframe {
+    min-height: 510px;
+  }
+}

@@ -1,10 +1,24 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { brandName, brandTagline, LabcatMark } from "./Brand";
+import { ConnectionsPanel } from "./Connections";
+import PublicSourcesPanel from "./PublicSources";
+import RankingProfilesPanel from "./RankingProfiles";
+import ReportFormat from "./ReportFormat";
+import "./settingsLayout.css";
+import { canSubmitResearch } from "./setupApi";
+import SetupWizard from "./SetupWizard";
 import "./workspace.css";
+import type { SearchSettings } from "./workspaceApi";
+import { errorMessage, workspaceApi } from "./workspaceApi";
 
+import { ResearchPlanCard } from "./AgentConnections";
 import type { StatusReport } from "./api";
 import { fetchStatus } from "./api";
+import { ConnectionsProvider, useConnections } from "./Connections";
+import DeveloperSettings from "./DeveloperSettings";
+import { modelConnectionSummary } from "./modelConnectionSummary";
+import { SetupProvider, useSetup } from "./SetupWizard";
 
 type IconName =
   | "overview"
@@ -99,10 +113,49 @@ type LoadState =
   | { status: "ready"; report: StatusReport };
 
 export default function App() {
+  const [developer, setDeveloper] = useState(false);
+  useEffect(() => {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 15000);
+    fetch("/api/runtime", {
+      credentials: "same-origin",
+      cache: "no-store",
+      redirect: "error",
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Runtime unavailable");
+        return response.json() as Promise<unknown>;
+      })
+      .then((value) => {
+        if (
+          !controller.signal.aborted &&
+          value &&
+          typeof value === "object" &&
+          "edition" in value &&
+          "developer_settings_available" in value
+        )
+          setDeveloper(
+            value.edition === "developer" &&
+              value.developer_settings_available === true,
+          );
+      })
+      .catch(() => undefined)
+      .finally(() => window.clearTimeout(timeout));
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeout);
+    };
+  }, []);
   return (
-    <WorkspaceShell>
-      <Overview />
-    </WorkspaceShell>
+    <ConnectionsProvider>
+      <SetupProvider>
+        <SettingsWorkspace
+          connectionOverview={<Overview />}
+          developerSettings={developer ? <DeveloperSettings /> : undefined}
+        />
+      </SetupProvider>
+    </ConnectionsProvider>
   );
 }
 
@@ -148,9 +201,10 @@ function Overview() {
 
   return (
     <section className="connection-overview" aria-label="Workspace services">
+      <WorkspaceServices />
       <details className="connection-capabilities card">
         <summary>Research process and application capabilities</summary>
-
+        <ResearchPlanCard />
         {state.status === "loading" && (
           <p role="status">Reading application capabilities…</p>
         )}
@@ -168,6 +222,48 @@ function Overview() {
         )}
         {report && <ReportContent report={report} />}
       </details>
+    </section>
+  );
+}
+
+export function WorkspaceServices() {
+  const connection = useConnections();
+  const setup = useSetup();
+  const { status } = connection;
+  const profile = status?.profile;
+  const model = modelConnectionSummary({
+    status,
+    readiness: setup.status,
+    checking:
+      connection.loading || connection.busy || setup.loading || setup.busy,
+    unavailable: Boolean(connection.error || setup.error),
+  });
+  return (
+    <section className="runtime-grid" aria-label="Runtime status">
+      <RuntimeCard
+        icon="computer"
+        title="Compute"
+        value="Local research pipeline"
+        note={
+          profile?.provider === "bedrock"
+            ? "Selected model inference uses Amazon Bedrock"
+            : "Model inference follows the selected provider"
+        }
+        available
+      />
+      <RuntimeCard
+        icon="model"
+        title="Language model"
+        value={model.title}
+        note={model.note}
+        available={model.available}
+      />
+      <RuntimeCard
+        icon="source"
+        title="Materials data"
+        value="Public evidence"
+        note="Verified source connections and keyless databases"
+      />
     </section>
   );
 }
@@ -198,12 +294,12 @@ function ReportContent({ report }: { report: StatusReport }) {
           <span className="neutral-badge">Summary + Technical View</span>
         </div>
         <div className="empty-state">
-          <h3>Explore materials with the command-line interface.</h3>
+          <h3>Start a chat to explore materials.</h3>
           <p>
-            The command-line research interface searches public sources for your
-            research question. Reports preserve references, ranking rationale
-            and missing evidence. A scored shortlist is generated only when
-            verified material properties support it.
+            Search public sources for your research question. Reports preserve
+            references, ranking rationale and missing evidence. A scored
+            shortlist is generated only when verified material properties
+            support it.
           </p>
           <div className="output-qualities">
             <span>
@@ -314,6 +410,34 @@ function ReportContent({ report }: { report: StatusReport }) {
   );
 }
 
+function RuntimeCard({
+  icon,
+  title,
+  value,
+  note,
+  available = false,
+}: {
+  icon: IconName;
+  title: string;
+  value: string;
+  note: string;
+  available?: boolean;
+}) {
+  return (
+    <article className="runtime-card">
+      <div className="runtime-heading">
+        <span>{title}</span>
+        <Icon name={icon} />
+      </div>
+      <div className="runtime-value">
+        {value}
+        {available && <span className="connection-dot is-connected" />}
+      </div>
+      <p>{note}</p>
+    </article>
+  );
+}
+
 function WorkspaceShell({
   children,
   navigation,
@@ -352,5 +476,120 @@ function WorkspaceShell({
         </main>
       </div>
     </div>
+  );
+}
+
+function SettingsWorkspace({
+  connectionOverview,
+  developerSettings,
+}: {
+  connectionOverview?: ReactNode;
+  developerSettings?: ReactNode;
+}) {
+  const [mode, setMode] = useState("connections");
+  const [settings, setSettings] = useState<SearchSettings | null>(null);
+  const [error, setError] = useState("");
+  const [attempt, setAttempt] = useState(0);
+  const [setupOpen, setSetupOpen] = useState(false);
+  const setup = useSetup();
+  useEffect(() => {
+    const controller = new AbortController();
+    setError("");
+    workspaceApi
+      .settings(controller.signal)
+      .then((value) => {
+        if (!controller.signal.aborted) setSettings(value);
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) setError(errorMessage(error));
+      });
+    return () => controller.abort();
+  }, [attempt]);
+  useEffect(() => {
+    if (
+      setup.status &&
+      !setup.loading &&
+      (!setup.status.completed || !canSubmitResearch(setup.status))
+    )
+      setSetupOpen(true);
+  }, [setup.status, setup.loading]);
+  return (
+    <WorkspaceShell
+      navigation={
+        <nav className="sidebar-bottom-nav" aria-label="Application">
+          <button
+            type="button"
+            aria-current={mode === "format" ? "page" : undefined}
+            onClick={() => setMode("format")}
+          >
+            Report Format
+          </button>
+          <button
+            type="button"
+            aria-current={mode === "settings" ? "page" : undefined}
+            onClick={() => setMode("settings")}
+          >
+            Search Criterion
+          </button>
+          <button
+            type="button"
+            aria-current={mode === "connections" ? "page" : undefined}
+            onClick={() => setMode("connections")}
+          >
+            Connections
+          </button>
+          {developerSettings && (
+            <button
+              type="button"
+              aria-current={mode === "developer" ? "page" : undefined}
+              onClick={() => setMode("developer")}
+            >
+              Developer Settings
+            </button>
+          )}
+        </nav>
+      }
+    >
+      {error && (
+        <div role="alert">
+          <p>{error}</p>
+          <button
+            type="button"
+            onClick={() => setAttempt((value) => value + 1)}
+          >
+            Reload preferences
+          </button>
+        </div>
+      )}
+      {mode === "connections" ? (
+        <ConnectionsPanel
+          overview={connectionOverview}
+          onSetup={() => setSetupOpen(true)}
+        />
+      ) : mode === "settings" ? (
+        <section className="search-settings">
+          <header className="settings-intro">
+            <h1>Search Criterion</h1>
+            <p>
+              Choose a ranking profile and the public sources available to your
+              research.
+            </p>
+          </header>
+          <RankingProfilesPanel />
+          <PublicSourcesPanel onConnections={() => setMode("connections")} />
+        </section>
+      ) : mode === "developer" ? (
+        developerSettings
+      ) : settings ? (
+        <ReportFormat initial={settings} onSaved={setSettings} />
+      ) : (
+        <p role="status">Loading saved format…</p>
+      )}
+      <SetupWizard
+        open={setupOpen}
+        onClose={() => setSetupOpen(false)}
+        onComplete={() => setSetupOpen(false)}
+      />
+    </WorkspaceShell>
   );
 }

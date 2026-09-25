@@ -1,0 +1,73 @@
+.ranking-profile-help {
+  min-width: 0;
+}
+.ranking-profile-help-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ranking-profile-help-heading > h2 {
+  margin: 0;
+}
+.ranking-profile-help-button {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid #becfba;
+  border-radius: 50%;
+  background: #f1f6ec;
+  color: #43694e;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.ranking-profile-help-button:hover,
+.ranking-profile-help-button[aria-expanded="true"] {
+  background: #e3eddd;
+  border-color: #99b493;
+}
+.ranking-profile-help-button:focus-visible {
+  outline: 2px solid #34725a;
+  outline-offset: 3px;
+}
+.ranking-profile-help-content {
+  margin-top: 12px;
+  padding: 13px 15px;
+  border: 1px solid #d8e3d0;
+  border-radius: 10px;
+  background: #f6f9f1;
+  color: #546b54;
+  font-size: 12px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.ranking-profile-help-content p {
+  margin: 0 0 10px;
+}
+.ranking-profile-help-content p:last-child {
+  margin-bottom: 0;
+}
+.ranking-profile-help-content strong {
+  color: #345a44;
+  font-weight: 600;
+}
+.ranking-profile-help-compact .ranking-profile-help-content {
+  font-size: 11px;
+  padding: 11px;
+}
+.ranking-profile-editor .settings-card-heading {
+  align-items: flex-start;
+}
+.ranking-profile-editor .settings-card-heading > div {
+  min-width: 0;
+  flex: 1;
+}
+.ranking-profile-editor .settings-card-heading > .neutral-badge {
+  flex-shrink: 0;
+}

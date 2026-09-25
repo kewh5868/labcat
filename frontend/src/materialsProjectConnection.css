@@ -1,0 +1,55 @@
+.selected-public-sources {
+  align-items: start;
+}
+.materials-project-connection {
+  min-width: 0;
+}
+.materials-project-connection form {
+  margin-top: 18px;
+}
+.materials-project-connection label {
+  font-size: 11px;
+}
+.materials-project-connection input[type="password"] {
+  width: 100%;
+  min-width: 0;
+  margin-top: 6px;
+}
+.materials-project-connection .source-remember-key {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 14px 0 0;
+  font-weight: 500;
+  cursor: pointer;
+}
+.materials-project-connection .source-remember-key input {
+  flex: 0 0 auto;
+  width: 14px;
+  margin: 2px 0 0;
+}
+.materials-project-connection .source-storage-note {
+  margin: 5px 0 0;
+}
+.materials-project-connection .source-key-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+.materials-project-connection .source-key-actions button {
+  margin: 0;
+}
+.materials-project-connection .source-vault-prompt button {
+  display: inline;
+  padding: 0;
+  font-size: inherit;
+}
+.materials-project-connection .source-key-error {
+  color: #a54e37;
+  overflow-wrap: anywhere;
+}
+.materials-project-connection .source-key-notice {
+  color: #315e47;
+}
