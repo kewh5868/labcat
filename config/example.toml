@@ -1,0 +1,20 @@
+# Ranking settings are preferences, never scientific evidence.
+# These legacy CLI weights must total one. Search Settings profiles instead use
+# independent 0..1 importance values and normalize them automatically.
+[ranking]
+stability = 0.30
+band_gap = 0.25
+element_screen = 0.20
+simplicity = 0.10
+evidence_quality = 0.15
+
+[presentation]
+style = "pi"
+format = "text"
+terminology = "general"
+verbosity = "standard"
+outputs = ["pi", "audit"]
+
+[model]
+# Configure optional model accounts in Connections; never put API keys here.
+provider = "none"
