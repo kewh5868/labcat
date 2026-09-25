@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { brandName, brandTagline, LabcatMark } from "./Brand";
 import ChatIdentity, { chatLabel } from "./ChatIdentity";
 import ClearGeneralChatsDialog from "./ClearGeneralChatsDialog";
+import ComposerControls from "./ComposerControls";
 import {
   ConnectionNotice,
   ConnectionsPanel,
@@ -17,6 +18,8 @@ import RemovedItemsPanel, { ItemActionDialog } from "./RemovedItems";
 import ReportFormat from "./ReportFormat";
 import type { ReportPinAction } from "./ReportPinControls";
 import ReportPinControls from "./ReportPinControls";
+import type { ResearchSubmission } from "./ResearchProgress";
+import ResearchProgress, { beginResearchSubmission } from "./ResearchProgress";
 import RunningResearchIndicator from "./RunningResearchIndicator";
 import SetupWizard, { useSetup } from "./SetupWizard";
 import SidebarSections from "./SidebarSections";
@@ -24,6 +27,8 @@ import { SidebarViewControls, useSidebarView } from "./SidebarView";
 import WorkspaceSearch from "./WorkspaceSearch";
 import "./settingsLayout.css";
 import { canSubmitResearch } from "./setupApi";
+import type { WorkspaceResearch } from "./useResearchRuns";
+import { completedResearchKey, useResearchRuns } from "./useResearchRuns";
 import "./workspace.css";
 import type {
   About,
@@ -44,6 +49,7 @@ import {
   errorMessage,
   GeneralChatsChangedError,
   publicLink,
+  ResearchRequestError,
   workspaceApi,
 } from "./workspaceApi";
 
@@ -341,28 +347,12 @@ export default function ProjectWorkspace({
     Record<string, number>
   >({});
   const [busyChats, setBusyChats] = useState<Set<string>>(new Set());
-  const [runningChats, setRunningChats] = useState<Set<string>>(new Set());
-  useEffect(() => {
-    const controller = new AbortController();
-    let timer: number | undefined;
-    async function poll() {
-      try {
-        const active = await workspaceApi.activeResearch(controller.signal);
-        if (!controller.signal.aborted)
-          setRunningChats(new Set(active.map((run) => run.chat_id)));
-      } catch {
-        /* Preserve known activity while the status service is unavailable. */
-      } finally {
-        if (!controller.signal.aborted)
-          timer = window.setTimeout(() => void poll(), 2000);
-      }
-    }
-    void poll();
-    return () => {
-      controller.abort();
-      if (timer !== undefined) window.clearTimeout(timer);
-    };
-  }, []);
+  const research = useResearchRuns(rememberChat);
+  const runningChats = new Set(
+    Object.entries(research.runs)
+      .filter(([, run]) => run.status === "running")
+      .map(([id]) => id),
+  );
   const busyOwners = useRef(new Map<string, Set<symbol>>());
   const dragChat = useRef("");
   const moveLock = useRef(false);
@@ -1528,6 +1518,7 @@ export default function ProjectWorkspace({
                 </div>
               </section>
               <DraftChat
+                research={research}
                 {...composerLinks}
                 key={`project-composer-${selectedProject.id}`}
                 project={selectedProject}
@@ -1550,6 +1541,7 @@ export default function ProjectWorkspace({
             </>
           ) : mode === "chat" && chatId ? (
             <ChatView
+              research={research}
               {...composerLinks}
               initialRankingProfileId={recoveredRankingProfileId}
               key={chatId}
@@ -1572,6 +1564,7 @@ export default function ProjectWorkspace({
             />
           ) : mode === "chat" ? (
             <DraftChat
+              research={research}
               {...composerLinks}
               key={draftSeed}
               project={
@@ -1928,95 +1921,332 @@ function NewProject({
   );
 }
 
-function DraftChat({
-  project,
-  compact = false,
-  loadingHistory,
-}: {
-  project: Project | null;
-  compact?: boolean;
-  loadingHistory: boolean;
-  [key: string]: unknown;
+function PromptComposer({
+  searchStructures,
+  onSearchStructuresChange,
+  draft,
+  onDraft,
+  onSubmit,
+  disabled,
+  busy,
+  id,
+  welcome = false,
+  rankingProfileId,
+  onRankingProfileChange,
+  onOpenSettings,
+  onOpenConnections,
+}: ComposerLinks & {
+  searchStructures: boolean;
+  onSearchStructuresChange: (value: boolean) => void;
+  draft: string;
+  onDraft: (value: string) => void;
+  onSubmit: (event: FormEvent) => void;
+  disabled: boolean;
+  busy: boolean;
+  id: string;
+  welcome?: boolean;
+  rankingProfileId: string;
+  onRankingProfileChange: (id: string) => void;
 }) {
+  const connection = useConnections();
+  const setup = useSetup();
+  const blocked =
+    !canSubmitResearch(setup.status) ||
+    setup.loading ||
+    setup.busy ||
+    Boolean(setup.error) ||
+    connection.loading ||
+    connection.busy ||
+    Boolean(connection.error);
   return (
-    <section className={compact ? "project-inline-composer" : "prompt-welcome"}>
+    <>
+      <form
+        className={`message-composer ${welcome ? "welcome-composer" : ""}`}
+        onSubmit={(event) => {
+          if (blocked) {
+            event.preventDefault();
+            return;
+          }
+          onSubmit(event);
+        }}
+      >
+        <label htmlFor={id} className="sr-only">
+          Research question
+        </label>
+        <textarea
+          id={id}
+          autoFocus={welcome}
+          rows={welcome ? 4 : 3}
+          value={draft}
+          onChange={(event) => onDraft(event.target.value)}
+          placeholder="What would you like to explore?"
+          maxLength={20000}
+          disabled={busy}
+          onKeyDown={(event) => {
+            if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+              event.preventDefault();
+              event.currentTarget.form?.requestSubmit();
+            }
+          }}
+        />
+        <div className="composer-actions">
+          <ComposerControls
+            rankingProfileId={rankingProfileId}
+            onRankingProfileChange={onRankingProfileChange}
+            disabled={busy || disabled}
+            onOpenSettings={onOpenSettings}
+            onOpenConnections={onOpenConnections}
+          >
+            <label className="composer-structure-option">
+              <input
+                type="checkbox"
+                checked={searchStructures}
+                disabled={busy || disabled}
+                onChange={(event) =>
+                  onSearchStructuresChange(event.target.checked)
+                }
+              />
+              <span>Find reference structures</span>
+              <span className="sr-only">
+                Search selected public databases for available structures while
+                preparing this report. Matching composition does not confirm the
+                same phase.
+              </span>
+            </label>
+          </ComposerControls>
+          <button
+            className="send-button"
+            type="submit"
+            disabled={!draft.trim() || disabled || busy || blocked}
+            aria-label={busy ? "Research request in progress" : "Send message"}
+          >
+            {busy ? "Researching…" : "Send"}
+            <span aria-hidden="true">↑</span>
+          </button>
+        </div>
+      </form>
+      <p className="composer-hint">Ctrl / ⌘ + Enter to send · Saved locally</p>
+    </>
+  );
+}
+
+function DraftChat({
+  research,
+  project,
+  onCreated,
+  onOpen,
+  onReload,
+  loadingHistory,
+  compact = false,
+  ...composerLinks
+}: ComposerLinks & {
+  research: WorkspaceResearch;
+  project: Project | null;
+  onCreated: (chat: Chat) => void;
+  onOpen: (
+    id: string,
+    draft?: string,
+    rankingProfileId?: string,
+    researchError?: string,
+    completionKey?: string,
+  ) => void;
+  onReload: () => void;
+  loadingHistory: boolean;
+  compact?: boolean;
+}) {
+  const setup = useSetup();
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [rankingProfileId, setRankingProfileId] = useState("infer");
+  const [searchStructures, setSearchStructures] = useState(true);
+  const [submission, setSubmission] = useState<ResearchSubmission | null>(null);
+  const [progressChatId, setProgressChatId] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const [uncertain, setUncertain] = useState(false);
+  const lock = useRef(false);
+  const mounted = useMounted();
+  async function send(event: FormEvent) {
+    event.preventDefault();
+    const content = draft.trim();
+    if (
+      !content ||
+      lock.current ||
+      uncertain ||
+      !canSubmitResearch(setup.status) ||
+      setup.loading ||
+      setup.busy ||
+      setup.error
+    )
+      return;
+    lock.current = true;
+    const currentSubmission = beginResearchSubmission();
+    setSubmission(currentSubmission);
+    setProgressChatId(null);
+    setSaving(true);
+    setError("");
+    let created: Chat | null = null;
+    try {
+      created = project
+        ? await workspaceApi.projectDraft(project.id)
+        : await workspaceApi.startChat();
+      onCreated(created);
+      const pending = research.start(
+        created.id,
+        content,
+        rankingProfileId,
+        currentSubmission,
+        searchStructures,
+      );
+      // Transfer to the saved chat immediately. The workspace keeps ownership
+      // even when this draft or the new chat view is no longer mounted.
+      if (mounted.current) {
+        setProgressChatId(created.id);
+        onOpen(created.id, "", rankingProfileId);
+      }
+      await pending;
+    } catch (error) {
+      if (mounted.current) {
+        if (error instanceof ResearchRequestError) {
+          setError(errorMessage(error));
+          void setup.refresh().catch(() => undefined);
+          if (error.setupRequired) composerLinks.onRequireSetup();
+        }
+        if (created) setError(errorMessage(error));
+        else {
+          setUncertain(true);
+          setError(
+            `${errorMessage(error)} A chat may have been created. Reload history before starting another.`,
+          );
+        }
+      }
+    } finally {
+      lock.current = false;
+      if (mounted.current) setSaving(false);
+    }
+  }
+  return (
+    <section
+      className={compact ? "project-inline-composer" : "prompt-welcome"}
+      aria-label={compact ? "Project research question" : undefined}
+    >
       {!compact && (
         <>
           <LabcatMark className="welcome-brand-mark" />
           <p className="eyebrow">LABCAT</p>
           <h1>{brandTagline}</h1>
+          <p className="welcome-description">
+            Your companion for materials research.
+            <br />
+            Ask a question to start exploring.
+          </p>
         </>
       )}
-      <p className="welcome-description">
-        Browse saved chats and organize your research
-        {project ? ` in ${project.name}` : ""}. Research submission is available
-        through the command-line interface.
-      </p>
-      {loadingHistory && <p role="status">Loading saved history…</p>}
+      {!compact && project && (
+        <p className="draft-project-badge">
+          This chat will be added to <strong>{project.name}</strong>.
+        </p>
+      )}
+      <PromptComposer
+        {...composerLinks}
+        searchStructures={searchStructures}
+        onSearchStructuresChange={setSearchStructures}
+        rankingProfileId={rankingProfileId}
+        onRankingProfileChange={setRankingProfileId}
+        draft={draft}
+        onDraft={setDraft}
+        onSubmit={send}
+        disabled={uncertain}
+        busy={saving}
+        id={compact ? `project-prompt-${project?.id}` : "first-prompt"}
+        welcome
+      />
+      {saving && submission && (
+        <ResearchProgress
+          key={submission.runId}
+          chatId={progressChatId}
+          submission={submission}
+        />
+      )}
+      {loadingHistory && (
+        <p className="history-loading-label" role="status">
+          Loading saved history…
+        </p>
+      )}
+      {error && (
+        <Notice error={error} onRetry={onReload} label="Reload chat history" />
+      )}
     </section>
   );
 }
 
 function ChatView({
+  research,
   chatId,
   identity,
   projects,
   presentation,
+  initialDraft,
+  initialResearchError,
+  initialCompletionKey,
+  onCompletionConsumed,
   onChanged,
   onMoveRequested,
   sidebarMoving,
   sidebarMoveRevision,
   onBusyChange,
+  initialRankingProfileId,
   searchMatch,
-}: {
+  ...composerLinks
+}: ComposerLinks & {
+  research: WorkspaceResearch;
+  initialRankingProfileId: string;
   chatId: string;
   identity?: Chat;
   projects: Project[];
   presentation: ReportPresentation;
+  initialDraft: string;
+  initialResearchError: string;
+  initialCompletionKey: string;
+  onCompletionConsumed: () => void;
   onChanged: (chat: Chat) => void;
   onMoveRequested: (chat: Chat, forPin?: boolean) => void;
   sidebarMoving: boolean;
   sidebarMoveRevision: number;
   onBusyChange: (id: string, busy: boolean, owner: symbol) => void;
   searchMatch: ChatSearchMatch | null;
-  [key: string]: unknown;
 }) {
+  const setup = useSetup();
+  const [failureNotice, setFailureNotice] = useState(initialResearchError);
+  const [, setCompletionKey] = useState(initialCompletionKey);
+  useEffect(() => {
+    if (initialCompletionKey) onCompletionConsumed();
+  }, [initialCompletionKey, onCompletionConsumed]);
   const [data, setData] = useState<ChatDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
+  const [draft, setDraft] = useState(initialDraft);
+  const run = research.runs[chatId];
+  const sending = run?.status === "running";
+  const submission = run?.submission ?? null;
+  const [rankingProfileId, setRankingProfileId] = useState(
+    initialRankingProfileId,
+  );
+  const [searchStructures, setSearchStructures] = useState(true);
+  const [uncertain, setUncertain] = useState(Boolean(initialDraft));
   const [mutating, setMutating] = useState(false);
-  const busyOwner = useRef(Symbol("chat-view")).current;
   const mutationLock = useRef(false);
+  const failedDraft = useRef(initialDraft);
+  const mounted = useMounted();
+  const busyOwner = useRef(Symbol("chat-view")).current;
   const history = useRef<HTMLDivElement>(null);
+  const appliedSearchMatch = useRef<ChatSearchMatch | null>(null);
   useEffect(() => {
-    onBusyChange(chatId, loading || mutating, busyOwner);
-    return () => {
-      if (!mutationLock.current) onBusyChange(chatId, false, busyOwner);
-    };
-  }, [chatId, loading, mutating, onBusyChange, busyOwner]);
-  useEffect(() => {
-    const controller = new AbortController();
-    setLoading(true);
-    setError("");
-    workspaceApi
-      .chat(chatId, controller.signal)
-      .then((next) => {
-        if (!controller.signal.aborted) {
-          setData(next);
-          onChanged(next.chat);
-        }
-      })
-      .catch((error) => {
-        if (!controller.signal.aborted) setError(errorMessage(error));
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, [chatId, revision, sidebarMoveRevision]);
-  useEffect(() => {
-    if (loading || !searchMatch) return;
+    if (!searchMatch) {
+      appliedSearchMatch.current = null;
+      return;
+    }
+    if (loading || !data || appliedSearchMatch.current === searchMatch) return;
     const target = [
       ...(history.current?.querySelectorAll<HTMLElement>(
         "[data-search-message], [data-search-report]",
@@ -2026,10 +2256,133 @@ function ChatView({
         ? element.dataset.searchReport === searchMatch.report_id
         : element.dataset.searchMessage === searchMatch.message_id,
     );
-    target?.scrollIntoView?.({ block: "center" });
-  }, [searchMatch, loading]);
+    if (!target) return;
+    appliedSearchMatch.current = searchMatch;
+    for (
+      let parent: HTMLElement | null = target;
+      parent && parent !== history.current;
+      parent = parent.parentElement
+    ) {
+      if (parent.tagName === "DETAILS")
+        (parent as HTMLDetailsElement).open = true;
+    }
+    target.classList.add("is-search-match");
+    target.tabIndex = -1;
+    target.scrollIntoView?.({ block: "center" });
+    target.focus({ preventScroll: true });
+    return () => target.classList.remove("is-search-match");
+  }, [searchMatch, loading, data]);
+  useEffect(() => {
+    onBusyChange(
+      chatId,
+      loading || sending || mutating || uncertain,
+      busyOwner,
+    );
+    return () => {
+      if (!mutationLock.current) onBusyChange(chatId, false, busyOwner);
+    };
+  }, [chatId, loading, sending, mutating, uncertain, onBusyChange, busyOwner]);
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    setError("");
+    workspaceApi
+      .chat(chatId, controller.signal)
+      .then((next) => {
+        if (controller.signal.aborted) return;
+        setData(next);
+        setUncertain(false);
+        onChanged(next.chat);
+        const lastUser = [...next.messages]
+          .reverse()
+          .find((message) => message.role === "user");
+        if (failedDraft.current && lastUser?.content === failedDraft.current)
+          setDraft("");
+        failedDraft.current = "";
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) {
+          setUncertain(true);
+          setError(errorMessage(error));
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [chatId, revision, sidebarMoveRevision, run?.revision]);
+  useEffect(() => {
+    if (run?.status === "completed") {
+      setDraft("");
+      setFailureNotice("");
+    }
+    if (run?.status === "failed") {
+      setFailureNotice(run.error || "Research could not finish.");
+      if (run.prompt) setDraft(run.prompt);
+      if (run.setupRequired !== undefined) {
+        void setup.refresh().catch(() => undefined);
+        if (run.setupRequired) composerLinks.onRequireSetup();
+      }
+    }
+  }, [run?.status, run?.error, run?.prompt, run?.submission.runId]);
+  useEffect(() => {
+    if (run?.status === "completed" && run.completionKey) {
+      setCompletionKey(run.completionKey);
+      research.consumeCompletion(chatId, run.submission.runId);
+    }
+  }, [
+    chatId,
+    run?.status,
+    run?.completionKey,
+    run?.submission.runId,
+    research.consumeCompletion,
+  ]);
+  async function send(event: FormEvent) {
+    event.preventDefault();
+    const content = draft.trim();
+    if (
+      !content ||
+      sending ||
+      mutationLock.current ||
+      uncertain ||
+      loading ||
+      sidebarMoving ||
+      !data ||
+      !canSubmitResearch(setup.status) ||
+      setup.loading ||
+      setup.busy ||
+      setup.error
+    )
+      return;
+    mutationLock.current = true;
+    const currentSubmission = beginResearchSubmission();
+    setCompletionKey("");
+    setError("");
+    setFailureNotice("");
+    try {
+      const next = await research.start(
+        chatId,
+        content,
+        rankingProfileId,
+        currentSubmission,
+        searchStructures,
+        data.reports,
+      );
+      if (mounted.current) {
+        setCompletionKey(completedResearchKey(next, data.reports));
+        setData(next);
+        setDraft("");
+        onChanged(next.chat);
+      }
+    } catch {
+      /* Workspace-owned status preserves errors and reconciles transport failures. */
+    } finally {
+      mutationLock.current = false;
+      if (!mounted.current) onBusyChange(chatId, false, busyOwner);
+    }
+  }
   async function pin(kind: PinKind, id: string, pinned: boolean) {
-    if (!data || mutationLock.current || sidebarMoving) return;
+    if (mutationLock.current || sidebarMoving || !data) return;
     if (!data.chat.project_id) {
       onMoveRequested(data.chat, true);
       return;
@@ -2037,17 +2390,20 @@ function ChatView({
     mutationLock.current = true;
     setMutating(true);
     try {
-      await workspaceApi.pin(data.chat.project_id, kind, id, !pinned);
-      setRevision((value) => value + 1);
-    } catch (error) {
-      setError(errorMessage(error));
+      await workspaceApi.pin(data.chat.project_id, kind, id, pinned);
+      const next = await workspaceApi.chat(chatId);
+      if (mounted.current) {
+        setData(next);
+        onChanged(next.chat);
+      }
     } finally {
       mutationLock.current = false;
-      setMutating(false);
+      if (mounted.current) setMutating(false);
+      else onBusyChange(chatId, false, busyOwner);
     }
   }
   async function reportPin(action: ReportPinAction) {
-    if (!data || mutationLock.current || sidebarMoving) return;
+    if (mutationLock.current || sidebarMoving || !data) return;
     if (!data.chat.project_id) {
       onMoveRequested(data.chat, true);
       return;
@@ -2056,13 +2412,62 @@ function ChatView({
     setMutating(true);
     try {
       await applyReportPin(data.chat.project_id, action);
-      setRevision((value) => value + 1);
-    } catch (error) {
-      setError(errorMessage(error));
+      const next = await workspaceApi.chat(chatId);
+      if (mounted.current) {
+        setData(next);
+        onChanged(next.chat);
+      }
     } finally {
       mutationLock.current = false;
-      setMutating(false);
+      if (mounted.current) setMutating(false);
+      else onBusyChange(chatId, false, busyOwner);
     }
+  }
+  const snapshotPins =
+    data?.reports.flatMap((report) =>
+      report.snapshot_pin ? [report.snapshot_pin] : [],
+    ) ?? [];
+  function renderMessage(
+    message: ChatDetail["messages"][number],
+    includeReport = true,
+  ) {
+    if (!data) return null;
+    const report = includeReport
+      ? data.reports.find((item) => item.id === message.report_id)
+      : undefined;
+    return (
+      <article
+        className={`message message-${message.role}`}
+        key={message.id}
+        data-search-message={message.id}
+        data-search-report={message.report_id ?? undefined}
+      >
+        <div className="message-meta">
+          <span className={`message-avatar ${message.role}`} aria-hidden="true">
+            {message.role === "user" ? "Y" : <LabcatMark />}
+          </span>
+          <strong>{message.role === "user" ? "You" : brandName}</strong>
+          {message.intake?.status === "clarification_required" && (
+            <span className="intake-label">A little more detail</span>
+          )}
+          <SavedTime value={message.created_at} />
+        </div>
+        <div className="message-text">{message.content}</div>
+        {report && (
+          <ReportCard
+            report={report}
+            sources={data.sources}
+            onPin={pin}
+            onReportPin={reportPin}
+            trackingPin={data.report_tracking}
+            snapshotPins={snapshotPins}
+            disabled={sending || mutating || uncertain || sidebarMoving}
+            presentation={presentation}
+            requiresProject={!data.chat.project_id}
+          />
+        )}
+      </article>
+    );
   }
   return (
     <div className="chat-view standalone-chat-view">
@@ -2077,20 +2482,59 @@ function ChatView({
               number={identity?.chat_number ?? data?.chat.chat_number}
             />
           </h1>
-          <p className="chat-scope-label">
-            {projects.find((project) => project.id === data?.chat.project_id)
-              ?.name ?? "General Chats"}
-          </p>
+          {data && (
+            <>
+              <p className="chat-scope-label">
+                {projects.find((project) => project.id === data.chat.project_id)
+                  ?.name ??
+                  (data.chat.project_id ? "Project chat" : "General Chats")}
+              </p>
+              <PinTotals counts={data.chat.pin_counts} />
+            </>
+          )}
         </div>
-        <span className="neutral-badge">Saved history</span>
+        <div className="mascot-conversation-meta">
+          <span className="neutral-badge">Saved history</span>
+        </div>
       </header>
       <div
-        className="message-history"
         ref={history}
+        className="message-history"
         aria-label="Chat history"
-        aria-busy={loading}
+        aria-busy={loading || sending}
       >
+        {failureNotice && <Notice error={failureNotice} />}
+        {searchMatch && searchMatch.match_field !== "title" && (
+          <p className="chat-search-match-note">
+            Found in saved{" "}
+            {searchMatch.match_field === "message" ? "message" : "report"}:{" "}
+            {searchMatch.snippet}
+          </p>
+        )}
         {loading && <Loading label="Loading conversation…" />}
+        {!loading && !sending && data && !data.messages.length && (
+          <div className="first-message">
+            <h3>Continue with your question.</h3>
+            <p>
+              This chat is saved. Your report will identify the evidence used
+              and any gaps.
+            </p>
+          </div>
+        )}
+        {!loading && data?.messages.map((message) => renderMessage(message))}
+        {sending && run?.prompt && (
+          <div className="message message-user pending-research-question">
+            <strong>Research question</strong>
+            <p>{run.prompt}</p>
+          </div>
+        )}
+        {sending && submission && (
+          <ResearchProgress
+            key={submission.runId}
+            chatId={chatId}
+            submission={submission}
+          />
+        )}
         {error && (
           <Notice
             error={error}
@@ -2098,40 +2542,20 @@ function ChatView({
             label="Reload chat"
           />
         )}
-        {!loading &&
-          data?.messages.map((message) => (
-            <article
-              className={`message message-${message.role}`}
-              key={message.id}
-              data-search-message={message.id}
-              data-search-report={message.report_id ?? undefined}
-            >
-              <div className="message-meta">
-                <strong>{message.role === "user" ? "You" : brandName}</strong>
-                <SavedTime value={message.created_at} />
-              </div>
-              <div className="message-text">{message.content}</div>
-              {data.reports
-                .filter((report) => report.id === message.report_id)
-                .map((report) => (
-                  <ReportCard
-                    key={report.id}
-                    report={report}
-                    sources={data.sources}
-                    onPin={pin}
-                    onReportPin={reportPin}
-                    trackingPin={data.report_tracking}
-                    snapshotPins={data.reports.flatMap((report) =>
-                      report.snapshot_pin ? [report.snapshot_pin] : [],
-                    )}
-                    disabled={mutating || sidebarMoving}
-                    presentation={presentation}
-                    requiresProject={!data.chat.project_id}
-                  />
-                ))}
-            </article>
-          ))}
       </div>
+      <PromptComposer
+        {...composerLinks}
+        searchStructures={searchStructures}
+        onSearchStructuresChange={setSearchStructures}
+        rankingProfileId={rankingProfileId}
+        onRankingProfileChange={setRankingProfileId}
+        draft={draft}
+        onDraft={setDraft}
+        onSubmit={send}
+        disabled={loading || uncertain || mutating || sidebarMoving || !data}
+        busy={sending}
+        id={`prompt-${chatId}`}
+      />
     </div>
   );
 }

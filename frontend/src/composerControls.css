@@ -1,0 +1,283 @@
+.composer-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-width: 0;
+  margin-right: auto;
+}
+.composer-picker-button,
+.project-app .composer-structure-option {
+  color: #506d58;
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 1.3;
+}
+.composer-picker-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 210px;
+  padding: 7px 8px;
+  border: 1px solid #dce5d7;
+  border-radius: 7px;
+  background: #f4f7ef;
+  text-align: left;
+}
+.project-app .composer-structure-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  padding: 7px 8px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  max-width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+.project-app .composer-structure-option input {
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  margin: 0;
+  flex: 0 0 14px;
+  accent-color: #527763;
+}
+.project-app .composer-structure-option:has(input:disabled) {
+  opacity: 0.55;
+  cursor: default;
+}
+.composer-ranking-button {
+  max-width: 175px;
+}
+.composer-model-button {
+  background: transparent;
+  border-color: transparent;
+}
+.composer-picker-button:hover,
+.composer-picker-button[aria-expanded="true"] {
+  background: #e9f0e4;
+  border-color: #c7d9c6;
+}
+.composer-picker-button:disabled {
+  opacity: 0.55;
+}
+.composer-picker-button > span:first-of-type {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.composer-picker-button svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.composer-picker-chevron {
+  flex-shrink: 0;
+  margin-left: 2px;
+  font-size: 13px;
+}
+.composer-picker-popover {
+  position: fixed;
+  z-index: 45;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 18px;
+  border: 1px solid #d2dfcc;
+  border-radius: 13px;
+  background: #fffefa;
+  color: #355e4f;
+  text-align: left;
+  box-shadow:
+    0 12px 50px #163b292b,
+    0 2px 8px #163b2912;
+}
+.composer-picker-popover header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 15px;
+  margin-bottom: 11px;
+}
+.composer-picker-popover h2 {
+  font-size: 18px;
+  margin: 0;
+}
+.composer-picker-eyebrow {
+  margin: 0 0 6px;
+  color: #809575;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+.composer-popup-close {
+  flex-shrink: 0;
+  background: none;
+  border: 0;
+  color: #71846a;
+  font-size: 23px;
+  line-height: 1;
+  padding: 0 3px;
+}
+.composer-picker-help {
+  font-size: 11px;
+  line-height: 1.6;
+  color: #72806b;
+  margin: 10px 0;
+}
+.composer-choice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 13px;
+  width: 100%;
+  padding: 10px;
+  margin: 3px 0;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: #3c6150;
+}
+.composer-choice:hover {
+  background: #f0f4eb;
+}
+.composer-choice[aria-pressed="true"] {
+  background: #edf4e7;
+  border-color: #d8e5ce;
+}
+.composer-choice:disabled {
+  opacity: 0.5;
+}
+.composer-choice > span:first-child {
+  min-width: 0;
+}
+.composer-choice strong {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  font-weight: 550;
+}
+.composer-choice small {
+  display: block;
+  overflow-wrap: anywhere;
+  margin-top: 4px;
+  color: #7c8b75;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.composer-profile-search,
+.composer-active-model select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #d6e1cf;
+  border-radius: 6px;
+  padding: 10px;
+  background: #fff;
+  color: #41634e;
+  font: inherit;
+  font-size: 11px;
+}
+.composer-profile-search {
+  margin: 12px 0 7px;
+}
+.composer-profile-list,
+.composer-account-list {
+  min-height: 0;
+}
+.composer-picker-popover footer {
+  border-top: 1px solid #e2e9db;
+  margin-top: 13px;
+  padding-top: 13px;
+}
+.composer-picker-popover footer button,
+.composer-setup-link,
+.composer-picker-error button,
+.composer-model-heading button {
+  border: 0;
+  padding: 4px 0;
+  background: transparent;
+  color: #39765b;
+  text-align: left;
+  font-size: 11px;
+}
+.composer-picker-popover footer button {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+}
+.composer-active-model {
+  margin-top: 13px;
+  padding-top: 13px;
+  border-top: 1px solid #e2e9db;
+}
+.composer-model-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 7px;
+}
+.composer-model-heading label {
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.composer-model-heading button {
+  flex-shrink: 0;
+}
+.composer-model-paused {
+  padding: 9px 10px;
+  border-radius: 6px;
+  color: #826544;
+  background: #f7f1e5;
+  font-size: 10px;
+  line-height: 1.6;
+  margin: 10px 0 0;
+}
+.composer-picker-error {
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 6px;
+  background: #fbefe9;
+  color: #925d4d;
+}
+.composer-picker-error p {
+  font-size: 11px;
+  line-height: 1.65;
+  margin: 0 0 5px;
+}
+.composer-picker-notice {
+  font-size: 11px;
+  line-height: 1.6;
+  color: #52714c;
+  margin: 10px 0;
+}
+@media (max-width: 600px) {
+  .composer-controls {
+    gap: 4px;
+  }
+  .composer-picker-button,
+  .project-app .composer-structure-option {
+    font-size: 9px;
+    padding: 6px;
+  }
+  .composer-picker-button {
+    max-width: 155px;
+  }
+  .composer-ranking-button {
+    max-width: 145px;
+  }
+  .composer-picker-button svg {
+    width: 12px;
+    height: 12px;
+  }
+}
