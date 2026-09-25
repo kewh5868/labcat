@@ -423,6 +423,24 @@ def test_purge_one_chat_does_not_remove_other_versions_or_pinned_source(tmp_path
         assert list(conn.execute("PRAGMA foreign_key_check")) == []
 
 
+def test_live_evaluator_uses_report_scoped_legacy_passages(tmp_path):
+    from test_live_prompt_evaluator import assess
+
+    store = WorkspaceStore(tmp_path / "workspace.sqlite3")
+    project = store.create_project("TEST ONLY")["id"]
+    chat = store.create_global_chat("TEST ONLY", project)["id"]
+    first, second = [append(store, project, chat, version) for version in (0, 1)]
+    force_legacy_collision(store, project, first, second)
+    detail = store.get_global_chat(chat)
+    assessed = assess(detail, {"class": None, "candidates_expected": True})
+    assert "error_type" not in assessed
+    assert (
+        assessed["literature_evaluation"] == second["result"]["literature_evaluation"]
+    )
+    assert assessed["checks"]["source_linked_candidate_leads"] is True
+    assert assessed["provisional_ranked_count"] == 1
+
+
 def test_direct_exports_reject_identical_evidence_from_an_unlinked_project(tmp_path):
     store = WorkspaceStore(tmp_path / "workspace.sqlite3")
     saved = []

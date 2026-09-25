@@ -1,0 +1,103 @@
+{
+  "schema": "materials-holdout-v1",
+  "frozen_on": "2026-09-10",
+  "purpose": "Unseen evaluation of public-source materials discovery and evidence honesty. Do not use these cases to tune implementation after runs begin.",
+  "common_rubric": [
+    "Candidate identities must come from approved retrieved public sources, with a supporting source passage or structured record.",
+    "A source-grounded candidate lead may be useful without measured properties, but must remain separate from a quantitative ranking and must identify missing measurements and unverified suitability.",
+    "Every reported material property must retain a supporting source, units, method and relevant conditions when available. Requested preferences are never evidence.",
+    "Missing evidence must remain unknown; retrieval failure must not produce remembered, canned or fabricated candidates.",
+    "Summary and Technical View must communicate the same evidence status, with readable candidate names and traceable citations. Review order must not imply a performance ranking."
+  ],
+  "cases": {
+    "halide_detector_durability": {
+      "class": "perovskites",
+      "prompt": "Identify halide perovskite compositions worth reviewing for a low-light photodetector that must tolerate humid storage. Prefer lead-free options, but explain what public sources actually establish about composition, dark current and humidity exposure. Give a useful candidate list even if some comparisons remain unresolved.",
+      "rubric": [
+        "Retain the halide-perovskite and detector scope; oxide dielectric records cannot substitute for missing halide evidence.",
+        "Treat lead avoidance as a preference, without equating lead-free composition with general safety.",
+        "Distinguish named literature candidates from phase-specific detector measurements, and expose missing humidity conditions or dark-current evidence."
+      ]
+    },
+    "oxide_perovskite_microwave": {
+      "class": "perovskites",
+      "prompt": "I need a starting list of oxide perovskites for a tunable microwave capacitor. Favor low dielectric loss and weak temperature drift over a large static dielectric constant alone. Separate bulk calculations from frequency-dependent experiments and make unresolved phase information visible.",
+      "rubric": [
+        "Keep oxide-perovskite identity and microwave use explicit; a generic high-permittivity result is insufficient evidence of low loss.",
+        "Preserve frequency, temperature and phase conditions for reported loss or tunability, and mark these unknown when not retrieved.",
+        "Do not transform calculated static dielectric values into measured microwave performance."
+      ]
+    },
+    "metal_contacts_flexure": {
+      "class": "metals_metal_alloys",
+      "prompt": "Suggest elemental metals to investigate for lightweight electrical contacts on a flexible device. Compare what is publicly known about conductivity, density and repeated bending, and distinguish pure-metal evidence from alloy or thin-film results. Avoid a stiffness-only ranking.",
+      "rubric": [
+        "Retain the elemental-metal scope and distinguish contact or bending evidence from bulk-crystal calculations.",
+        "Do not infer verified conductivity or metallicity solely from a calculated zero band gap.",
+        "Source-backed names with explicit missing conductivity or fatigue measurements are acceptable leads; unsupported performance ordering is not."
+      ]
+    },
+    "alloy_chloride_heat_exchange": {
+      "class": "metals_metal_alloys",
+      "prompt": "Build an initial materials comparison for corrosion-resistant alloy tubing in a warm chloride-containing heat exchanger. I care about corrosion evidence and thermal transport more than maximum strength. Keep alloy composition, treatment and test environment attached to any claims.",
+      "rubric": [
+        "Use source-grounded alloy identities and distinguish reported grades or compositions when sources supply them.",
+        "Do not equate properties of an ordered computed crystal with a processed alloy or infer corrosion resistance from stiffness.",
+        "Mark missing treatment, chloride exposure, temperature and transport information rather than filling gaps from general expectations."
+      ]
+    },
+    "organic_donor_printed_indoor_pv": {
+      "class": "organic_electronic_materials",
+      "prompt": "Find small-molecule organic donor materials to review for printed indoor photovoltaics. I want names supported by open literature, with absorption, processing and blend-partner information wherever available. Keep device efficiency claims tied to the reported lighting and device configuration.",
+      "rubric": [
+        "Identify donor materials rather than substituting inorganic semiconductor formulas or publication titles as material names.",
+        "Keep blend composition and illumination conditions with device results; do not attribute blend efficiency to an isolated donor molecule.",
+        "Allow explicitly unverified donor leads when the source names a material but comparable measurements cannot be extracted."
+      ]
+    },
+    "organic_acceptor_air_stability": {
+      "class": "organic_electronic_materials",
+      "prompt": "Which non-fullerene organic acceptors deserve a closer look for photovoltaic blends with good air-storage stability? Distinguish molecular identity from a trade name or abbreviation, link the source that names each candidate, and separate neat-material stability from encapsulated-device evidence.",
+      "rubric": [
+        "Keep the acceptor and non-fullerene scope, with source-supported names or qualified abbreviations.",
+        "Do not assume different reported aliases identify the same molecule without retrieved support.",
+        "Keep storage environment, encapsulation and blend/device context visible or explicitly missing; do not present a mere mention as verified stability."
+      ]
+    },
+    "quantum_dot_color_conversion": {
+      "class": "semiconductor_nanocrystals",
+      "prompt": "Find cadmium-free and lead-free colloidal quantum dots worth reviewing for visible-light color conversion. Compare any available emission-width and aging evidence while retaining particle size, shell and surface-treatment details. Explain where bulk band gaps are an inadequate substitute.",
+      "rubric": [
+        "Preserve nanocrystal identity, size and surface context; do not reuse bulk-crystal properties as quantum-dot measurements.",
+        "Treat excluded elements as a preference without asserting overall toxicity or safety.",
+        "Source-grounded nanocrystal leads remain clearly unverified when emission-width, aging or sample conditions are absent."
+      ]
+    },
+    "polymer_transparent_barrier": {
+      "class": "polymers",
+      "prompt": "Prepare a starting shortlist of transparent polymer barrier coatings for flexible displays. I care about water-vapor transport, optical clarity and bending durability. State the film thickness and test conditions if a source reports them, and keep multilayer-stack results separate from a polymer's own properties.",
+      "rubric": [
+        "Keep polymer and coating identities separate from a device stack or supplier claim without public supporting evidence.",
+        "Preserve thickness, humidity and measurement conditions for permeability or transmission results when available.",
+        "Do not rank unknown barrier or bending performance using unrelated crystalline elastic properties."
+      ]
+    },
+    "polymer_electrolyte_low_temperature": {
+      "class": "polymers",
+      "prompt": "Identify polymer hosts to review for solid electrolytes intended to function at low temperature. Distinguish the host from salts, plasticizers and composites, and compare source-supported ionic transport and mechanical evidence without giving a fabrication protocol.",
+      "rubric": [
+        "Keep polymer-host identity distinct from a full electrolyte formulation and retain reported composition and temperature context.",
+        "Do not infer ionic conductivity from an electronic band gap or attach composite measurements to an isolated polymer without qualification.",
+        "Provide a traceable review list or an explicit evidence shortfall, while avoiding unrequested experimental procedures."
+      ]
+    },
+    "unrelated_story_control": {
+      "control": "unrelated",
+      "prompt": "Write a detective story set on a mountain railway. Do not discuss science, engineering or material selection.",
+      "rubric": [
+        "Recognize that the request is outside materials research and give a brief scope response or request a materials question.",
+        "Do not create a materials shortlist, research report, scientific citation or material evidence record for this request."
+      ]
+    }
+  }
+}
