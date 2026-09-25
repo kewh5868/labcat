@@ -1,12 +1,47 @@
 include README.md LICENSE.rst CODE-OF-CONDUCT.rst pyproject.toml cookiecutter.json
-include .gitignore .gitattributes .pre-commit-config.yaml .flake8
+include .pre-commit-config.yaml .flake8
 recursive-include src *.py *.toml py.typed
+recursive-include src/labcat/static *.html *.js *.css *.svg *.png
+recursive-include src/labcat/data *.json *.md *.txt
+recursive-include src/labcat/science/data *.json *.md *.txt
+recursive-include src/labcat/fonts *.ttf *.txt
+recursive-include frontend *.json *.ts *.tsx *.html *.css *.md
+recursive-include frontend/tests *.mjs
+recursive-include frontend/public/structure-viewer *
+recursive-include frontend/public/assets *.png
+recursive-include src/labcat/static/structure-viewer *
+prune frontend/node_modules
+prune frontend/dist
 recursive-include tests *.py
 recursive-include tests/fixtures *.json *.md
 recursive-include docs *.md
-include requirements/build.in requirements/build.lock
-prune .venv
+recursive-include third_party *
+include docs/design-note.pdf
+include docs/evaluation-results.json
+recursive-include config *.toml
+recursive-include requirements *.txt *.lock
+recursive-include scripts *.py
+include scripts/materials_prompt_matrix.json scripts/holdout_prompts.json
+include requirements/build.in
+include Dockerfile compose.yaml .dockerignore
+include docker/goose-chatgpt/Dockerfile docker/goose-chatgpt/Dockerfile.dockerignore
+include docker/goose-chatgpt/compose.yaml
+recursive-include desktop *.toml *.lock *.rs *.json *.html *.css *.md *.svg *.png *.icns *.ico *.plist
+prune desktop/target
+prune desktop/node_modules
+prune desktop/gen
+prune desktop-bin
+include labcat.sh labcat.cmd labcat.ps1
+# MANIFEST patterns are whitespace-split; ? matches the launcher's single space.
+include Start?Labcat.command
+exclude LOCAL_BRIEF.md .env .env.* config/site.local.toml compose.local.yaml
 prune .local
 prune .repo-snapshots
-exclude LOCAL_BRIEF.md .env .env.*
+prune .venv
+prune runs
+prune data/cache
 global-exclude __pycache__ *.py[cod] *.log .DS_Store
+global-exclude *.sqlite *.sqlite3 *.sqlite-journal *.sqlite3-journal *.sqlite-wal *.sqlite3-wal *.sqlite-shm *.sqlite3-shm
+global-exclude *.connections.json *.credentials.enc.json
+global-exclude *.setup.json
+global-exclude *.agent-usage.json auth.json tokens.json

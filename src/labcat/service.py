@@ -44,8 +44,8 @@ def get_status(config: AppConfig, style: str | None = None) -> dict[str, Any]:
             "Open-access text follow-up returns cited review passages, not "
             "automatically validated values or an exhaustive literature review.",
             "This is a local single-user prototype, not a shared service.",
-            "The React workspace and portable/native launchers are not yet "
-            "included in this snapshot.",
+            "The React status interface is available; additional workspace views "
+            "and portable/native launchers are planned.",
         ],
     }
     if selected == "audit":
@@ -55,7 +55,7 @@ def get_status(config: AppConfig, style: str | None = None) -> dict[str, Any]:
             "Strict preference configuration with no safety-policy override fields",
             "Saved standalone chats, optional projects and pinned report collections",
             "Persistent settings for paired Summary and Technical View reports",
-            "Local FastAPI service shared with the research command-line interface",
+            "Local React status interface and shared FastAPI research service",
             "Repository-first public retrieval, missing-attribute literature "
             "follow-up, deterministic ranking and cited reports",
             "Required verified model connection with encrypted or session-only "
@@ -63,7 +63,7 @@ def get_status(config: AppConfig, style: str | None = None) -> dict[str, Any]:
             "Optional isolated Goose orchestration through fixed research tools",
         ]
         report["next_steps"] = [
-            "Add the React workspace and portable/native launchers.",
+            "Extend the workspace views and add portable/native launchers.",
             "Broaden independently verified scientific coverage and hazard evidence.",
             "Validate authenticated providers and native hosts at the deployment site.",
         ]

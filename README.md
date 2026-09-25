@@ -2,16 +2,17 @@
 
 **Curious. Clever. Companionable.**
 
-Labcat is a local materials research prototype with one Python core for its CLI
+Labcat is an interview prototype for materials research, with one Python core for its CLI
 and FastAPI service. This snapshot implements bounded public retrieval, reproducible
 ranking, cited report exports, saved projects/chats and explicit model connections.
 User prompts and model memory are preferences or search hints, never evidence.
 Only approved public-source adapters can supply scientific records. Missing evidence
 remains unknown; the application provides no private-data or wetlab tools.
 
-The React workspace and portable/native launchers arrive in later snapshots.
-The backend serves an actionable missing-frontend response at `/`; `/health` and
-the application API work independently. This is a local single-user prototype.
+The React interface displays the application identity and backend status.
+Build the interface with `npm ci --prefix frontend` and
+`npm run build --prefix frontend`, then open the running backend URL.
+Portable and native launchers are planned separately. This is a local single-user prototype.
 
 ## Run the backend
 
@@ -31,7 +32,7 @@ Choose an available local port. `python -m labcat` supports the same commands.
 `labcat research --help` describes direct-workspace and running-backend research.
 New research requires an explicitly verified model connection; hosted inference
 also requires explicit consent. Status and configuration validation are offline.
-API connection and setup routes are implemented; the onboarding UI is still planned.
+API connection and setup routes are implemented. The onboarding UI is planned.
 No API key or user account is bundled.
 
 TOML settings can change bounded ranking/presentation preferences, but cannot
