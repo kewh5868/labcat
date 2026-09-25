@@ -2505,6 +2505,190 @@ test("structure controls remain mounted after saved JSON and the first source ca
   });
 });
 
+test("measured shortlist rows open exact inline structures lazily in both views and close their frames", async (t) => {
+  const report = structuredReport();
+  const scope = { chatId: "row-chat", reportId: "row-report" };
+  const base = "/api/chats/row-chat/reports/row-report/structures";
+  report.result.report_tables.technical.rows[0].material_id = "mp-1";
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async (path, options) => {
+    calls.push({ path, method: options.method });
+    if (path.endsWith("/content"))
+      return new Response("data_synthetic_ui_fixture\n", {
+        headers: { "Content-Type": "chemical/x-cif" },
+      });
+    assert.equal(path, base);
+    return Response.json({
+      viewer_enabled: true,
+      structures: [
+        {
+          material_id: "mp-1",
+          formula: "Fixture",
+          status: "ready",
+          source_name: "Materials Project",
+          source_url: "https://materialsproject.org/materials/mp-1",
+          caveats: [],
+          filename: "fixture.cif",
+          download_url: `${base}/mp-1/download`,
+          sha256: "a".repeat(64),
+          retrieved_at: "2026-09-23T00:00:00Z",
+          n_sites: 1,
+        },
+      ],
+    });
+  });
+  await withReportDom(async ({ document, render, click }) => {
+    for (const view of ["pi", "audit"]) {
+      const table =
+        report.result.report_tables[view === "pi" ? "summary" : "technical"];
+      await render(
+        view === "pi" ? report.pi_summary : report.technical_audit,
+        view,
+        { table, structureScope: scope },
+      );
+      const start = calls.length;
+      const action = document.querySelector(".report-structure-action");
+      assert.equal(action.getAttribute("aria-expanded"), "false");
+      assert.equal(document.querySelector("iframe, .report-structures"), null);
+      await click(action);
+      assert.equal(action.getAttribute("aria-expanded"), "true");
+      assert.equal(
+        document
+          .getElementById(action.getAttribute("aria-controls"))
+          .querySelectorAll("iframe").length,
+        1,
+      );
+      assert.equal(
+        document.querySelector(".report-structure-expanded > td").colSpan,
+        table.columns.length,
+      );
+      assert.equal(document.querySelector("select"), null);
+      assert.deepEqual(
+        calls.slice(start).map(({ path }) => path),
+        [base, `${base}/mp-1/content`],
+      );
+      assert.ok(calls.every(({ method }) => method === "GET"));
+      await click(action);
+      assert.equal(
+        document.querySelector("iframe, .report-structure-expanded"),
+        null,
+      );
+      assert.equal(calls.length, start + 2);
+    }
+  });
+});
+
+test("literature inline controls bind reordered formula typography to unique saved lead and citations", async (t) => {
+  const fixture = await leadFixture();
+  const leads = structuredClone(fixture.leads.slice(0, 1));
+  leads[0].name = "O2Si";
+  const reference = fixture.references.find(({ url }) => url === leads[0].url);
+  const content = `Candidate shortlist:\n\n| Rank | Material | Screening priority | Why considered | Attribute evidence | Stability / key caveat |\n| --- | --- | --- | --- | --- | --- |\n| 1 | SiO2 [${reference.id}] | 22% · Unassessed review prior | Fixture only | Unknown | Unknown |`;
+  const base = "/api/chats/lead-chat/reports/lead-report/structures";
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async (path) => {
+    calls.push(path);
+    assert.equal(path, base);
+    return Response.json({
+      viewer_enabled: true,
+      structures: [],
+      literature_candidates: [
+        {
+          lead_id: leads[0].id,
+          name: leads[0].name,
+          status: "reference_lookup_available",
+        },
+      ],
+    });
+  });
+  await withReportDom(async ({ document, render, click }) => {
+    const options = {
+      candidateLeads: leads,
+      references: fixture.references,
+      structureScope: { chatId: "lead-chat", reportId: "lead-report" },
+    };
+    await render(content, "pi", options);
+    const action = document.querySelector(".report-structure-action");
+    assert.equal(action.disabled, false);
+    assert.equal(
+      calls.length,
+      0,
+      "no structure metadata is loaded for collapsed rows",
+    );
+    await click(action);
+    assert.match(
+      document.querySelector(".report-structure-expanded").textContent,
+      /Find reference structures/,
+    );
+    assert.equal(calls.length, 1);
+    const ambiguous = structuredClone(leads[0]);
+    ambiguous.id = "lead-" + "f".repeat(24);
+    ambiguous.name = "SiO2";
+    await render(content, "pi", {
+      ...options,
+      candidateLeads: [...leads, ambiguous],
+    });
+    assert.equal(
+      document.querySelector(".report-structure-action").disabled,
+      true,
+    );
+    assert.equal(
+      document.querySelector(".report-structure-expanded"),
+      null,
+      "an ambiguous alias cannot inherit a previous open row",
+    );
+    assert.equal(calls.length, 1);
+    await render(content.replace(`[${reference.id}]`, "[S999]"), "pi", options);
+    assert.equal(
+      document.querySelector(".report-structure-action").disabled,
+      true,
+      "name alone cannot bind an unverified citation to a candidate",
+    );
+  });
+});
+
+test("historical source-grounded rows expose inline controls for their exact saved lead IDs", async (t) => {
+  const fixture = await leadFixture();
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async (path) => {
+    calls.push(path);
+    return Response.json({
+      viewer_enabled: true,
+      structures: [],
+      literature_candidates: fixture.leads.map((lead) => ({
+        lead_id: lead.id,
+        name: lead.name,
+        status: "unsupported",
+        reason: `Unresolved saved lead ${lead.id}`,
+      })),
+    });
+  });
+  await withReportDom(async ({ document, render, click }) => {
+    await render(fixture.summary, "pi", {
+      candidateLeads: fixture.leads,
+      references: fixture.references,
+      structureScope: { chatId: "lead-chat", reportId: "lead-report" },
+    });
+    assert.equal(calls.length, 0);
+    const actions = document.querySelectorAll(".report-structure-action");
+    assert.equal(actions.length, 5);
+    await click(actions[1]);
+    assert.match(
+      document.querySelector(".report-structure-expanded").textContent,
+      new RegExp(fixture.leads[1].id),
+    );
+    assert.doesNotMatch(
+      document.querySelector(".report-structure-expanded").textContent,
+      new RegExp(fixture.leads[0].id),
+    );
+    assert.equal(
+      document.querySelector(".report-structure-expanded > td").colSpan,
+      5,
+    );
+    assert.equal(calls.length, 1);
+  });
+});
+
 test("technical candidate headings and comparisons remain separate from supporting record details", async () => {
   await withReportDom(async ({ render, document }) => {
     await render(
@@ -2657,7 +2841,7 @@ test("optional chemical name metadata has bounded text, exact IDs, flat formulas
   );
 });
 
-test("chemical names appear beneath the same typed formulas in both views without changing saved data", async () => {
+test("chemical names appear beneath the same typed formulas before structure actions in both views without changing saved data", async () => {
   const report = namedReport(),
     before = JSON.stringify(report),
     name = chemicalNameFixture();
@@ -2685,6 +2869,12 @@ test("chemical names appear beneath the same typed formulas in both views withou
       assert.equal(label.querySelector("a").href, name.url);
       assert.match(label.querySelector("a").title, /does not verify the phase/);
       assert.equal(label.querySelector("a").rel, "noopener noreferrer");
+      assert.ok(
+        label.compareDocumentPosition(
+          cell.querySelector(".report-structure-action"),
+        ) & 4,
+        "name precedes existing structure control",
+      );
       assert.equal(
         document.querySelectorAll(".report-chemical-name").length,
         1,
@@ -3249,6 +3439,11 @@ test("compound shortlist rows show independently sourced component names with pa
       assert.doesNotMatch(
         labels.map((label) => label.textContent).join(" "),
         /core|shell/i,
+      );
+      assert.ok(
+        labels[1].compareDocumentPosition(
+          document.querySelector(".report-structure-action"),
+        ) & 4,
       );
     }
     await render(content, "pi", {

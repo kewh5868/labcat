@@ -1,0 +1,30 @@
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #f6f8f3;
+  font:
+    14px system-ui,
+    sans-serif;
+  color: #244840;
+}
+#viewer {
+  width: 100%;
+  height: 100%;
+}
+#status {
+  position: absolute;
+  top: 12px;
+  left: 16px;
+  right: 16px;
+  pointer-events: none;
+  margin: 0;
+  padding: 8px 12px;
+  background: #f6f8f3ed;
+  border-radius: 8px;
+}
+#status:empty {
+  display: none;
+}

@@ -1,0 +1,321 @@
+.report-structures {
+  margin: 1.5rem 0 2rem;
+  padding: 1.15rem;
+  border: 1px solid var(--report-rule, #d7e0d3);
+  border-radius: 10px;
+  background: var(--report-tint, #f5f8f0);
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 12px;
+}
+.report-structures > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.report-structures h4 {
+  margin: 0.3rem 0 0.5rem;
+  font-size: 1.05rem;
+  color: var(--report-accent, #456a52);
+}
+.report-structures p {
+  line-height: 1.6;
+}
+.report-structures > header p {
+  margin: 0.3rem 0 1rem;
+}
+.report-structures .eyebrow {
+  font-size: 0.7rem;
+}
+.structure-refresh {
+  flex-shrink: 0;
+  border: 0;
+  background: none;
+  text-decoration: underline;
+  font-size: 0.8rem;
+  color: var(--muted, #657666);
+  padding: 0.4rem 0;
+}
+.structure-select-label {
+  display: block;
+  margin: 0.8rem 0 0.4rem;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+.structure-material-select {
+  width: 100%;
+  max-width: 100%;
+  padding: 0.8rem;
+  text-overflow: ellipsis;
+}
+.structure-selected {
+  margin-top: 1rem;
+  padding: 1.2rem;
+  border: 1px solid var(--line, #d7e0d3);
+  border-radius: 14px;
+  background: var(--surface, #fafbf7);
+  min-width: 0;
+}
+.structure-record-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+.structure-record-heading > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.8rem;
+  align-items: baseline;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.structure-record-heading strong {
+  font-size: 1.1rem;
+}
+.structure-record-heading > div > span {
+  font-size: 0.8rem;
+  color: var(--muted, #657666);
+}
+.structure-state {
+  display: inline-block;
+  border-radius: 20px;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.72rem;
+  background: #eef1e8;
+  color: #536754;
+  flex-shrink: 0;
+}
+.structure-state-ready {
+  background: #e1eee5;
+  color: #285e45;
+}
+.structure-state-connection_required {
+  background: #f6ecd6;
+  color: #795c21;
+}
+.structure-source,
+.structure-caveats,
+.structure-disabled {
+  font-size: 0.85rem;
+}
+.structure-source a {
+  color: inherit;
+  text-underline-offset: 3px;
+}
+.structure-reference-notice {
+  margin: 1rem 0;
+  padding: 0.85rem 1rem;
+  border: 1px solid #dccaa7;
+  border-radius: 10px;
+  background: #fff9ec;
+  color: #70562c;
+  font-size: 0.84rem;
+}
+.structure-reference-notice p {
+  margin: 0.35rem 0;
+}
+.structure-reference-notice ul {
+  margin: 0.4rem 0 0;
+  padding-left: 1.2rem;
+}
+.structure-caveats {
+  padding-left: 1.2rem;
+  line-height: 1.6;
+  color: var(--muted, #657666);
+}
+.structure-disabled {
+  border-left: 3px solid #b5c2ad;
+  padding-left: 0.8rem;
+}
+.structure-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.1rem;
+  margin: 1rem 0;
+}
+.structure-actions .quiet-button,
+.structure-actions .report-download-link {
+  margin: 0;
+}
+.structure-error {
+  color: #9c503e;
+  font-size: 0.88rem;
+  overflow-wrap: anywhere;
+}
+.structure-provenance {
+  font-size: 0.78rem;
+  margin: 1rem 0 0;
+}
+.structure-provenance summary {
+  cursor: pointer;
+}
+.structure-provenance dl {
+  margin: 0.7rem 0;
+}
+.structure-provenance dl > div {
+  display: grid;
+  grid-template-columns: 6rem minmax(0, 1fr);
+  gap: 0.7rem;
+  margin: 0.4rem 0;
+}
+.structure-provenance dd {
+  margin: 0;
+}
+.structure-hash {
+  overflow-wrap: anywhere;
+  font-family: monospace;
+}
+.structure-viewer {
+  margin-top: 1.2rem;
+  border: 1px solid #dae3d5;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fbfcf9;
+}
+.structure-viewer-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 0.8rem;
+  border-bottom: 1px solid #e4e9df;
+  font-size: 0.75rem;
+  color: #617465;
+}
+.structure-viewer-toolbar > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.structure-viewer-toolbar button {
+  font: inherit;
+  background: white;
+  border: 1px solid #cfdaca;
+  border-radius: 6px;
+  padding: 0.4rem 0.6rem;
+}
+.structure-viewer-status,
+.structure-viewer > .structure-error {
+  margin: 0.75rem;
+  font-size: 0.85rem;
+}
+.structure-frame {
+  display: block;
+  width: 100%;
+  height: clamp(300px, 50vw, 470px);
+  border: 0;
+  background: #fbfcf9;
+}
+.structure-frame-failed {
+  display: none;
+}
+@media (max-width: 650px) {
+  .report-structures > header {
+    flex-direction: column;
+    gap: 0;
+  }
+  .structure-record-heading {
+    flex-direction: column;
+  }
+  .structure-selected {
+    padding: 0.8rem;
+  }
+  .structure-provenance dl > div {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
+  }
+}
+
+.structure-limitations {
+  font-size: 0.82rem;
+  margin-top: 1rem;
+}
+.structure-limitations summary {
+  cursor: pointer;
+}
+.structure-reference-search {
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid var(--line, #d7e0d3);
+  border-radius: 12px;
+}
+.structure-reference-search p {
+  font-size: 0.85rem;
+}
+.report-structures-inline {
+  margin: 0;
+  padding: 12px;
+}
+.report-structures-inline .structure-selected {
+  margin-top: 12px;
+  padding: 12px;
+}
+.structure-record-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+.structure-record-options > p {
+  flex-basis: 100%;
+  margin: 0;
+}
+.structure-record-options > button {
+  text-align: left;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+.structure-record-options > button small {
+  display: block;
+  font-weight: normal;
+  margin-top: 4px;
+}
+.structure-record-options > button[aria-pressed="true"] {
+  background: var(--report-tint, #e9f1e4);
+  border-color: var(--report-accent, #456a52);
+}
+@media (max-width: 480px) {
+  .report-structures-inline,
+  .report-structures-inline .structure-selected {
+    padding: 6px;
+  }
+}
+
+.structure-components {
+  margin: 1rem 0;
+  font-size: 0.85rem;
+}
+.structure-components h5 {
+  margin: 0 0 0.35rem;
+  font-size: 0.9rem;
+}
+.structure-components > p {
+  margin: 0.35rem 0 0.65rem;
+}
+.structure-components ul {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.structure-components li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.8rem;
+  align-items: baseline;
+  overflow-wrap: anywhere;
+}
+.structure-components li > span {
+  color: var(--muted, #657666);
+}
+.structure-components li > small {
+  flex-basis: 100%;
+}
+.structure-record-options > button > strong {
+  display: block;
+  margin-bottom: 4px;
+}

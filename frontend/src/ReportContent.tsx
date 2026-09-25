@@ -1,19 +1,20 @@
+import { createContext, useContext, useId, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import { createContext, useContext, useRef } from "react";
-import type { CandidateLead } from "./CandidateLeadTable";
+import { defaultReportLayout } from "./workspaceApi";
+import type { ReportPresentation, ReportView } from "./workspaceApi";
+import type { ReportTable, ReportRow, ReportColumn } from "./reportTables";
+import type { ReportReference } from "./reportPresentationApi";
 import CandidateLeadTable, {
   candidateLeadCells,
   matchesCandidateLeadTable,
   savedCandidateLeads,
 } from "./CandidateLeadTable";
+import type { CandidateLead } from "./CandidateLeadTable";
+import StructureViewer from "./StructureViewer";
+import type { StructureTarget } from "./structureApi";
 import ChemicalName, { MaterialNamesContext } from "./MaterialName";
 import { safeMaterialNames } from "./chemicalNamesApi";
 import "./reportContent.css";
-import type { ReportReference } from "./reportPresentationApi";
-import type { ReportColumn, ReportRow, ReportTable } from "./reportTables";
-import type { StructureTarget } from "./structureApi";
-import type { ReportPresentation, ReportView } from "./workspaceApi";
-import { defaultReportLayout } from "./workspaceApi";
 
 const FormulaTypographyContext = createContext<readonly string[]>([]);
 // Same conservative symbol subset as the server's flat-formula display parser.
@@ -546,6 +547,10 @@ type StructureScope = { chatId: string; reportId: string };
 
 function InlineStructureRow({
   children,
+  scope,
+  target,
+  label,
+  colSpan,
 }: {
   children: (action?: ReactNode) => ReactNode;
   scope?: StructureScope;
@@ -553,7 +558,55 @@ function InlineStructureRow({
   label: string;
   colSpan: number;
 }) {
-  return <tr>{children()}</tr>;
+  const [openKey, setOpenKey] = useState("");
+  const identity =
+    scope && target
+      ? `${scope.chatId}:${scope.reportId}:${target.kind}:${target.id}`
+      : "";
+  const open = Boolean(identity && openKey === identity);
+  const id = useId();
+  const action = scope ? (
+    <button
+      type="button"
+      className="report-structure-action"
+      disabled={!target}
+      aria-label={`${open ? "Hide" : "View"} structure for ${label}`}
+      aria-expanded={open}
+      aria-controls={target ? `${id}-structure` : undefined}
+      title={
+        !target
+          ? "This historical row cannot be matched unambiguously to a saved candidate."
+          : undefined
+      }
+      onClick={() => setOpenKey(open ? "" : identity)}
+    >
+      {open ? "Hide structure" : "View structure"}
+    </button>
+  ) : undefined;
+  return (
+    <>
+      <tr>{children(action)}</tr>
+      {open && scope && target && (
+        <tr className="report-structure-expanded">
+          <td colSpan={colSpan}>
+            <div
+              id={`${id}-structure`}
+              className="report-inline-structure"
+              role="region"
+              aria-label={`Structure for ${label}`}
+            >
+              <StructureViewer
+                {...scope}
+                target={target}
+                label={label}
+                autoLoad
+              />
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  );
 }
 
 function literatureStructureTarget(

@@ -1,0 +1,40 @@
+JSmol / Jmol 16.4.23
+Copyright 1998-2023 The Jmol Development Team
+GNU Lesser General Public License, version 2.1 or (at your option) any later version.
+
+JSmol is distributed WITHOUT ANY WARRANTY; without even the implied warranty
+of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See JSMOL-LICENSE.
+Upstream copyright and component acknowledgments are retained verbatim in
+static/structure-viewer/vendor/COPYRIGHT.txt and throughout the source archive.
+
+Labcat ships the upstream browser runtime without modifying its bytes.
+The application integration and sandbox wrapper are separate files.
+
+The corresponding source and build resources supplied by the upstream release
+are included in SOURCE.tar.gz, with a complete member/hash manifest in
+SOURCE-MANIFEST.json. Both files ship beside the runtime in:
+
+  Repository: frontend/public/structure-viewer/vendor/
+  Installed Python package and Docker image:
+    labcat/static/structure-viewer/vendor/
+
+SOURCE.tar.gz preserves the complete jmol-16.4.23/src, tools, jars and manifest
+trees, source build instructions, copyright/license/changelog, Java2Script
+compiler resources, unminified browser wrappers, jQuery source and JavaScript
+support-class resources. It excludes demonstration-site data outside src,
+prebuilt application JARs and duplicate browser-runtime ZIP archives.
+This is a source-distribution subset, not a modified JSmol library. Internal
+library resources within src are retained; they are not research output data.
+
+Upstream release directory:
+https://sourceforge.net/projects/jmol/files/Jmol/Version%2016.4/Jmol%2016.4.23/
+Binary ZIP SHA-256:
+1c4aa04d6b4fc96cfd1b2cb3649f5ba39048620a8358799bc1b78ee1041bc4b2
+Full source TAR.GZ SHA-256:
+ecb76e7d0ce06f1a69c757ad379dd5f979ce538f35b63613a0366383db348085
+
+The source-distribution helper verifies these pinned input hashes and every
+runtime byte against the upstream archive before packaging source files.
+See docs/jsmol-source.md and scripts/vendor_jsmol_source.py for the precise
+selection and local reproduction/check commands. No upstream library rebuild
+or bit-for-bit compiler reproducibility is claimed.
