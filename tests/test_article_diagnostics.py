@@ -108,7 +108,13 @@ def test_rejection_reason_and_declaration_state_must_agree(reason, handling):
         assert attempt == before
 
 
-@pytest.mark.parametrize("raw", [b"", b"x" * MAX_RESPONSE_BYTES])
+@pytest.mark.parametrize(
+    "raw",
+    [
+        pytest.param(b"", id="empty-response"),
+        pytest.param(b"x" * MAX_RESPONSE_BYTES, id="at-transport-cap"),
+    ],
+)
 def test_hash_is_of_complete_original_bytes_within_transport_cap(raw):
     attempt = new_article_attempt("PMC123")
     mark_download_complete(attempt, raw)
@@ -148,7 +154,7 @@ def test_declaration_and_injected_source_text_are_represented_only_by_raw_hash()
         "bytes",
         bytearray(b"bytes"),
         memoryview(b"bytes"),
-        b"x" * (MAX_RESPONSE_BYTES + 1),
+        pytest.param(b"x" * (MAX_RESPONSE_BYTES + 1), id="over-transport-cap"),
     ],
 )
 def test_invalid_raw_input_cannot_change_an_attempt(raw):

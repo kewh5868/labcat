@@ -4,8 +4,12 @@ this suite."""
 import base64
 import copy
 import json
+import os
+import subprocess
+import sys
 import textwrap
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -437,8 +441,11 @@ def fake_binary(tmp_path, auth, monkeypatch):
         assert "HTTPS_PROXY" not in os.environ
         assert "AWS_SECRET_ACCESS_KEY" not in os.environ
         assert "CLAUDE_CODE_OAUTH_TOKEN" not in os.environ
-        assert (home.stat().st_mode & 0o777) == 0o700
-        assert ((home / "config.toml").stat().st_mode & 0o777) == 0o600
+        # The deployed helper uses Linux tmpfs and POSIX permissions. Windows
+        # runs this protocol fixture with a simulated tmpfs, not native login.
+        if os.name != "nt":
+            assert (home.stat().st_mode & 0o777) == 0o700
+            assert ((home / "config.toml").stat().st_mode & 0o777) == 0o600
         def emit(value):
             print(json.dumps(value), flush=True)
         for line in sys.stdin:
@@ -477,12 +484,48 @@ def fake_binary(tmp_path, auth, monkeypatch):
             textwrap.dedent(script),
         )
     )
-    # Explicit executable interpreter avoids depending on inherited PATH.
-    import sys
-
-    source = source.replace("#!/usr/bin/env python3", "#!" + sys.executable)
     binary.write_text(source)
     binary.chmod(0o700)
+
+    # Execute the real Python protocol peer explicitly on every platform;
+    # Windows does not execute shebang scripts as native binaries. Keep the
+    # session's exact environment, cwd, pipes and process lifecycle intact.
+    def peer_command(command):
+        assert command[0] == str(binary)
+        return [sys.executable, *command]
+
+    process_api = SimpleNamespace(**vars(subprocess))
+    process_api.run = lambda command, **kwargs: subprocess.run(
+        peer_command(command), **kwargs
+    )
+    peers = {}
+
+    def start_peer(command, **kwargs):
+        process = subprocess.Popen(peer_command(command), **kwargs)
+        peers[process.pid] = process
+        return process
+
+    process_api.Popen = start_peer
+    monkeypatch.setattr(module, "subprocess", process_api)
+    if os.name == "nt":
+        # The broker cannot run natively on Windows: real login requires Linux
+        # tmpfs. Adapt only this simulated peer's POSIX group cleanup to its
+        # Windows process handle, keeping real process termination exercised.
+        process_os = SimpleNamespace(**vars(module.os))
+        process_signal = SimpleNamespace(**vars(module.signal))
+        process_signal.SIGKILL = 9
+
+        def terminate_peer(pid, sig):
+            process = peers[pid]
+            if sig == process_signal.SIGTERM:
+                process.terminate()
+            else:
+                assert sig == process_signal.SIGKILL
+                process.kill()
+
+        process_os.killpg = terminate_peer
+        monkeypatch.setattr(module, "os", process_os)
+        monkeypatch.setattr(module, "signal", process_signal)
     return binary, record
 
 

@@ -82,6 +82,127 @@ def redact(value):
     return value
 
 
+@contextmanager
+def windows_private_descriptor():
+    """Allocate a protected owner-only Windows security descriptor."""
+    import ctypes
+    from ctypes import wintypes
+
+    advapi = ctypes.WinDLL("advapi32", use_last_error=True)
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+    convert = advapi.ConvertStringSecurityDescriptorToSecurityDescriptorW
+    convert.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        ctypes.POINTER(ctypes.c_void_p),
+        ctypes.POINTER(wintypes.DWORD),
+    ]
+    convert.restype = wintypes.BOOL
+    kernel.LocalFree.argtypes = [ctypes.c_void_p]
+    kernel.LocalFree.restype = ctypes.c_void_p
+    descriptor = ctypes.c_void_p()
+    # Protected DACL: one full-control entry for the file's owner, with no
+    # inherited grants. Windows chmod(0600) only changes the read-only flag.
+    if not convert("D:P(A;;FA;;;OW)", 1, ctypes.byref(descriptor), None):
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        yield advapi, kernel, descriptor
+    finally:
+        kernel.LocalFree(descriptor)
+
+
+def restrict_private_file(path):
+    """Apply owner-only access using POSIX permissions or a protected
+    Windows ACL."""
+    if os.name != "nt":
+        os.chmod(path, 0o600)
+        return
+    import ctypes
+    from ctypes import wintypes
+
+    with windows_private_descriptor() as (advapi, _, descriptor):
+        apply = advapi.SetFileSecurityW
+        apply.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, ctypes.c_void_p]
+        apply.restype = wintypes.BOOL
+        if not apply(str(path), 0x80000004, descriptor):
+            raise ctypes.WinError(ctypes.get_last_error())
+
+
+def open_private_file(path):
+    """Create exclusively with private access from the first filesystem
+    operation."""
+    if os.name != "nt":
+        return os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    import ctypes
+    import msvcrt
+    from ctypes import wintypes
+
+    class SecurityAttributes(ctypes.Structure):
+        _fields_ = [
+            ("length", wintypes.DWORD),
+            ("descriptor", ctypes.c_void_p),
+            ("inherit_handle", wintypes.BOOL),
+        ]
+
+    with windows_private_descriptor() as (_, kernel, descriptor):
+        create = kernel.CreateFileW
+        create.argtypes = [
+            wintypes.LPCWSTR,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            ctypes.POINTER(SecurityAttributes),
+            wintypes.DWORD,
+            wintypes.DWORD,
+            wintypes.HANDLE,
+        ]
+        create.restype = wintypes.HANDLE
+        kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+        kernel.CloseHandle.restype = wintypes.BOOL
+        attributes = SecurityAttributes(
+            ctypes.sizeof(SecurityAttributes), descriptor, False
+        )
+        # GENERIC_WRITE, no sharing, CREATE_NEW, FILE_ATTRIBUTE_NORMAL.
+        handle = create(
+            str(path), 0x40000000, 0, ctypes.byref(attributes), 1, 0x80, None
+        )
+        if handle == ctypes.c_void_p(-1).value:
+            raise ctypes.WinError(ctypes.get_last_error())
+        try:
+            # The CRT owns the Win32 handle after successful transfer.
+            return msvcrt.open_osfhandle(handle, os.O_WRONLY | os.O_BINARY)
+        except BaseException:
+            kernel.CloseHandle(handle)
+            path.unlink()
+            raise
+
+
+@contextmanager
+def private_output(path):
+    """Create once with private permissions already present before
+    opening content."""
+    try:
+        descriptor = open_private_file(path)
+    except FileExistsError:
+        raise
+    except OSError:
+        raise Paused("private_artifact_permissions_unavailable") from None
+    try:
+        handle = os.fdopen(descriptor, "wb")
+    except BaseException:
+        os.close(descriptor)
+        path.unlink()
+        raise
+    with handle:
+        try:
+            # Also fail closed on filesystems that ignore creation ACLs.
+            restrict_private_file(path)
+        except OSError:
+            handle.close()
+            path.unlink()
+            raise Paused("private_artifact_permissions_unavailable") from None
+        yield handle
+
+
 def save_new(path, value):
     """Write once.
 
@@ -91,8 +212,7 @@ def save_new(path, value):
     data = json_bytes(redact(value))
     if len(data) > MAX_RESPONSE * 2:
         raise Paused("artifact_too_large")
-    with path.open("xb") as handle:
-        os.chmod(path, 0o600)
+    with private_output(path) as handle:
         handle.write(data)
         handle.flush()
         os.fsync(handle.fileno())
@@ -175,7 +295,7 @@ def campaign_lock():
     lock = REPO / ".local/research-campaign.lock"
     lock.parent.mkdir(exist_ok=True, mode=0o700)
     with lock.open("a+b") as handle:
-        os.chmod(lock, 0o600)
+        restrict_private_file(lock)
         try:
             if os.name == "nt":
                 import msvcrt
@@ -367,8 +487,7 @@ def initialize(args):
         save_new(budget_file, {"baseline_bytes": artifact_bytes(args.campaign.parent)})
     budget = load(budget_file)
     args.campaign.mkdir(parents=True, mode=0o700)
-    with (args.campaign / "prompts.json").open("xb") as handle:
-        os.chmod(args.campaign / "prompts.json", 0o600)
+    with private_output(args.campaign / "prompts.json") as handle:
         handle.write(raw)
     manifest = {
         "schema": "research-campaign-v1",

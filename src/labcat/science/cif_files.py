@@ -150,7 +150,8 @@ def read_dataset_cif(archive_bytes, formula, crystal_system):
             path = PurePosixPath(member.filename)
             mode = member.external_attr >> 16
             if (
-                member.filename in seen
+                member.orig_filename != member.filename
+                or member.filename in seen
                 or path.is_absolute()
                 or ".." in path.parts
                 or "\\" in member.filename

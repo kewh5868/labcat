@@ -3,6 +3,7 @@ host files."""
 
 import hashlib
 import importlib.util
+import os
 import stat
 import zipfile
 from pathlib import Path
@@ -32,7 +33,7 @@ def bundle_inputs(tmp_path):
     archive.write_bytes(b"FAKE TAR BYTES FOR PACKAGING TEST ONLY\x00\xff")
     expected = hashlib.sha256(archive.read_bytes()).hexdigest()
     archive.with_suffix(".tar.sha256").write_text(
-        f"{expected}  {archive.name}\n", encoding="utf-8"
+        f"{expected}  {archive.name}\n", encoding="utf-8", newline="\n"
     )
     return root, archive
 
@@ -211,7 +212,8 @@ def test_native_file_bundle_preserves_name_bytes_and_permissions(bundle_inputs, 
     with zipfile.ZipFile(output) as bundle:
         name = f"{prefix}/desktop-bin/{desktop_app.name}"
         assert bundle.read(name) == binary.read_bytes()
-        assert stat.S_IMODE(bundle.getinfo(name).external_attr >> 16) == 0o700
+        expected_mode = 0o755 if os.name == "nt" else 0o700
+        assert stat.S_IMODE(bundle.getinfo(name).external_attr >> 16) == expected_mode
         expected_resources = {"labcat.sh", "labcat.ps1", "compose.yaml"}
         assert set(bundle.namelist()) == {
             f"{prefix}/{host_file}"
@@ -265,7 +267,8 @@ def test_native_argument_errors_leave_no_partial_bundle(bundle_inputs, mutation,
     elif mutation == "output_inside_app":
         output_dir = desktop_app / "bundles"
     elif mutation == "unsafe_child":
-        (desktop_app / "..\\outside.txt").write_text("unsafe", encoding="utf-8")
+        # DEL is creatable on both Windows and Unix, but unsafe in an archive.
+        (desktop_app / "unsafe\x7f.txt").write_text("unsafe", encoding="utf-8")
     with pytest.raises(bundle_builder.BundleError, match=error):
         bundle_builder.build_install_bundle(
             archive,
@@ -344,3 +347,15 @@ def test_cli_rejects_unsupported_native_host(bundle_inputs, capsys):
         bundle_builder.main([str(archive), "--host", "unsupported"])
     assert failure.value.code == 2
     assert "invalid choice" in capsys.readouterr().err
+
+
+def test_windows_checksum_line_endings_are_accepted_and_normalized(bundle_inputs):
+    root, archive = bundle_inputs
+    checksum = archive.with_suffix(".tar.sha256")
+    line = checksum.read_text(encoding="utf-8").strip()
+    checksum.write_bytes((line + "\r\n").encode("utf-8"))
+    output, _ = bundle_builder.build_install_bundle(archive, project_root=root)
+    with zipfile.ZipFile(output) as bundle:
+        assert bundle.read(f"{archive.stem}/{archive.name}.sha256") == (
+            line + "\n"
+        ).encode("utf-8")

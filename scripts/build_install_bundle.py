@@ -3,6 +3,7 @@ install files."""
 
 import argparse
 import hashlib
+import os
 import re
 import stat
 import tempfile
@@ -180,7 +181,15 @@ def desktop_entries(
                 "Desktop input may contain only regular files/directories."
             )
         relative = path.relative_to(desktop_app.parent).as_posix()
-        entries.append((relative, path, details.st_mode & 0o777, directory))
+        # Windows stat/chmod expose DOS read-only flags, not executable bits.
+        # Derive portable Unix ZIP permissions there from the selected layout.
+        mode = details.st_mode & 0o777
+        if os.name == "nt":
+            native_executable = path == desktop_app or (
+                host == "macos" and "MacOS" in path.relative_to(desktop_app).parts
+            )
+            mode = 0o755 if directory or native_executable else 0o644
+        entries.append((relative, path, mode, directory))
         if directory:
             for child in sorted(path.iterdir()):
                 collect(child)

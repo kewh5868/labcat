@@ -14,6 +14,7 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         python: ["3.11", "3.13"]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -31,7 +32,9 @@ jobs:
       - run: npm test --prefix frontend
       - run: python -m pip install --require-hashes -r requirements/runtime.lock
       - run: python -m pip install -e ".[web,aws,connections,exports,dev]"
-      - run: python -m pytest
+      - name: Run Python tests
+        run: python -m pytest -v --tb=short --durations=20
+        timeout-minutes: 15
       - run: python -m ruff check .
       - run: python -m pre_commit run --all-files
       - name: Build and inspect a fresh distribution pair

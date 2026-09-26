@@ -5,6 +5,7 @@ import base64
 import hashlib
 import io
 import zipfile
+from types import SimpleNamespace
 
 import pytest
 
@@ -40,7 +41,12 @@ def archive(
 ):
     stream = io.BytesIO()
     with zipfile.ZipFile(stream, "w", compression=compression) as output:
-        output.writestr(name, text)
+        # ZipInfo normalizes backslashes on Windows. Preserve the hostile raw
+        # name so this fixture exercises the same archive bytes on every OS.
+        info = zipfile.ZipInfo(name)
+        info.filename = name
+        info.compress_type = compression
+        output.writestr(info, text)
         for key, value in (extra or {}).items():
             output.writestr(key, value)
     return stream.getvalue()
@@ -99,9 +105,30 @@ def test_rejects_wrong_source_crystal_system():
 )
 def test_archive_paths_never_escape_or_extract(name, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    payload = archive(name=name)
+    with zipfile.ZipFile(io.BytesIO(payload)) as source:
+        assert [member.orig_filename for member in source.infolist()] == [name]
     with pytest.raises(ValueError):
-        cif_files.read_dataset_cif(archive(name=name), "SiO2", "triclinic")
+        cif_files.read_dataset_cif(payload, "SiO2", "triclinic")
     assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize("name", ["files\\test.cif", "files/test.cif\x00hidden"])
+def test_original_member_name_is_checked_before_platform_normalization(
+    name, monkeypatch
+):
+    payload = archive(name=name)
+    # Exercise Windows ZIP path normalization on every CI operating system.
+    windows_os = SimpleNamespace(**vars(zipfile.os))
+    windows_os.sep = "\\"
+    windows_os.altsep = "/"
+    monkeypatch.setattr(zipfile, "os", windows_os)
+    with zipfile.ZipFile(io.BytesIO(payload)) as source:
+        member = source.infolist()[0]
+        assert member.orig_filename == name
+        assert member.filename != name
+    with pytest.raises(ValueError, match="Unsupported dataset archive member"):
+        cif_files.read_dataset_cif(payload, "SiO2", "triclinic")
 
 
 def test_rejects_zip_bomb_member_count_file_budget_and_unsupported_compression():

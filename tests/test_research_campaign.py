@@ -3,7 +3,9 @@ evidence."""
 
 import importlib.util
 import json
+import os
 import shutil
+import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -230,6 +232,39 @@ def test_frozen_prompts_detect_tampering(campaign):
         runner.run_batch(campaign, api=API())
 
 
+def assert_private_permissions(path):
+    if os.name == "nt":
+        # Verify the actual Windows security descriptor, not DOS stat mode bits.
+        script = (
+            "$acl = Get-Acl -LiteralPath $env:LABCAT_TEST_ARTIFACT; "
+            "$rules = @($acl.Access); "
+            "@{ protected = $acl.AreAccessRulesProtected; "
+            "count = $rules.Count; "
+            "sid = $rules[0].IdentityReference.Translate("
+            "[System.Security.Principal.SecurityIdentifier]).Value; "
+            "rights = [int]$rules[0].FileSystemRights; "
+            "type = [string]$rules[0].AccessControlType } | ConvertTo-Json"
+        )
+        completed = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
+            env={**os.environ, "LABCAT_TEST_ARTIFACT": str(path)},
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+        acl = json.loads(completed.stdout)
+        assert acl == {
+            "protected": True,
+            "count": 1,
+            "sid": "S-1-3-4",
+            "rights": 2032127,
+            "type": "Allow",
+        }
+    else:
+        assert path.stat().st_mode & 0o777 == 0o600
+
+
 def test_immutable_private_artifacts_redact_secrets(tmp_path):
     path = tmp_path / "result.json"
     runner.save_new(
@@ -242,7 +277,7 @@ def test_immutable_private_artifacts_redact_secrets(tmp_path):
     )
     assert "secret-value" not in path.read_text()
     assert runner.load(path)["usage"]["total_tokens"] == 4
-    assert path.stat().st_mode & 0o777 == 0o600
+    assert_private_permissions(path)
     with pytest.raises(FileExistsError):
         runner.save_new(path, {"overwritten": True})
 
@@ -471,3 +506,32 @@ def test_fingerprint_covers_bundled_configuration_and_scientific_data(
     before = runner.fingerprint()
     (tmp_path / relative).write_text("TEST ONLY changed content")
     assert runner.fingerprint() != before
+
+
+def test_permission_failure_leaves_no_artifact(tmp_path, monkeypatch):
+    path = tmp_path / "result.json"
+
+    def reject_permissions(_):
+        raise OSError("TEST ONLY unsupported private permissions")
+
+    monkeypatch.setattr(runner, "restrict_private_file", reject_permissions)
+    with pytest.raises(runner.Paused, match="private_artifact_permissions_unavailable"):
+        runner.save_new(path, {"private": "MUST NOT BE WRITTEN"})
+    assert not path.exists()
+
+
+def test_permissions_are_private_at_creation_before_content_open(tmp_path, monkeypatch):
+    path = tmp_path / "result.json"
+    original_fdopen = runner.os.fdopen
+    observed = []
+
+    def inspect_creation(descriptor, *args, **kwargs):
+        assert_private_permissions(path)
+        assert path.stat().st_size == 0
+        observed.append(True)
+        return original_fdopen(descriptor, *args, **kwargs)
+
+    monkeypatch.setattr(runner.os, "fdopen", inspect_creation)
+    runner.save_new(path, {"private": "TEST ONLY content"})
+    assert observed == [True]
+    assert runner.load(path)["private"] == "TEST ONLY content"
