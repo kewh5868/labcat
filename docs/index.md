@@ -14,12 +14,16 @@ Describe your application. Compare a ranked candidate shortlist, read the cited
 findings, and explore available crystal structures. Keep each question and its
 results in a chat or project.
 
-[Install Labcat](installation.md){ .md-button .md-button--primary }
+[First-run walkthrough](first-run.md){ .md-button .md-button--primary }
 [Explore examples](examples.md){ .md-button }
 
 </div>
 
 ## Install and open
+
+New to Labcat? The [first-run walkthrough](first-run.md) explains what to type,
+what to click, and what to expect from installation through your first download.
+Use the quick start below if you are already comfortable with Docker.
 
 **You need:** Git and a running local Docker installation. Use
 [Docker Desktop](https://docs.docker.com/desktop/) on Mac or Windows, or

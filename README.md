@@ -11,7 +11,7 @@ and keep your research organized. Ask a question, adjust your ranking priorities
 and review the findings, supporting sources, and available crystal structures.
 
 **[Get started →](https://kewh5868.github.io/labcat/)** ·
-[Installation](https://kewh5868.github.io/labcat/installation/) ·
+[First-run walkthrough](https://kewh5868.github.io/labcat/first-run/) ·
 [User guide](https://kewh5868.github.io/labcat/user-guide/) ·
 [Examples](https://kewh5868.github.io/labcat/examples/)
 
@@ -41,6 +41,8 @@ The Docker route does not require Python, Node, or Rust on your computer.
 Local workspace processing uses your selected AI provider; research may consume
 its allowance or incur charges.
 
+For exact commands and in-app clicks, follow the
+[first-run walkthrough](https://kewh5868.github.io/labcat/first-run/).
 For supplied image bundles, native desktop options, troubleshooting, and updates,
 see the [installation guide](https://kewh5868.github.io/labcat/installation/).
 

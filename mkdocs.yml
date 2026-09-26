@@ -23,6 +23,7 @@ theme:
     - search.highlight
 nav:
   - Get started: index.md
+  - First-run walkthrough: first-run.md
   - Installation: installation.md
   - User guide: user-guide.md
   - Example questions: examples.md

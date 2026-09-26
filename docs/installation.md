@@ -5,6 +5,9 @@ Labcat in your browser. Docker runs the application locally; new research still
 requires a connected model provider and access to public sources. The image does
 not include a local AI model.
 
+**First time?** Follow the [first-run walkthrough](first-run.md) for exact terminal
+commands and a guided tour of setup, your first question and report downloads.
+
 Already installed? Start Docker and skip to [everyday use](#everyday-use).
 
 ## 1. Prepare Docker

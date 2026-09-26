@@ -5,8 +5,10 @@ property records, chats and reports. Compatible public records can also supply
 structures to view and download. Coverage and answer quality vary by topic;
 results are provisional screening aids, not predictions of material performance.
 
-Start with [installation](installation.md) and [model setup](onboarding.md),
-then try the [example research prompts](examples.md).
+Start with the [first-run walkthrough](first-run.md) for exact installation
+commands and setup clicks, then try the [example research prompts](examples.md).
+For installation alternatives, see [installation](installation.md); for account
+recovery, see [model setup](onboarding.md).
 
 ## Start a research chat
 
