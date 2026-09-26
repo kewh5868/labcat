@@ -236,22 +236,26 @@ def assert_private_permissions(path):
     if os.name == "nt":
         # Verify the actual Windows security descriptor, not DOS stat mode bits.
         script = (
+            "$ErrorActionPreference = 'Stop'; "
             "$acl = Get-Acl -LiteralPath $env:LABCAT_TEST_ARTIFACT; "
-            "$rules = @($acl.Access); "
+            "$rules = @($acl.GetAccessRules($true, $true, "
+            "[System.Security.Principal.SecurityIdentifier])); "
             "@{ protected = $acl.AreAccessRulesProtected; "
             "count = $rules.Count; "
-            "sid = $rules[0].IdentityReference.Translate("
-            "[System.Security.Principal.SecurityIdentifier]).Value; "
+            "sid = $rules[0].IdentityReference.Value; "
             "rights = [int]$rules[0].FileSystemRights; "
             "type = [string]$rules[0].AccessControlType } | ConvertTo-Json"
         )
         completed = subprocess.run(
             ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
             env={**os.environ, "LABCAT_TEST_ARTIFACT": str(path)},
-            check=True,
+            check=False,
             capture_output=True,
             text=True,
             timeout=20,
+        )
+        assert completed.returncode == 0, (
+            "Windows ACL inspection failed: " + completed.stderr + completed.stdout
         )
         acl = json.loads(completed.stdout)
         assert acl == {
