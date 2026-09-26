@@ -624,8 +624,10 @@ def test_sources_run_concurrently_and_return_partial_results_at_shared_deadline(
 
     # Three seconds of request setup consume the same shared budget for all sources.
     # Keep this clock local to the source module; Event/Future guards use real time.
-    clock = iter((100.0, 103.0))
-    monkeypatch.setattr(sources, "time", SimpleNamespace(monotonic=lambda: next(clock)))
+    clock = iter((100.0,))
+    monkeypatch.setattr(
+        sources, "time", SimpleNamespace(monotonic=lambda: next(clock, 103.0))
+    )
     monkeypatch.setattr(sources, "MAX_SECONDS", 10.0)
     monkeypatch.setattr(sources, "wait", wait_at_deadline)
     monkeypatch.setitem(sources._ADAPTERS, "hybrid3", quick)

@@ -1095,7 +1095,12 @@ def _scoped_adapter(
     token = _SEARCH_SCOPE.set(deepcopy(semantic_scope))
     context_token = _SEARCH_CONTEXT.set(search_context)
     try:
-        return adapter(query, limit, deadline, **options)
+        result = adapter(query, limit, deadline, **options)
+        # A delayed coordinator can observe a completed future after its budget.
+        # Check at completion so late results cannot be merged from that snapshot,
+        # while results that finished on time remain available for later merging.
+        _remaining(deadline)
+        return result
     finally:
         _SEARCH_SCOPE.reset(token)
         _SEARCH_CONTEXT.reset(context_token)

@@ -3,6 +3,8 @@ policy."""
 
 import json
 import time
+from threading import Event
+from types import SimpleNamespace
 
 import pytest
 
@@ -236,7 +238,10 @@ def test_all_adapters_share_earlier_caller_or_per_call_deadline(
     assert {row["status"] for row in result["source_statuses"]} == {"no_results"}
 
 
-def test_caller_deadline_keeps_partial_results_and_excludes_late_records(monkeypatch):
+@pytest.mark.parametrize("completion_time", [105.0, 106.0])
+def test_caller_deadline_keeps_partial_results_and_excludes_late_records(
+    monkeypatch, completion_time
+):
     quick_reference = public._reference(
         "hybrid3",
         "100001",
@@ -256,20 +261,44 @@ def test_caller_deadline_keeps_partial_results_and_excludes_late_records(monkeyp
         "https://nomad-lab.eu/prod/v1/api/v1/entries/query",
     )
 
+    clock = [100.0]
+    release_slow = Event()
+    real_wait = public.wait
+    submitted = []
+
     def quick(*args):
         return [quick_reference], "Synthetic quick result."
 
     def slow(*args):
-        time.sleep(0.08)
+        assert release_slow.wait(5), "Late adapter was not released"
         return [late_reference], "Synthetic late result."
 
+    def delayed_observation(futures, *, timeout):
+        quick_future, slow_future = tuple(futures)
+        submitted.extend((quick_future, slow_future))
+        assert timeout == 5.0
+        assert quick_future.result(timeout=5)[0] == [quick_reference]
+        clock[0] = completion_time
+        release_slow.set()
+        done, pending = real_wait(submitted, timeout=5)
+        assert not pending, "Fixture adapters did not finish"
+        # Both are observed as done, even though only one finished within budget.
+        return done, pending
+
+    monkeypatch.setattr(public, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+    monkeypatch.setattr(public, "wait", delayed_observation)
     monkeypatch.setitem(public._ADAPTERS, "hybrid3", quick)
     monkeypatch.setitem(public._ADAPTERS, "nomad", slow)
-    result = public.search_public_sources(
-        TOPIC, ["hybrid3", "nomad"], deadline=time.monotonic() + 0.02
-    )
-    assert result["references"] == [quick_reference]
-    assert [row["status"] for row in result["source_statuses"]] == [
-        "ok",
-        "unavailable",
-    ]
+    try:
+        result = public.search_public_sources(
+            TOPIC, ["hybrid3", "nomad"], deadline=105.0
+        )
+        assert result["references"] == [quick_reference]
+        assert [row["status"] for row in result["source_statuses"]] == [
+            "ok",
+            "unavailable",
+        ]
+    finally:
+        release_slow.set()
+        _, pending = real_wait(submitted, timeout=5)
+        assert not pending, "Fixture worker was not cleaned up"
