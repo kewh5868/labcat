@@ -367,15 +367,19 @@ def test_actual_pty_answers_only_two_menus_stops_before_inference_and_cleans_fil
 
     script = "\n".join(
         [
-            "import sys, time, os, json",
+            "import sys, time, os, json, tempfile",
             "from pathlib import Path",
             "print('What would you like to configure?', flush=True)",
             "assert sys.stdin.readline() == '\\n'",
             "print('Which model provider should we use?', flush=True)",
             "assert sys.stdin.readline() == '\\n'",
             "root = Path(os.environ['GOOSE_PATH_ROOT'])",
-            f"(root / 'browser-url').write_text({url!r})",
-            "(root / 'browser-url').chmod(0o600)",
+            # Match the browser helper: only publish a complete private file.
+            "fd, temporary = tempfile.mkstemp(prefix='.browser-', dir=root)",
+            "with os.fdopen(fd, 'w', encoding='ascii') as stream:",
+            "    os.fchmod(stream.fileno(), 0o600)",
+            f"    stream.write({url!r})",
+            "os.replace(temporary, root / 'browser-url')",
             "time.sleep(0.2)",
             "directory = root / 'config/chatgpt_codex'",
             "directory.mkdir(mode=0o700)",
@@ -476,10 +480,13 @@ def test_pty_cancel_expiry_output_overflow_and_early_exit_cleanup(
         return result
 
     script = (
-        "import os, time\nfrom pathlib import Path\n"
+        "import os, time, tempfile\nfrom pathlib import Path\n"
         "root = Path(os.environ['GOOSE_PATH_ROOT'])\n"
-        f"(root / 'browser-url').write_text({url!r})\n"
-        "(root / 'browser-url').chmod(0o600)\n"
+        "fd, temporary = tempfile.mkstemp(prefix='.browser-', dir=root)\n"
+        "with os.fdopen(fd, 'w', encoding='ascii') as stream:\n"
+        "    os.fchmod(stream.fileno(), 0o600)\n"
+        f"    stream.write({url!r})\n"
+        "os.replace(temporary, root / 'browser-url')\n"
         "time.sleep(0.2)\n"
         + (
             "print('x' * 260000, flush=True)\ntime.sleep(10)\n"
