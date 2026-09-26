@@ -42,6 +42,9 @@ cd labcat
 docker build -t labcat:0.1.0.dev0 .
 ```
 
+The final `.` is a required argument meaning “use the current folder as the
+build context.” Include the space before it.
+
 Use the exact image tag shown above: the supplied Compose configuration expects
 it. The first build downloads dependencies and may take several minutes. Wait
 for a successful build before launching. You only rebuild when updating the

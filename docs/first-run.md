@@ -35,7 +35,7 @@ docker compose version
 command is not found, finish installing that tool and reopen your terminal. If
 Docker cannot connect to its engine, start Docker and try again.
 
-!!! tip "Where to type"
+**Where to type:**
 Terminal commands go in Terminal or PowerShell. Research questions go in
 Labcat's chat box later. Copy only the commands inside the code blocks;
 do not type terminal prompts such as `$` or `>`.
@@ -52,8 +52,9 @@ docker build -t labcat:0.1.0.dev0 .
 
 The first command creates a `labcat` folder in your current directory. The
 second enters it. The third builds the application, including its dependencies.
-Keep the final `.` in the build command. The first build can take several
-minutes; wait for it to finish successfully and return to the terminal prompt.
+Keep the final `.` in the build command, with a space before it: this is the
+required build context argument, meaning the current folder. The first build can
+take several minutes; wait for it to finish successfully and return to the terminal prompt.
 
 If you already cloned Labcat, open a terminal in that existing folder and run
 only the build command. The folder should contain `Dockerfile` and `compose.yaml`.
@@ -149,7 +150,7 @@ ready for research. [More connection help](onboarding.md)
    **Finish setup**. The setup dialog closes and the workspace is ready for a
    question.
 
-!!! tip "Optional: connect Materials Project"
+**Optional: connect Materials Project.**
 In **Public sources**, find the Materials Project card. Use
 **Register or get an API key** if needed, paste your key into its field, and
 click **Save and verify**. Wait for verification before continuing. You can

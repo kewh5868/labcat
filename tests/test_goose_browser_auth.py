@@ -467,7 +467,9 @@ def test_non_memory_root_is_rejected_and_missing_helper_preserves_safe_setup_err
 
 
 @pytest.mark.skipif(os.name != "posix", reason="Goose worker requires a POSIX PTY")
-@pytest.mark.parametrize("scenario", ["cancel", "expire", "overflow", "exit"])
+@pytest.mark.parametrize(
+    "scenario", ["cancel", "expire", "overflow", "exit", "exit_before_start"]
+)
 def test_pty_cancel_expiry_output_overflow_and_early_exit_cleanup(
     tmp_path, url, monkeypatch, scenario
 ):
@@ -480,18 +482,25 @@ def test_pty_cancel_expiry_output_overflow_and_early_exit_cleanup(
         return result
 
     script = (
-        "import os, time, tempfile\nfrom pathlib import Path\n"
+        "import os, sys, tempfile\nfrom pathlib import Path\n"
         "root = Path(os.environ['GOOSE_PATH_ROOT'])\n"
         "fd, temporary = tempfile.mkstemp(prefix='.browser-', dir=root)\n"
         "with os.fdopen(fd, 'w', encoding='ascii') as stream:\n"
         "    os.fchmod(stream.fileno(), 0o600)\n"
         f"    stream.write({url!r})\n"
         "os.replace(temporary, root / 'browser-url')\n"
-        "time.sleep(0.2)\n"
+        # Wait for the test to consume the URL before triggering the failure.
+        # A fixed sleep races start() on a busy runner, where rejecting a dead
+        # helper is correct and must remain covered separately below.
+        "assert sys.stdin.readline() == 'proceed\\n'\n"
         + (
-            "print('x' * 260000, flush=True)\ntime.sleep(10)\n"
+            "print('x' * 260000, flush=True)\nsys.stdin.readline()\n"
             if scenario == "overflow"
-            else "raise SystemExit(0)\n" if scenario == "exit" else "time.sleep(10)\n"
+            else (
+                "raise SystemExit(0)\n"
+                if scenario in {"exit", "exit_before_start"}
+                else "sys.stdin.readline()\n"
+            )
         )
     )
     monkeypatch.setattr(module, "_private_directory", directory)
@@ -504,18 +513,32 @@ def test_pty_cancel_expiry_output_overflow_and_early_exit_cleanup(
         clock=lambda: clock[0],
     )
     try:
-        assert session.start() == url
-        if scenario == "cancel":
-            session.close()
-        elif scenario == "expire":
-            clock[0] += module.FLOW_TTL_SECONDS
+        if scenario == "exit_before_start":
+            os.write(session.master, b"proceed\n")
+            session._reader.join(timeout=5)
+            assert not session._reader.is_alive()
+            with pytest.raises(ChatGPTAuthError):
+                session.start()
+        else:
+            assert session.start() == url
+            if scenario == "cancel":
+                session.close()
+            elif scenario == "expire":
+                clock[0] += module.FLOW_TTL_SECONDS
+            else:
+                os.write(session.master, b"proceed\n")
         deadline = time.monotonic() + 3
         while session.poll() == "pending" and time.monotonic() < deadline:
             time.sleep(0.02)
         expected = {"cancel": "cancelled", "expire": "expired"}.get(scenario, "error")
         assert session.poll() == expected
+        session._reader.join(timeout=5)
+        assert not session._reader.is_alive()
         assert session.process.poll() is not None
+        assert session.master is None
         assert not roots[0].exists()
+        with pytest.raises(ChatGPTAuthError):
+            session.start()
         with pytest.raises(ChatGPTAuthError):
             session.credentials()
     finally:

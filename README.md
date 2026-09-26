@@ -29,6 +29,9 @@ cd labcat
 docker build -t labcat:0.1.0.dev0 .
 ```
 
+The final `.` is required: it tells Docker to build using the current `labcat`
+folder. Include the space before it.
+
 Then open the app:
 
 | Mac / Linux             | Windows PowerShell      |

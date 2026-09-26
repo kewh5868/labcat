@@ -41,6 +41,9 @@ cd labcat
 docker build -t labcat:0.1.0.dev0 .
 ```
 
+The final `.` means “use this folder as the build context”; keep it in the
+command, separated from the image tag by a space.
+
 The first build downloads dependencies and can take several minutes. It builds
 for your computer's architecture, including Apple Silicon. Wait for it to finish.
 

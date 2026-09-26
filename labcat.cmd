@@ -5,7 +5,7 @@ set "labcat_exit=%errorlevel%"
 if not "%labcat_exit%"=="0" (
     echo.
     echo If PowerShell reports a blocked script, follow your site's script-signing policy.
-    echo You can also use the Docker Compose startup commands in the README.
+    echo You can also use the Docker Compose startup commands in docs/installation.md.
     pause
 )
 exit /b %labcat_exit%
