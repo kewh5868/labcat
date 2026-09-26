@@ -1,0 +1,63 @@
+site_name: Labcat
+site_description: Install Labcat and explore materials with cited evidence, adjustable rankings, and public reference structures.
+site_url: https://kewh5868.github.io/labcat/
+repo_url: https://github.com/kewh5868/labcat
+repo_name: kewh5868/labcat
+edit_uri: edit/main/docs/
+docs_dir: docs
+site_dir: .local/docs-site
+strict: true
+theme:
+  name: material
+  logo: assets/labcat-mark.png
+  favicon: assets/labcat-mark.png
+  font: false
+  palette:
+    primary: custom
+    accent: custom
+  features:
+    - navigation.sections
+    - navigation.footer
+    - content.code.copy
+    - search.suggest
+    - search.highlight
+nav:
+  - Get started: index.md
+  - Installation: installation.md
+  - User guide: user-guide.md
+  - Example questions: examples.md
+  - Research reference:
+      - How ranking works: ranking.md
+      - Application evidence: literature-ranking.md
+      - Structures and CIF files: structures.md
+      - Public sources: scientific-sources.md
+      - Model connections: onboarding.md
+      - Chats and projects: projects.md
+      - Research safeguards: research-safeguards.md
+  - Advanced:
+      - Deployment and troubleshooting: deployment.md
+      - AWS options: aws.md
+      - Developer guide: development.md
+      - Architecture: architecture.md
+      - Validation: validation.md
+plugins:
+  - search
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+extra_css:
+  - stylesheets/labcat.css
+validation:
+  nav:
+    omitted_files: info
+  links:
+    not_found: warn
+    anchors: warn

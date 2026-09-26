@@ -6,7 +6,7 @@ in research, ranking, account connections, reports, exports, or structure viewin
 ## Turn the feature off
 
 Set `ENABLE_LABCAT_MASCOTS = false` in
-[`frontend/src/labcatMascotConfig.ts`](../frontend/src/labcatMascotConfig.ts), then
+[`frontend/src/labcatMascotConfig.ts`](https://github.com/kewh5868/labcat/blob/main/frontend/src/labcatMascotConfig.ts), then
 rebuild the frontend. This is the single source switch for every placement.
 Alternatively, disable it for a particular frontend build:
 
@@ -36,7 +36,7 @@ folder and placement imports; there are no backend migrations or dependencies.
 ## Scenes and triggers
 
 The six PNG sheets are in
-[`frontend/public/assets/labcat/`](../frontend/public/assets/labcat/).
+[`frontend/public/assets/labcat/`](https://github.com/kewh5868/labcat/blob/main/frontend/public/assets/labcat/).
 Each has eight equal square cells, four columns by two rows, read left-to-right,
 then top-to-bottom. Images use actual alpha transparency and are displayed at
 48–104 CSS pixels in the app. CSS moves a sheet behind a fixed square viewport;
@@ -52,7 +52,7 @@ JavaScript does not render individual frames. There is no sound or flashing.
 | `nap.png`        | Retained asset only; no longer displayed in chat.                                                                                                                                                                              |
 
 The desk and nap PNGs and their original generation prompts remain available
-for future reuse. [`nap-sequence.json`](../frontend/public/assets/labcat/nap-sequence.json)
+for future reuse. [`nap-sequence.json`](https://github.com/kewh5868/labcat/blob/main/frontend/public/assets/labcat/nap-sequence.json)
 records the frame order, original 4.8-second playback, held sleeping frame and
 previous two-minute idle trigger. Nothing in the application loads this metadata
 or starts the nap sequence.
@@ -93,7 +93,7 @@ existing Labcat mark as a style reference. The approved beaker sheet served as
 the character reference for the other scenes; the computer sheet also guided
 the nap sequence. The brand mark itself was not replaced. The final generation
 prompts are saved in
-[`prompts.json`](../frontend/public/assets/labcat/prompts.json).
+[`prompts.json`](https://github.com/kewh5868/labcat/blob/main/frontend/public/assets/labcat/prompts.json).
 
 Maintain the four-by-two layout, transparent gutters, fixed framing and character
 identity when replacing a sheet. The CSS uses proportions rather than hard-coded

@@ -12,7 +12,7 @@ The source is **Dielectric Constant Data**, Figshare article 7108790, version 2,
 published October 8, 2018. Its metadata identifies file 13213475 and an MIT
 license. The original dataset is attributed to Petousis and colleagues; its
 Dryad metadata declares CC0. Attribution and the mirror's permission notice are
-retained in [the data documentation](../src/labcat/science/data/README.md).
+retained in [the data documentation](https://github.com/kewh5868/labcat/blob/main/src/labcat/science/data/README.md).
 [Versioned mirror](https://doi.org/10.6084/m9.figshare.7108790.v2),
 [mirror metadata](https://api.figshare.com/v2/articles/7108790/versions/2),
 [original Dryad data](https://doi.org/10.5061/dryad.ph81h).

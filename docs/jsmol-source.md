@@ -1,8 +1,8 @@
 # JSmol source distribution
 
 Labcat redistributes the unmodified JSmol 16.4.23 browser runtime under
-GNU LGPL 2.1 or later. The [notice](../third_party/JSMOL-NOTICE) and
-[license](../third_party/JSMOL-LICENSE) accompany the desktop installation
+GNU LGPL 2.1 or later. The [notice](https://github.com/kewh5868/labcat/blob/main/third_party/JSMOL-NOTICE) and
+[license](https://github.com/kewh5868/labcat/blob/main/third_party/JSMOL-LICENSE) accompany the desktop installation
 bundles and Docker image. Upstream copyright/component notices also remain
 beside the runtime and within its source files.
 

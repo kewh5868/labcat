@@ -1,0 +1,69 @@
+:root {
+  --md-primary-fg-color: #174b40;
+  --md-primary-fg-color--light: #47705a;
+  --md-primary-fg-color--dark: #123c34;
+  --md-accent-fg-color: #bf562f;
+  --md-default-bg-color: #fafbf7;
+  --md-text-font:
+    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --md-code-font: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.md-header__button.md-logo img {
+  background: #fafbf7;
+  border-radius: 0.4rem;
+  padding: 0.15rem;
+  height: 2rem;
+  width: 2rem;
+}
+
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3 {
+  color: #174b40;
+  font-weight: 650;
+}
+
+.md-typeset h1 {
+  line-height: 1.15;
+}
+
+.md-typeset a {
+  text-underline-offset: 0.2em;
+}
+
+.labcat-intro {
+  padding: 0.5rem 0 1.1rem;
+  margin-bottom: 1.4rem;
+  border-bottom: 1px solid #d8e2d4;
+}
+
+.labcat-intro > p:first-child {
+  margin-bottom: 0.25rem;
+}
+
+.labcat-intro img {
+  width: 5.6rem;
+  height: 5.6rem;
+}
+
+.labcat-intro h1 {
+  margin-top: 0.25rem;
+  margin-bottom: 0.6rem;
+}
+
+.labcat-intro .md-button {
+  margin: 0.4rem 0.35rem 0 0;
+  border-radius: 0.3rem;
+}
+
+.md-typeset blockquote {
+  border-left-color: #759778;
+  background: #f0f4eb;
+  padding: 0.3rem 0.8rem;
+  color: #314e42;
+}
+
+.md-typeset pre > code {
+  border-radius: 0.3rem;
+}

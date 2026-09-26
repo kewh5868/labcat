@@ -33,7 +33,7 @@ or [Docker Engine installation](https://docs.docker.com/engine/install/).
 ## Primary end-user path: load an image and open a window
 
 For a source checkout without an install archive, follow the
-[README Docker quick start](../README.md#run-with-docker): build
+[README Docker quick start](installation.md): build
 `labcat:0.1.0.dev0` once, then run the supplied launcher. The following
 bundle instructions are an alternative; an archive is not required to build from source.
 
@@ -381,7 +381,7 @@ python scripts/build_install_bundle.py dist/labcat-0.1.0.dev0-linux-arm64.tar --
 This creates `labcat-0.1.0.dev0-macos-arm64.zip` with the app in
 `desktop-bin/`. Windows/Linux native bundles include fixed adjacent launcher
 resources as well as the executable; do not distribute a binary alone. Build
-instructions and native OS prerequisites are in [the desktop shell guide](../desktop/README.md).
+instructions and native OS prerequisites are in [the desktop shell guide](https://github.com/kewh5868/labcat/blob/main/desktop/README.md).
 The native CI workflow builds per-OS artifacts; those jobs still need to run on
 the target systems before their results can be claimed.
 

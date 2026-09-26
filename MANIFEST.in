@@ -14,7 +14,8 @@ prune frontend/node_modules
 prune frontend/dist
 recursive-include tests *.py
 recursive-include tests/fixtures *.json *.md
-recursive-include docs *.md
+recursive-include docs *.md *.png *.css
+include mkdocs.yml
 recursive-include third_party *
 include docs/design-note.pdf
 include docs/evaluation-results.json
