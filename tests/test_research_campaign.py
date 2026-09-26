@@ -246,9 +246,17 @@ def assert_private_permissions(path):
             "rights = [int]$rules[0].FileSystemRights; "
             "type = [string]$rules[0].AccessControlType } | ConvertTo-Json"
         )
+        # A parent PowerShell 7 session supplies incompatible module paths to
+        # Windows PowerShell 5. Let the child resolve its own built-in modules.
+        environment = {
+            key: value
+            for key, value in os.environ.items()
+            if key.casefold() != "psmodulepath"
+        }
+        environment["LABCAT_TEST_ARTIFACT"] = str(path)
         completed = subprocess.run(
             ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
-            env={**os.environ, "LABCAT_TEST_ARTIFACT": str(path)},
+            env=environment,
             check=False,
             capture_output=True,
             text=True,
