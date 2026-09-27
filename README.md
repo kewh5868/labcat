@@ -6,9 +6,11 @@
 
 **Curious. Clever. Companionable.**
 
-Labcat helps you explore materials for an application, compare cited candidates,
-and keep your research organized. Ask a question, adjust your ranking priorities,
-and review the findings, supporting sources, and available crystal structures.
+Labcat is a platform and API for intelligent materials research. Explore public
+materials science data, screen and rank cited candidates for your application,
+and keep your research organized. Ask a question, customize your ranking
+priorities, and review the findings, supporting sources, and available crystal
+structures.
 
 **[Get started →](https://kewh5868.github.io/labcat/)** ·
 [First-run walkthrough](https://kewh5868.github.io/labcat/first-run/) ·

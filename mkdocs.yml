@@ -1,5 +1,5 @@
 site_name: Labcat
-site_description: Install Labcat and explore materials with cited evidence, adjustable rankings, and public reference structures.
+site_description: An intelligent materials research platform and API for screening public materials science data, comparing cited candidates, and customizing ranking priorities.
 site_url: https://kewh5868.github.io/labcat/
 repo_url: https://github.com/kewh5868/labcat
 repo_name: kewh5868/labcat

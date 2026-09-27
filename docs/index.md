@@ -10,9 +10,11 @@ title: Get started
 
 **Curious. Clever. Companionable.**
 
-Describe your application. Compare a ranked candidate shortlist, read the cited
-findings, and explore available crystal structures. Keep each question and its
-results in a chat or project.
+Labcat is a platform and API for intelligent materials research. Explore public
+materials science data, screen and rank cited candidates for your application,
+and keep your research organized. Ask a question, customize your ranking
+priorities, and review the findings, supporting sources, and available crystal
+structures.
 
 [First-run walkthrough](first-run.md){ .md-button .md-button--primary }
 [Explore examples](examples.md){ .md-button }
