@@ -6,6 +6,7 @@ import copy
 import json
 import os
 import shlex
+import socket
 import subprocess
 import sys
 import tempfile
@@ -346,12 +347,20 @@ def test_browser_capture_is_atomic_private_memory_only_and_never_prints(
 
 
 @pytest.mark.skipif(os.name != "posix", reason="Goose worker requires a POSIX PTY")
+@pytest.mark.parametrize(
+    "url_delivery", ["pending", "complete", "missing", "malformed", "changed"]
+)
 def test_actual_pty_answers_only_two_menus_stops_before_inference_and_cleans_files(
-    tmp_path, auth, url, monkeypatch
+    tmp_path, auth, url, monkeypatch, url_delivery
 ):
     roots = []
     calls = []
     writes = []
+    control, helper = socket.socketpair()
+    control.settimeout(5)
+    early_completion = url_delivery in {"complete", "missing", "malformed"}
+    invalid_completion = url_delivery in {"missing", "malformed", "changed"}
+    changed_url = url.replace("offline-state", "another-state")
 
     def directory(root):
         result = private_root(root)
@@ -367,26 +376,44 @@ def test_actual_pty_answers_only_two_menus_stops_before_inference_and_cleans_fil
 
     script = "\n".join(
         [
-            "import sys, time, os, json, tempfile",
+            "import sys, os, tempfile",
             "from pathlib import Path",
             "print('What would you like to configure?', flush=True)",
             "assert sys.stdin.readline() == '\\n'",
             "print('Which model provider should we use?', flush=True)",
             "assert sys.stdin.readline() == '\\n'",
             "root = Path(os.environ['GOOSE_PATH_ROOT'])",
+            f"control = {helper.fileno()}",
+            "assert os.read(control, 1) == b'u'",
             # Match the browser helper: only publish a complete private file.
             "fd, temporary = tempfile.mkstemp(prefix='.browser-', dir=root)",
             "with os.fdopen(fd, 'w', encoding='ascii') as stream:",
             "    os.fchmod(stream.fileno(), 0o600)",
             f"    stream.write({url!r})",
             "os.replace(temporary, root / 'browser-url')",
-            "time.sleep(0.2)",
+            (
+                "(root / 'browser-url').unlink()"
+                if url_delivery == "missing"
+                else (
+                    "(root / 'browser-url').write_text('invalid-url')"
+                    if url_delivery == "malformed"
+                    else "pass"
+                )
+            ),
+            "os.write(control, b'u')",
+            "assert os.read(control, 1) == b'c'",
+            (
+                f"(root / 'browser-url').write_text({changed_url!r})"
+                if url_delivery == "changed"
+                else "pass"
+            ),
             "directory = root / 'config/chatgpt_codex'",
             "directory.mkdir(mode=0o700)",
             "(directory / 'tokens.json').write_text("
             f"{json.dumps(goose_token_cache(auth))!r})",
             "(directory / 'tokens.json').chmod(0o600)",
             "print('Select a model:', flush=True)",
+            "os.write(control, b'c')",
             "sys.stdin.readline()",
             "raise RuntimeError('Model selection must never be answered')",
         ]
@@ -395,7 +422,31 @@ def test_actual_pty_answers_only_two_menus_stops_before_inference_and_cleans_fil
     def process(args, **kwargs):
         calls.append((args, kwargs))
         assert not (Path(kwargs["cwd"]) / "capture-browser").exists()
-        return subprocess.Popen([sys.executable, "-I", "-c", script], **kwargs)
+        return subprocess.Popen(
+            [sys.executable, "-I", "-c", script], pass_fds=(helper.fileno(),), **kwargs
+        )
+
+    original_select = module.select.select
+    release_count = 0
+
+    def select(*args):
+        nonlocal release_count
+        if len(writes) == 2 and release_count == 0:
+            # Release the URL only after the reader's absent-file check. For
+            # early completion, buffer the model menu before its next PTY read.
+            release_count = 1
+            control.sendall(b"u")
+            assert control.recv(1) == b"u"
+            if early_completion:
+                control.sendall(b"c")
+                assert control.recv(1) == b"c"
+        elif release_count == 1 and url_delivery == "changed":
+            # The original URL was captured at loop top; replace it while the
+            # reader is waiting for the final menu to test completion recheck.
+            release_count = 2
+            control.sendall(b"c")
+            assert control.recv(1) == b"c"
+        return original_select(*args)
 
     original_write = os.write
 
@@ -406,17 +457,33 @@ def test_actual_pty_answers_only_two_menus_stops_before_inference_and_cleans_fil
     monkeypatch.setattr(module, "_private_directory", directory)
     monkeypatch.setattr(module, "GOOSE_BINARY", Binary())
     monkeypatch.setattr(module.os, "write", write)
+    monkeypatch.setattr(module.select, "select", select)
     monkeypatch.setenv("OPENAI_API_KEY", "do-not-inherit")
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "do-not-inherit")
     monkeypatch.setenv("HTTPS_PROXY", "http://attacker.invalid")
-    session = module._GooseConfigureSession(tmp_path, process_factory=process)
+    session = None
     try:
-        assert session.start() == url
+        session = module._GooseConfigureSession(tmp_path, process_factory=process)
+        try:
+            assert session.start() == url
+        except ChatGPTAuthError:
+            assert invalid_completion
+        if url_delivery == "pending":
+            control.sendall(b"c")
         deadline = time.monotonic() + 5
         while session.poll() == "pending" and time.monotonic() < deadline:
             time.sleep(0.02)
-        assert session.poll() == "complete"
-        assert session.credentials()["tokens"] == auth["tokens"]
+        assert session.poll() == ("error" if invalid_completion else "complete")
+        if invalid_completion:
+            with pytest.raises(ChatGPTAuthError):
+                session.credentials()
+        else:
+            assert session.credentials()["tokens"] == auth["tokens"]
+            # A caller scheduled after completion can still retrieve the URL.
+            assert session.start() == url
+        session._reader.join(timeout=5)
+        assert not session._reader.is_alive()
+        assert session.master is None
         assert session.process.poll() is not None
         assert not roots[0].exists()
         assert writes == [b"\r", b"\r"]
@@ -437,7 +504,10 @@ def test_actual_pty_answers_only_two_menus_stops_before_inference_and_cleans_fil
         assert str(roots[0]) not in env["BROWSER"]
         assert calls[0][1]["umask"] == 0o077
     finally:
-        session.close()
+        if session is not None:
+            session.close()
+        control.close()
+        helper.close()
     with pytest.raises(ChatGPTAuthError):
         session.credentials()
 

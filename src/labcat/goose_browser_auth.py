@@ -314,6 +314,18 @@ class _GooseConfigureSession:
                         pass
                 self.process.wait(timeout=5)
 
+    def _capture_authorize_url(self):
+        url = validate_authorize_url(
+            _private_read(self.directory / "browser-url", self.directory, 8192).decode(
+                "ascii"
+            )
+        )
+        with self._lock:
+            if self._url is not None and url != self._url:
+                _fail()
+            self._url = url
+            self._ready.set()
+
     def _run(self):
         prompts = [
             b"What would you like to configure?",
@@ -330,14 +342,7 @@ class _GooseConfigureSession:
             ):
                 target = self.directory / "browser-url"
                 if target.exists():
-                    url = validate_authorize_url(
-                        _private_read(target, self.directory, 8192).decode("ascii")
-                    )
-                    with self._lock:
-                        if self._url is not None and url != self._url:
-                            _fail()
-                        self._url = url
-                        self._ready.set()
+                    self._capture_authorize_url()
                 if not select.select([self.master], [], [], 0.1)[0]:
                     continue
                 data = os.read(self.master, 8192)
@@ -356,6 +361,10 @@ class _GooseConfigureSession:
                     # configure otherwise runs a weather-tool connectivity test.
                     # Stop the entire process group before reading its token cache.
                     self._stop_process()
+                    # The URL may have appeared while waiting for PTY output.
+                    # Recheck it before completion, including its identity if
+                    # an earlier loop already captured it.
+                    self._capture_authorize_url()
                     credentials = _cache_credentials(self.directory)
                     break
         except Exception:
