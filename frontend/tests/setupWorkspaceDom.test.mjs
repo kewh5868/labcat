@@ -82,8 +82,6 @@ test("workspace requires first-run setup and preserves drafts and chat identity 
     model: "fixture-model",
     allow_paid_inference: true,
     ollama_url: "http://localhost:11434",
-    aws_profile: "",
-    aws_region: "",
   };
   const status = {
     configured: true,
@@ -134,8 +132,6 @@ test("workspace requires first-run setup and preserves drafts and chat identity 
       checked_at: ready ? at : null,
     },
     optional: {
-      compute: "local",
-      aws_required: false,
       data_apis_required: false,
     },
   });
@@ -490,8 +486,6 @@ test("completed setup can submit with expired verification while missing readine
     model: "fixture-model",
     allow_paid_inference: true,
     ollama_url: "http://localhost:11434",
-    aws_profile: "",
-    aws_region: "",
   };
   const connection = {
     configured: true,
@@ -540,8 +534,6 @@ test("completed setup can submit with expired verification while missing readine
       checked_at: null,
     },
     optional: {
-      compute: "local",
-      aws_required: false,
       data_apis_required: false,
     },
   });

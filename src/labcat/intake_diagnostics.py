@@ -19,7 +19,7 @@ from labcat.goose_runtime import (
 )
 from labcat.provider_catalog import API_KEY_PROVIDERS
 
-_PROVIDERS = {"none", "chatgpt", "ollama", "bedrock", *API_KEY_PROVIDERS}
+_PROVIDERS = {"none", "chatgpt", "claude_code", "ollama", *API_KEY_PROVIDERS}
 _MODES = {"not_run", "goose", "model"}
 _STATUSES = {"not_run", "completed", "stopped_after_report", "interrupted", "unknown"}
 _MODEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}\Z")

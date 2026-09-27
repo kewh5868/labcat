@@ -1,7 +1,7 @@
 # Embedded Goose and account sign-in
 
-The Docker image installs checksum-pinned Goose 1.50.0 and the Codex 0.154.0
-account helper for Linux ARM64 and AMD64. Native desktop clients use the same
+The Docker image installs checksum-pinned Goose 1.50.0, the Codex 0.154.0
+account helper and unmodified native Claude Code 2.1.274 for Linux ARM64 and AMD64. Native desktop clients use the same
 Docker backend. First-run setup requires connecting a supported model account
 and choosing a model before new research. Installation or startup does not sign
 in, download a model, or invoke a hosted model automatically.
@@ -13,26 +13,30 @@ Goose worker and the same research tools. ChatGPT is one provider option, not a
 requirement. A failed provider request never falls back to a direct model call
 or another account.
 
-| Connection         | Authentication                                          | Goose provider                            |
-| ------------------ | ------------------------------------------------------- | ----------------------------------------- |
-| ChatGPT            | Goose-owned browser OAuth, session or encrypted storage | `chatgpt_codex`                           |
-| OpenAI API         | OpenAI Platform API key                                 | `openai`                                  |
-| Anthropic / Claude | Anthropic API key                                       | `anthropic`                               |
-| Kimi               | Moonshot API key                                        | `openai` with the fixed Moonshot endpoint |
-| Amazon Bedrock     | Dedicated AWS profile supplied to the container         | `aws_bedrock`                             |
+| Connection         | Authentication                                          | Goose provider                                |
+| ------------------ | ------------------------------------------------------- | --------------------------------------------- |
+| ChatGPT            | Goose-owned browser OAuth, session or encrypted storage | `chatgpt_codex`                               |
+| OpenAI API         | OpenAI Platform API key                                 | `openai`                                      |
+| Claude Code        | Native terminal sign-in, temporary worker session       | `claude-code` through Labcat's fixed launcher |
+| Anthropic / Claude | Anthropic API key                                       | `anthropic`                                   |
+| Kimi               | Moonshot API key                                        | `openai` with the fixed Moonshot endpoint     |
 
-1. In setup or **Connections**, select a provider. Its name is used automatically.
-   Choose session-only credentials or unlock/create the encrypted vault before
-   choosing encrypted storage.
+1. In setup or **Connections**, choose **Model provider**. Use **Account** to
+   select a saved connection or **Connect another account…** to add one.
+   API keys and ChatGPT sign-ins can use session-only credentials or an unlocked
+   encrypted vault. Claude Code sign-in uses a separate temporary native session.
 2. Complete that provider's supported connection method. For ChatGPT, choose
    **Sign in with ChatGPT**, complete browser authorization on the provider's
    website, and return to Labcat. This native Goose flow does not require
-   device-code authorization. Other providers use their API key or configured AWS profile.
-   Labcat never asks for a third-party password.
-3. Available models load automatically after connecting. Choose one and enable the
-   consent setting before sending research context to the selected provider.
-4. Check the connection and finish setup. AWS and additional data API credentials
-   are optional. Choose a Ranking Profile, review source filters and send a research prompt.
+   device-code authorization. For Claude Code, copy the account-specific native
+   terminal command shown in **Connections** and follow
+   [the sign-in steps](onboarding.md#claude-code-account-sign-in). API providers
+   use their own keys. Labcat never asks for a third-party password.
+3. Available models load automatically after connecting; Claude Code instead
+   offers the configured aliases `default`, `sonnet` and `haiku`. Choose one and
+   enable consent before sending research context to the selected provider.
+4. Check the connection and finish setup. Additional data API credentials are
+   optional. Choose a Ranking Profile, review source filters and send a research prompt.
    **Check usage** requests account metadata; it does not invoke inference.
 
 ChatGPT account limits may be reported as percentage windows and reset times.
@@ -41,11 +45,48 @@ usage are displayed only when reported; unsupported fields remain unavailable.
 The app does not import another application's login or account usage. The
 connection test checks metadata, not the quality or success of a research run.
 
-Anthropic API and AWS Bedrock connections can select Claude models. Claude
-subscription sign-in is not implemented. It needs a separate provider-supported
-integration; consumer OAuth tokens cannot be pasted into an API-key field.
+Labcat's developer currently recommends **ChatGPT account sign-in** because it
+is the application's most thoroughly tested model connection. Claude Code native
+sign-in and Anthropic API access are separate options; consumer OAuth tokens
+cannot be pasted into an API-key field.
 Local Ollama remains an integration option for future model-free setup, but does not satisfy the current
 required account connection.
+
+## Native Claude Code runtime
+
+Labcat hosts the unmodified Claude Code 2.1.274 native CLI. Users authenticate
+through its own terminal flow with their own eligible account; Labcat never
+collects passwords, authorization codes or Claude account tokens. Native auth
+files remain in private worker tmpfs and are not copied into the app, workspace
+or vault. Each saved account has a separate native session. Ending that session
+or restarting the worker clears it; vault operations leave it unchanged.
+
+The fixed launcher invokes native Claude with empty built-in tools and settings
+sources, disabled slash commands and session persistence, strict MCP configuration,
+and an eight-turn limit. Its permission mode denies requests outside the exact
+allowed Labcat MCP actions. Built-in shell, file and web capabilities are disabled;
+the five research tools below are the only exposed MCP actions. Account-connected
+MCP servers and automatic updates are disabled. Native authentication methods
+remain available through the CLI's own `auth login` command.
+
+For developers: this integration uses the legacy `claude-code` adapter still
+present in pinned Goose 1.50.0. Upstream marks this adapter deprecated; Labcat
+maintains compatibility with this specific pin. The launcher accepts the pinned
+adapter's known invocation shapes, removes its broad permission-skip flag and
+constructs the restricted native command. Updating Goose or Claude requires
+revalidating that contract and tool isolation. This is not a claim of support
+for arbitrary Goose releases or an ACP migration.
+
+The connection check reads only the native CLI's sign-in status and validates a
+configured alias. It does not establish model entitlement, quota or successful
+inference. The pinned ARM64 binary has passed offline help/flag checks, a Docker build and
+an actual Goose-to-Claude startup test exposing exactly the five Labcat MCP tools.
+The native browser login URL and terminal code prompt were reached and cancelled
+without account authorization. Installer tests cover verification and failure
+handling for both architecture entries. No live Claude account authorization or
+inference has yet been validated in Labcat, and the AMD64 Claude binary has not
+been executed in this check. See the bundled `third_party/CLAUDE-CODE-NOTICE` for
+release hashes and license provenance.
 
 ## Research boundary
 
@@ -178,6 +219,8 @@ References: [Goose releases](https://github.com/aaif-goose/goose/releases/tag/v1
 [pinned configure sequence](https://github.com/aaif-goose/goose/blob/v1.50.0/crates/goose-cli/src/commands/configure.rs),
 [Codex app-server](https://learn.chatgpt.com/docs/app-server),
 [Codex authentication](https://learn.chatgpt.com/docs/auth),
+[pinned Goose Claude Code adapter](https://github.com/aaif-goose/goose/blob/v1.50.0/crates/goose/src/providers/claude_code.rs),
+[Claude Code CLI reference](https://code.claude.com/docs/en/cli-reference),
 [Claude Code legal and compliance](https://code.claude.com/docs/en/legal-and-compliance).
 
 ### Partial research and completion budget

@@ -248,7 +248,10 @@ def test_disabled_actions_and_context_apply_to_actual_research(
     monkeypatch.setattr(
         manager,
         "plan",
-        lambda prompt, *, context=None: (context_seen.append(context), Plan())[1],
+        lambda prompt, *, context=None, selected=None: (
+            context_seen.append(context),
+            Plan(),
+        )[1],
     )
     module = importlib.import_module("labcat.research")
     monkeypatch.setattr(

@@ -124,7 +124,6 @@ def test_source_key_promotion_restart_demotion_and_forgetting(manager):
     assert restarted.status()["credentials"][SOURCE] == "locked"
     for body in [
         {"secret_storage": "encrypted"},
-        {"secret_storage": "session", "api_key": NEXT_KEY},
         {"forget": True},
     ]:
         with pytest.raises(ConnectionError, match="[Uu]nlock"):

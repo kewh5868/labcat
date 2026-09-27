@@ -9,39 +9,53 @@ A model can request a bounded set of server-owned research stages. It cannot sup
 scientific facts, choose arbitrary destinations or replace the report. See the
 [Goose and sign-in guide](goose.md) for the complete runtime boundary.
 
-| Connection      | Authentication                                              | Model selection                                                    |
-| --------------- | ----------------------------------------------------------- | ------------------------------------------------------------------ |
-| ChatGPT         | Goose-owned browser OAuth, session or encrypted credentials | Account-reported model catalog                                     |
-| OpenAI Platform | OpenAI API key                                              | Provider catalog or configured identifier                          |
-| Anthropic       | Anthropic API key                                           | Provider catalog or configured identifier                          |
-| Kimi            | Moonshot API key                                            | Provider catalog or configured identifier                          |
-| Google Gemini   | Gemini API key                                              | Google OpenAI-compatible model catalog                             |
-| DeepSeek        | DeepSeek API key                                            | Provider catalog or configured identifier                          |
-| xAI / Grok      | xAI API key                                                 | Provider catalog or configured identifier                          |
-| OpenRouter      | OpenRouter API key                                          | Account-filtered model catalog                                     |
-| Local Ollama    | Local service connection retained for future optional use   | Does not satisfy the current account-required setup                |
-| AWS Bedrock     | Existing AWS profile/SSO session                            | Regional foundation-model and active inference-profile identifiers |
+Labcat's developer currently recommends **ChatGPT account sign-in** because it
+is the application's most thoroughly tested model connection.
 
-Choose a provider directly in Connections. Existing connection records are retained
-internally so switching providers preserves the current ChatGPT account and each
-provider's model settings; saved-account management is not a required setup step.
-The active provider connection determines the credentials and selected model for a run.
+| Connection      | Authentication                                                | Model selection                                     |
+| --------------- | ------------------------------------------------------------- | --------------------------------------------------- |
+| ChatGPT         | Goose-owned browser OAuth, session or encrypted credentials   | Account-reported model catalog                      |
+| OpenAI Platform | OpenAI API key                                                | Provider catalog or configured identifier           |
+| Claude Code     | Native Claude Code terminal sign-in, temporary worker session | Configured aliases: `default`, `sonnet`, `haiku`    |
+| Anthropic       | Anthropic API key                                             | Provider catalog or configured identifier           |
+| Kimi            | Moonshot API key                                              | Provider catalog or configured identifier           |
+| Google Gemini   | Gemini API key                                                | Google OpenAI-compatible model catalog              |
+| DeepSeek        | DeepSeek API key                                              | Provider catalog or configured identifier           |
+| xAI / Grok      | xAI API key                                                   | Provider catalog or configured identifier           |
+| OpenRouter      | OpenRouter API key                                            | Account-filtered model catalog                      |
+| Local Ollama    | Local service connection retained for future optional use     | Does not satisfy the current account-required setup |
+
+In **Connections**, choose **Model provider**, then use **Account** to select a
+saved connection or **Connect another account…** to add one. Each account keeps
+its own model and consent settings. The language-model control below a chat
+prompt also lets you switch saved accounts and choose **Active model**. The
+selected connection determines the credentials and model for the next run.
 A provider can be connected before choosing a model, but research remains unavailable
 until credentials, model selection and hosted-context consent pass the readiness
 check. Checks use provider authentication and model metadata; they do not invoke
 inference. Research checks the active connection again before retrieving sources.
-An expired login or locked vault returns to connection setup and cannot silently
-start model-free research.
+An expired or unavailable active credential returns to connection setup. A
+working session connection remains usable while the optional vault is locked;
+you can reconnect or choose another account without unlocking it. No model-free
+research starts silently.
 
-Consumer subscriptions are not interchangeable with API keys. ChatGPT has the
-specific supported sign-in flow described above. Claude subscription login is
-not implemented; Claude models currently use Anthropic API or Bedrock access.
+Consumer subscriptions are not interchangeable with API keys. ChatGPT and
+**Anthropic (Claude Code sign-in)** each have a specific native sign-in flow.
+Claude Code sign-in uses the unmodified CLI inside the isolated Docker worker;
+copy the account-specific terminal command from **Connections**. Labcat never
+collects its authorization code or tokens. The native session lasts until it is
+ended or the worker container restarts and is separate from the optional vault.
+Its `default`, `sonnet` and `haiku` choices are configured aliases, not a returned
+account entitlement catalog. The connection check detects native sign-in only;
+model access, quota and inference remain untested. See the
+[Claude Code setup steps](onboarding.md#claude-code-account-sign-in).
+Anthropic API access remains a separate connection using its own API key.
 Labcat never collects third-party passwords. There is no assumed permanent free
 hosted API tier. Local Ollama avoids hosted inference fees but still requires a
 model download, memory and compute; it is not an account option in the initial
 required-login flow.
 
-The main Docker application uses Goose's native browser authorization and fixed
+For ChatGPT, the main Docker application uses Goose's native browser authorization and fixed
 localhost callback; it does not require a device-code setting. The isolated
 configure process stops before model inference. A separate Codex helper reads
 account/model/usage metadata. Legacy device configurations are retained without
@@ -53,14 +67,6 @@ fields. Missing account balances or token counts remain unavailable. Other
 providers currently expose per-run usage only when Goose reports it. No model
 request happens merely because the application starts. Provider errors omit
 credentials, response bodies and identity details.
-
-Bedrock model selection reads the foundation-model catalog and at most two pages
-of 100 active inference profiles using `ListInferenceProfiles`. Cross-region
-profile IDs are used exactly as returned; no region prefixes are guessed. If the
-account lacks permission to list profiles, foundation models remain available.
-Catalog presence does not verify tool support or inference authorization. This
-connection supports the isolated Goose AWS-session/Converse path; Goose models
-requiring Bedrock Mantle and bearer-token authentication are not supported here.
 
 The plain Python installation retains the existing bounded intent classifier
 unless Goose is explicitly enabled. It accepts only a closed six-field enumeration

@@ -3,8 +3,8 @@ export type Provider =
   | "ollama"
   | "openai"
   | "anthropic"
+  | "claude_code"
   | "kimi"
-  | "bedrock"
   | "chatgpt"
   | "gemini"
   | "deepseek"
@@ -24,8 +24,6 @@ export interface ConnectionProfile {
   provider: Provider;
   model: string;
   ollama_url: string;
-  aws_profile: string;
-  aws_region: string;
   allow_paid_inference: boolean;
 }
 export interface ConnectionStatus {
@@ -75,10 +73,10 @@ export interface ModelCatalog {
   message: string;
   inference_tested: false;
 }
-export interface AwsProfiles {
-  profiles: string[];
-  regions: string[];
-  setup: { commands: string[]; documentation_url: string; message: string };
+export interface ClaudeCodeStatus {
+  available: boolean;
+  signed_in: boolean;
+  message: string;
 }
 export interface AgentRuntime {
   engine: "goose" | "direct";
@@ -139,7 +137,7 @@ export interface ResearchPlan {
   };
   [key: string]: unknown;
 }
-export type TestTarget = "materials_project" | "model" | "aws";
+export type TestTarget = "materials_project" | "model";
 export interface ConnectionTest {
   target: TestTarget;
   status: "ok" | "error" | "not_configured";
@@ -155,6 +153,11 @@ export interface ConnectionUpdate {
 }
 export type VaultAction =
   | { action: "create" | "unlock"; passphrase: string }
+  | {
+      action: "change_passphrase";
+      current_passphrase: string;
+      new_passphrase: string;
+    }
   | { action: "lock" }
   | { action: "reset"; confirm: true };
 export const providerLabels: Record<Provider, string> = {
@@ -162,8 +165,8 @@ export const providerLabels: Record<Provider, string> = {
   ollama: "Ollama · local model",
   openai: "OpenAI API (ChatGPT models)",
   anthropic: "Anthropic (Claude) API",
+  claude_code: "Anthropic (Claude Code sign-in)",
   kimi: "Kimi API",
-  bedrock: "Amazon Bedrock",
   chatgpt: "ChatGPT · account sign-in",
   gemini: "Google Gemini API",
   deepseek: "DeepSeek API",
@@ -175,8 +178,8 @@ export const providerAccountLabels: Record<Provider, string> = {
   ollama: "Ollama",
   openai: "OpenAI",
   anthropic: "Anthropic",
+  claude_code: "Claude Code",
   kimi: "Kimi",
-  bedrock: "Amazon Bedrock",
   chatgpt: "ChatGPT",
   gemini: "Google Gemini",
   deepseek: "DeepSeek",
@@ -195,6 +198,7 @@ export const secretLabels: Record<SecretName, string> = {
 };
 export const connectableProviders = [
   "chatgpt",
+  "claude_code",
   "openai",
   "anthropic",
   "gemini",
@@ -202,7 +206,6 @@ export const connectableProviders = [
   "deepseek",
   "xai",
   "openrouter",
-  "bedrock",
 ] as const;
 export const apiKeyProviders = [
   "openai",
@@ -217,6 +220,14 @@ export function isApiKeyProvider(
   provider: Provider,
 ): provider is (typeof apiKeyProviders)[number] {
   return (apiKeyProviders as readonly string[]).includes(provider);
+}
+export function isAccountSignInProvider(provider: Provider) {
+  return provider === "chatgpt" || provider === "claude_code";
+}
+export function claudeCodeLoginCommand(id: string): string | null {
+  return /^[a-f0-9]{32}$/.test(id)
+    ? `docker compose exec goose-worker python -m labcat.claude_auth login ${id}`
+    : null;
 }
 export function isCloudProvider(provider: Provider) {
   return provider !== "none" && provider !== "ollama";
@@ -404,20 +415,25 @@ function parseUsageWindow(value: unknown): UsageWindow | null {
   }
   return item as unknown as UsageWindow;
 }
+function parseClaudeCodeStatus(value: unknown): ClaudeCodeStatus {
+  const item = object(value);
+  exact(item, ["available", "signed_in", "message"]);
+  if (
+    typeof item.available !== "boolean" ||
+    typeof item.signed_in !== "boolean" ||
+    (item.signed_in && !item.available) ||
+    !shortText(item.message)
+  )
+    throw invalid();
+  return item as unknown as ClaudeCodeStatus;
+}
 function parseProfile(value: unknown): ConnectionProfile {
   const profile = object(value);
-  exact(profile, [
-    "provider",
-    "model",
-    "ollama_url",
-    "aws_profile",
-    "aws_region",
-    "allow_paid_inference",
-  ]);
+  exact(profile, ["provider", "model", "ollama_url", "allow_paid_inference"]);
   if (
     typeof profile.provider !== "string" ||
     !Object.hasOwn(providerLabels, profile.provider) ||
-    !["model", "ollama_url", "aws_profile", "aws_region"].every(
+    !["model", "ollama_url"].every(
       (field) => typeof profile[field] === "string",
     ) ||
     typeof profile.allow_paid_inference !== "boolean"
@@ -624,6 +640,25 @@ async function mutate(
 }
 
 export const connectionsApi = {
+  async claudeCodeStatus(
+    id: string,
+    signal?: AbortSignal,
+  ): Promise<ClaudeCodeStatus> {
+    return parseClaudeCodeStatus(
+      await fetchJson(
+        `/api/connections/accounts/${encodeURIComponent(id)}/claude-code`,
+        { signal, headers: { Accept: "application/json" } },
+      ),
+    );
+  },
+  async claudeCodeLogout(id: string): Promise<ClaudeCodeStatus> {
+    return parseClaudeCodeStatus(
+      await mutate(
+        `/api/connections/accounts/${encodeURIComponent(id)}/claude-code/logout`,
+        {},
+      ),
+    );
+  },
   async agent(signal?: AbortSignal): Promise<AgentRuntime> {
     const value = object(
       await fetchJson("/api/connections/agent", {
@@ -826,37 +861,6 @@ export const connectionsApi = {
         throw invalid();
     }
     return value as unknown as ModelCatalog;
-  },
-  async awsProfiles(signal?: AbortSignal): Promise<AwsProfiles> {
-    const value = object(
-      await fetchJson("/api/connections/aws-profiles", {
-        signal,
-        headers: { Accept: "application/json" },
-      }),
-    );
-    exact(value, ["profiles", "regions", "setup"]);
-    const setup = object(value.setup);
-    exact(setup, ["commands", "documentation_url", "message"]);
-    for (const list of [value.profiles, value.regions, setup.commands])
-      if (
-        !Array.isArray(list) ||
-        !list.every((item) => typeof item === "string")
-      )
-        throw invalid();
-    if (
-      typeof setup.documentation_url !== "string" ||
-      typeof setup.message !== "string"
-    )
-      throw invalid();
-    const url = new URL(setup.documentation_url);
-    if (
-      url.protocol !== "https:" ||
-      url.hostname !== "docs.aws.amazon.com" ||
-      url.username ||
-      url.password
-    )
-      throw invalid();
-    return value as unknown as AwsProfiles;
   },
   async vault(action: VaultAction) {
     return parseStatus(await mutate("/api/connections/vault", action));

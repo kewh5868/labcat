@@ -10,7 +10,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from labcat.aws import AWSConnectionError, check_connection
 from labcat.credentials import (
     SLOTS,
     ConnectionError,
@@ -21,6 +20,7 @@ from labcat.credentials import (
     validate_secrets,
 )
 from labcat.models import (
+    ModelBusy,
     ModelError,
     Plan,
     plan_with_model,
@@ -29,13 +29,11 @@ from labcat.models import (
 )
 from labcat.provider_catalog import API_KEY_PROVIDERS, MODEL_LIST_ENDPOINTS
 
-PROVIDERS = ("none", "ollama", *API_KEY_PROVIDERS, "bedrock", "chatgpt")
+PROVIDERS = ("none", "ollama", *API_KEY_PROVIDERS, "chatgpt", "claude_code")
 DEFAULT_PROFILE = {
     "provider": "none",
     "model": "",
     "ollama_url": "http://127.0.0.1:11434",
-    "aws_profile": "default",
-    "aws_region": "us-west-2",
     "allow_paid_inference": False,
 }
 
@@ -47,13 +45,10 @@ def validate_profile(value: object) -> dict:
         raise ConnectionError("Choose a supported model provider.")
     if type(value["allow_paid_inference"]) is not bool:
         raise ConnectionError("Hosted inference consent must be an explicit boolean.")
-    for key, pattern in (
-        ("model", r"[A-Za-z0-9_.:/-]{0,200}"),
-        ("aws_profile", r"[A-Za-z0-9_.@+-]{1,128}"),
-        ("aws_region", r"[a-z0-9-]{1,64}"),
+    if not isinstance(value["model"], str) or not re.fullmatch(
+        r"[A-Za-z0-9_.:/-]{0,200}", value["model"]
     ):
-        if not isinstance(value[key], str) or not re.fullmatch(pattern, value[key]):
-            raise ConnectionError("A connection identifier is invalid.")
+        raise ConnectionError("A connection identifier is invalid.")
     if not isinstance(value["ollama_url"], str):
         raise ConnectionError("A local Ollama address is required.")
     try:
@@ -65,6 +60,19 @@ def validate_profile(value: object) -> dict:
     if value["provider"] in {"none", "ollama"} and value["allow_paid_inference"]:
         raise ConnectionError("Local providers do not use hosted inference consent.")
     return {**value, "ollama_url": local_url}
+
+
+def _restore_profile(value: object) -> dict | None:
+    """Read the previous on-disk schema without accepting it over the
+    API."""
+    if isinstance(value, dict) and set(value) == set(DEFAULT_PROFILE) | {
+        "aws_profile",
+        "aws_region",
+    }:
+        value = {key: value[key] for key in DEFAULT_PROFILE}
+        if value["provider"] == "bedrock":
+            return None
+    return validate_profile(value)
 
 
 class ConnectionManager:
@@ -108,18 +116,31 @@ class ConnectionManager:
                     "accounts",
                     "active_account_id",
                 }:
-                    accounts = self._validate_accounts(value["accounts"])
+                    accounts = self._validate_accounts(value["accounts"], restore=True)
                     active = value["active_account_id"]
                     if active is not None and not any(
-                        a["id"] == active for a in accounts
+                        a["id"] == active for a in value["accounts"]
                     ):
                         raise ValueError
-                    selected = next((a for a in accounts if a["id"] == active), None)
+                    selected = next(
+                        (a for a in value["accounts"] if a["id"] == active), None
+                    )
                     if selected and selected["profile"] != value["profile"]:
                         raise ValueError
                 else:
                     raise ValueError
-                self._profile = validate_profile(value["profile"])
+                profile = _restore_profile(value["profile"])
+                if profile is None:
+                    profile, active = dict(DEFAULT_PROFILE), None
+                    self._warnings.append(
+                        "The saved model connection is no longer available. "
+                        "Choose and verify a supported model connection."
+                    )
+                elif len(accounts) < len(value.get("accounts", [])):
+                    self._warnings.append(
+                        "An unavailable saved model connection was omitted."
+                    )
+                self._profile = profile
                 self._accounts, self._active_account_id = accounts, active
                 self._configured = True
             except (ConnectionError, ValueError, TypeError, RecursionError):
@@ -138,7 +159,7 @@ class ConnectionManager:
         self.setup = SetupState(self, workspace_path)
 
     @staticmethod
-    def _validate_accounts(value):
+    def _validate_accounts(value, *, restore=False):
         if not isinstance(value, list) or len(value) > 12:
             raise ConnectionError("Save at most twelve named model connections.")
         seen, accounts = set(), []
@@ -161,10 +182,16 @@ class ConnectionManager:
                 raise ConnectionError(
                     "Use a short connection name without control characters."
                 )
-            profile = validate_profile(account["profile"])
+            profile = (
+                _restore_profile(account["profile"])
+                if restore
+                else validate_profile(account["profile"])
+            )
+            seen.add(identifier)
+            if profile is None:
+                continue
             if profile["provider"] == "none":
                 raise ConnectionError("Choose a model provider for a named connection.")
-            seen.add(identifier)
             accounts.append(
                 {"id": identifier, "label": label.strip(), "profile": profile}
             )
@@ -237,12 +264,22 @@ class ConnectionManager:
                 **account,
                 "profile": dict(account["profile"]),
                 "credential_state": (
-                    states.get("oauth_" + account["id"], "missing")
-                    if account["profile"]["provider"] == "chatgpt"
+                    (
+                        "session"
+                        if self.agent._claude_sessions.get(account["id"], {}).get(
+                            "signed_in"
+                        )
+                        else "missing"
+                    )
+                    if account["profile"]["provider"] == "claude_code"
                     else (
-                        states.get("account_" + account["id"], "missing")
-                        if account["profile"]["provider"] in SLOTS
-                        else "not_required"
+                        states.get("oauth_" + account["id"], "missing")
+                        if account["profile"]["provider"] == "chatgpt"
+                        else (
+                            states.get("account_" + account["id"], "missing")
+                            if account["profile"]["provider"] in SLOTS
+                            else "not_required"
+                        )
                     )
                 ),
             }
@@ -287,10 +324,18 @@ class ConnectionManager:
             if not isinstance(key, str):
                 raise ConnectionError("Supply an API key as text.")
             if key and provider not in SLOTS:
-                raise ConnectionError(
-                    "This provider uses its local service or AWS profile."
-                )
-            values = {"account_" + identifier: key} if key else {}
+                raise ConnectionError("This provider does not use an API key.")
+            slot = "account_" + identifier
+            if (
+                not key
+                and existing
+                and provider in SLOTS
+                and request["secret_storage"] == "encrypted"
+            ):
+                # A blank field retains an unavailable saved key. Metadata-only
+                # edits never require unlocking the optional credential vault.
+                key = self.vault.get(slot) or ""
+            values = {slot: key} if key else {}
             validate_secrets(values)
             self._change_credentials_and_state(
                 value["profile"],
@@ -573,11 +618,11 @@ class ConnectionManager:
                         "Enter an API key or unlock the saved source key first."
                     )
                 values = {source: key}
+            # A locked vault can accept a session override without changing its
+            # saved ciphertext. When unlocked, a session choice demotes this key.
+            removals = [source] if forget or self.vault.status()["available"] else []
+            self.vault.update(values, removals, storage)
             self._invalidate_materials_project()
-            # This is a single atomic vault update, with no profile-file write.
-            # Removing the slot before replacing it also removes a previous
-            # encrypted copy when the user explicitly chooses session storage.
-            self.vault.update(values, [source], storage)
             return self.status()
 
     def local_defaults(self, persist: bool = False) -> dict:
@@ -602,8 +647,6 @@ class ConnectionManager:
         if not isinstance(action, str):
             raise ConnectionError("Unsupported vault action.")
         with self._lock:
-            self.setup.invalidate()
-            self._invalidate_materials_project()
             if action in {"create", "unlock"} and set(request) == {
                 "action",
                 "passphrase",
@@ -612,6 +655,14 @@ class ConnectionManager:
                     self.vault.create(request["passphrase"])
                 else:
                     self.vault.unlock(request["passphrase"])
+            elif action == "change_passphrase" and set(request) == {
+                "action",
+                "current_passphrase",
+                "new_passphrase",
+            }:
+                self.vault.change_passphrase(
+                    request["current_passphrase"], request["new_passphrase"]
+                )
             elif action == "lock" and set(request) == {"action"}:
                 self.agent.cancel_pending()
                 self.vault.lock()
@@ -624,6 +675,8 @@ class ConnectionManager:
                 self.vault.reset()
             else:
                 raise ConnectionError("Unsupported or unconfirmed vault action.")
+            self.setup.invalidate()
+            self._invalidate_materials_project()
             return self.status()
 
     def get_secret(self, slot: str) -> str | None:
@@ -632,23 +685,73 @@ class ConnectionManager:
         with self._lock:
             return self.vault.get(slot)
 
-    def plan(self, prompt: str, context: dict | None = None) -> Plan:
-        self.setup.require_ready()
-        with self._lock:
-            profile = dict(DEFAULT_PROFILE if self._local_override else self._profile)
-            secret = (
-                self.vault.get(self._model_slot(profile["provider"]))
-                if profile["provider"] in SLOTS
+    def _connection_snapshot(self):
+        """Caller holds the manager lock; this internal snapshot
+        contains a key."""
+        profile = dict(DEFAULT_PROFILE if self._local_override else self._profile)
+        identifier = None if self._local_override else self._active_account_id
+        slot = (
+            "oauth_" + identifier
+            if profile["provider"] == "chatgpt" and identifier
+            else self._model_slot(profile["provider"])
+        )
+        return {
+            "profile": profile,
+            "account_id": identifier,
+            "secret": (
+                self.vault.get(slot)
+                if slot in SLOTS or slot.startswith(("account_", "oauth_"))
                 else None
-            )
-        return plan_with_model(profile, secret, prompt, context=context)
+            ),
+            "storage": self.vault.slots().get(slot, "missing"),
+            "generation": self.setup._generation,
+            **(
+                {
+                    "claude_session_id": self.agent._claude_sessions.get(
+                        identifier, {}
+                    ).get("session_id")
+                }
+                if profile["provider"] == "claude_code"
+                else {}
+            ),
+        }
 
-    def test(self, target: str) -> dict:
+    def _capture_verified_connection(self, verified):
+        from labcat.onboarding import SetupRequired
+
+        current = self.setup.status()
+        if not current["can_research"] or current["model"] != verified["model"]:
+            raise SetupRequired("The selected connection changed. Verify it again.")
+        return self._connection_snapshot()
+
+    def plan(self, prompt: str, context: dict | None = None, *, selected=None) -> Plan:
+        if not self.agent._auth_lock.acquire(blocking=False):
+            raise ModelBusy("A model connection operation is already in progress.")
+        try:
+            verified = self.setup.require_ready()
+            with self._lock:
+                snapshot = self._capture_verified_connection(verified)
+        finally:
+            self.agent._auth_lock.release()
+        profile = snapshot["profile"]
+        if selected is not None:
+            selected.update(
+                provider=profile["provider"],
+                model=profile["model"],
+                account_id=snapshot["account_id"],
+            )
+        try:
+            return plan_with_model(profile, snapshot["secret"], prompt, context=context)
+        except ModelError as error:
+            error.connection_generation = snapshot["generation"]
+            raise
+
+    def test(self, target: str, *, _snapshot=None) -> dict:
         """Explicit metadata/read-only checks.
 
         No model invocation or provisioning.
         """
-        if target not in {"materials_project", "model", "aws"}:
+        if target not in {"materials_project", "model"}:
             raise ConnectionError("Unsupported connection test.")
         result = {
             "target": target,
@@ -669,33 +772,16 @@ class ConnectionManager:
                 if slot in SLOTS or slot.startswith("account_")
                 else None
             )
+            identifier = self._active_account_id
             if target == "materials_project":
                 self._invalidate_materials_project()
                 source_generation = self._mp_generation
+            elif _snapshot is not None:
+                profile = _snapshot["profile"]
+                secret = _snapshot["secret"]
+                identifier = _snapshot["account_id"]
         try:
-            if (
-                target == "aws"
-                or target == "model"
-                and profile["provider"] == "bedrock"
-            ):
-                if target == "model":
-                    from labcat.aws import requires_mantle
-
-                    if requires_mantle(profile["model"]):
-                        raise ModelError(
-                            "This model requires Bedrock Mantle bearer-token access, "
-                            "which this AWS session connection does not support. "
-                            "Choose another model from the returned catalog."
-                        )
-                check_connection(profile["aws_profile"], profile["aws_region"])
-                if target == "model":
-                    catalog = self.list_models()
-                    self._check_model(catalog["models"], profile["model"], "id")
-                result["message"] = (
-                    "AWS credentials accepted. No identity details retained. "
-                    "Bedrock model authorization and inference have not been tested."
-                )
-            elif target == "materials_project":
+            if target == "materials_project":
                 from labcat.science.sources import SourceError, probe_connection
 
                 if not secret:
@@ -746,8 +832,25 @@ class ConnectionManager:
                         "Local deterministic mode is ready. "
                         "No model is selected or invoked."
                     )
+                elif provider == "claude_code":
+                    catalog = self.agent.claude_models(identifier)
+                    self._check_model(catalog["models"], profile["model"], "id")
+                    if _snapshot is not None and _snapshot.get(
+                        "claude_session_id"
+                    ) != self.agent._claude_sessions.get(identifier, {}).get(
+                        "session_id"
+                    ):
+                        raise ConnectionError(
+                            "The Claude Code session changed. Check the "
+                            "connection again."
+                        )
+                    result["message"] = (
+                        "Claude Code reports a signed-in account and a supported model "
+                        "alias. Model entitlement, quota and inference have not been "
+                        "tested."
+                    )
                 elif provider == "chatgpt":
-                    catalog = self.agent.models()
+                    catalog = self.agent.models(identifier)
                     self._check_model(catalog["models"], profile["model"], "id")
                     result["message"] = (
                         "ChatGPT account and model catalog responded. "
@@ -782,7 +885,7 @@ class ConnectionManager:
                         "inference authorization, available quota or "
                         "structured-output compatibility."
                     )
-        except (ModelError, AWSConnectionError, ConnectionError) as error:
+        except (ModelError, ConnectionError) as error:
             result.update(status="error", message=str(error))
         return result
 
@@ -791,6 +894,8 @@ class ConnectionManager:
         key."""
         if self.status()["profile"]["provider"] == "chatgpt":
             return self.agent.models()
+        if self.status()["profile"]["provider"] == "claude_code":
+            return self.agent.claude_models()
         with self._lock:
             profile = dict(DEFAULT_PROFILE if self._local_override else self._profile)
             provider = profile["provider"]
@@ -802,10 +907,6 @@ class ConnectionManager:
         try:
             if provider == "none":
                 models = []
-            elif provider == "bedrock":
-                from labcat.aws import model_options
-
-                models = model_options(profile["aws_profile"], profile["aws_region"])
             else:
                 if provider == "ollama":
                     data = request_json(
@@ -843,17 +944,9 @@ class ConnectionManager:
                     "Provider catalog only. A listed model may require additional "
                     "access or may not support this application's planning protocol. "
                     "Use a custom identifier if your authorized model is not listed."
-                    + (
-                        " Bedrock includes up to 200 active inference profiles when "
-                        "the account permits ListInferenceProfiles; otherwise only "
-                        "foundation models are available. Mantle/bearer-token models "
-                        "are not supported by this AWS session connection."
-                        if provider == "bedrock"
-                        else ""
-                    )
                 ),
             }
-        except (ModelError, AWSConnectionError) as error:
+        except ModelError as error:
             raise ConnectionError(str(error)) from None
 
     @staticmethod

@@ -20,8 +20,8 @@ from labcat.credentials import (
 )
 from labcat.provider_catalog import API_KEY_PROVIDERS
 
-STEPS = {"model", "compute", "sources", "review"}
-AUTHENTICATED_PROVIDERS = {"chatgpt", *API_KEY_PROVIDERS, "bedrock"}
+STEPS = {"model", "sources", "review"}
+AUTHENTICATED_PROVIDERS = {"chatgpt", "claude_code", *API_KEY_PROVIDERS}
 READINESS_SECONDS = 300
 
 
@@ -36,11 +36,14 @@ class SetupState:
         self.progress = {"version": 1, "completed": False, "current_step": "model"}
         self._verified = None
         self._error = None
+        self._generation = 0
         try:
             document = json.loads(
                 read_private_file(self.path, 4096),
                 object_pairs_hook=unique_json_object,
             )
+            if isinstance(document, dict) and document.get("current_step") == "compute":
+                document = {**document, "current_step": "sources"}
             if (
                 not isinstance(document, dict)
                 or set(document) != set(self.progress)
@@ -76,6 +79,11 @@ class SetupState:
             if provider in API_KEY_PROVIDERS or provider == "chatgpt" and identifier
             else None
         )
+        if provider == "claude_code":
+            # A random local generation, never a Claude credential.
+            secret = self.manager.agent._claude_sessions.get(identifier, {}).get(
+                "session_id"
+            )
         expiration = None
         if provider == "chatgpt" and secret:
             from labcat.agent_connections import _unpack
@@ -108,9 +116,12 @@ class SetupState:
         elif credential_state == "locked":
             model.update(
                 status="credentials_locked",
-                message="Unlock your saved credentials to reconnect the model.",
+                message=(
+                    "Reconnect this account for the session, choose another account, "
+                    "or unlock saved credentials."
+                ),
             )
-        elif provider != "bedrock" and not secret:
+        elif not secret:
             model.update(
                 status="not_connected",
                 message="Sign in or add the selected provider's API credential.",
@@ -124,10 +135,12 @@ class SetupState:
                 status="consent_required",
                 message="Allow this provider to receive research context first.",
             )
-        elif provider == "chatgpt" and not self.manager.agent.uses_goose:
+        elif (
+            provider in {"chatgpt", "claude_code"} and not self.manager.agent.uses_goose
+        ):
             model.update(
                 status="error",
-                message="Use the Docker application for ChatGPT account connections.",
+                message="Use the Docker application for account sign-in connections.",
             )
         return model, fingerprint, expiration
 
@@ -143,7 +156,13 @@ class SetupState:
                 ):
                     model.update(
                         status="ready",
-                        message="Account and model verified. No inference was run.",
+                        message=(
+                            "Claude Code sign-in is present; "
+                            "the model alias is supported. "
+                            "Model entitlement, quota and inference are untested."
+                            if model["provider"] == "claude_code"
+                            else "Account and model verified. No inference was run."
+                        ),
                         checked_at=self._verified["checked_at"],
                     )
                 elif self._error and self._error[0] == fingerprint:
@@ -154,10 +173,6 @@ class SetupState:
                 "can_research": model["status"] == "ready",
                 "model": model,
                 "optional": {
-                    "compute": (
-                        "aws_bedrock" if model["provider"] == "bedrock" else "local"
-                    ),
-                    "aws_required": False,
                     "data_apis_required": False,
                 },
             }
@@ -176,8 +191,11 @@ class SetupState:
             self.progress = progress
             return self.status()
 
-    def invalidate(self, message=None):
+    def invalidate(self, message=None, *, generation=None):
         with self.manager._lock:
+            if generation is not None and generation != self._generation:
+                return
+            self._generation += 1
             self._verified = None
             self._error = None
             if message:
@@ -190,12 +208,32 @@ class SetupState:
         if not self.manager.agent._auth_lock.acquire(blocking=False):
             raise ConnectionBusy("A model connection operation is already in progress.")
         try:
+            selected = self.manager.status()
+            if (
+                selected["profile"]["provider"] == "claude_code"
+                and selected["active_account_id"]
+            ):
+                self.manager.agent.claude_status(selected["active_account_id"])
             with self.manager._lock:
                 model, _, _ = self._connection()
-                self.invalidate()
                 if model["status"] != "verification_required":
                     return self.status()
-                result = self.manager.test("model")
+                self.manager.agent.require_account_available(model["account_id"])
+                self.invalidate()
+                generation = self._generation
+                snapshot = self.manager._connection_snapshot()
+            # Account selection remains available while provider metadata is pending.
+            result = self.manager.test("model", _snapshot=snapshot)
+            with self.manager._lock:
+                current = self.manager._connection_snapshot()
+                if (
+                    self._generation != generation
+                    or current["profile"] != snapshot["profile"]
+                    or current["account_id"] != snapshot["account_id"]
+                    or model["provider"] != "chatgpt"
+                    and current["secret"] != snapshot["secret"]
+                ):
+                    return self.status()
                 _, fingerprint, expiration = self._connection()
                 if result["status"] == "ok" and (
                     expiration is None or expiration > time.time()

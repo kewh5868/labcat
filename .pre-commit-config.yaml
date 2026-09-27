@@ -47,6 +47,12 @@ repos:
         exclude: ^src/labcat/science/data/mp_dielectric_snapshot\.json$
   - repo: local
     hooks:
+      - id: credential-publication-guard
+        name: Credential publication guard
+        entry: python scripts/check_secrets.py --staged --worktree
+        language: python
+        pass_filenames: false
+        always_run: true
       - id: ruff-check
         name: Ruff lint
         entry: ruff check

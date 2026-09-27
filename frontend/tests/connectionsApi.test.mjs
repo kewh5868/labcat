@@ -12,9 +12,10 @@ const compiled = ts.transpileModule(source, {
     module: ts.ModuleKind.ES2022,
   },
 }).outputText;
-const { connectionsApi } = await import(
-  `data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`
-);
+const { connectionsApi, claudeCodeLoginCommand, isApiKeyProvider } =
+  await import(
+    `data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`
+  );
 globalThis.window = { setTimeout, clearTimeout };
 afterEach(() => mock.restoreAll());
 const status = {
@@ -23,8 +24,6 @@ const status = {
     provider: "none",
     model: "",
     ollama_url: "http://127.0.0.1:11434",
-    aws_profile: "",
-    aws_region: "",
     allow_paid_inference: false,
   },
   credentials: {
@@ -57,6 +56,7 @@ function safeServer(result = status) {
 }
 test("connection status accepts only safe profile and credential metadata", async () => {
   const fetch = safeServer();
+  assert.equal(connectionsApi.awsProfiles, undefined);
   assert.deepEqual(await connectionsApi.status(), status);
   assert.equal(fetch.mock.calls[0].arguments[1].credentials, "same-origin");
   assert.equal(fetch.mock.calls[0].arguments[1].redirect, "error");
@@ -64,6 +64,9 @@ test("connection status accepts only safe profile and credential metadata", asyn
     { ...status, api_key: "UNEXPECTED_KEY" },
     { ...status, credentials: { ...status.credentials, openai: "RAW_SECRET" } },
     { ...status, profile: { ...status.profile, password: "UNEXPECTED_KEY" } },
+    { ...status, profile: { ...status.profile, provider: "bedrock" } },
+    { ...status, profile: { ...status.profile, aws_profile: "research" } },
+    { ...status, profile: { ...status.profile, aws_region: "us-west-2" } },
   ]) {
     fetch.mock.mockImplementation(async () => Response.json(response));
     await assert.rejects(connectionsApi.status(), /unsupported response/);
@@ -198,8 +201,19 @@ test("vault writes carry only action and passphrase then return safe metadata", 
     action: "create",
     passphrase: "TEST_VAULT_PASSPHRASE",
   });
-  await connectionsApi.vault({ action: "reset", confirm: true });
+  await connectionsApi.vault({
+    action: "change_passphrase",
+    current_passphrase: "TEST_CURRENT_VAULT_PASSWORD",
+    new_passphrase: "TEST_NEW_VAULT_PASSWORD",
+  });
   assert.deepEqual(JSON.parse(fetch.mock.calls[3].arguments[1].body), {
+    action: "change_passphrase",
+    current_passphrase: "TEST_CURRENT_VAULT_PASSWORD",
+    new_passphrase: "TEST_NEW_VAULT_PASSWORD",
+  });
+  assert.equal(fetch.mock.calls[3].arguments[1].headers["X-CSRF-Token"], token);
+  await connectionsApi.vault({ action: "reset", confirm: true });
+  assert.deepEqual(JSON.parse(fetch.mock.calls[5].arguments[1].body), {
     action: "reset",
     confirm: true,
   });
@@ -461,30 +475,6 @@ test("model catalog is explicit metadata-only and carries no prompt or credentia
     ),
   );
   await assert.rejects(connectionsApi.models(), /unsupported response/);
-});
-
-test("AWS selection exposes profile names and official sign-in instructions only", async () => {
-  const result = {
-    profiles: ["research"],
-    regions: ["us-west-2"],
-    setup: {
-      commands: ["aws configure sso", "aws sso login --profile research"],
-      message: "Sign in on this machine.",
-      documentation_url:
-        "https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sso.html",
-    },
-  };
-  const fetch = safeServer(result);
-  assert.deepEqual(await connectionsApi.awsProfiles(), result);
-  assert.equal(fetch.mock.calls.length, 1);
-  assert.equal(
-    fetch.mock.calls[0].arguments[0],
-    "/api/connections/aws-profiles",
-  );
-  fetch.mock.mockImplementation(async () =>
-    Response.json({ ...result, access_key: "UNEXPECTED_SECRET" }),
-  );
-  await assert.rejects(connectionsApi.awsProfiles(), /unsupported response/);
 });
 
 test("ChatGPT account sign-in exposes a provider device challenge and never accepts token responses", async () => {
@@ -786,4 +776,75 @@ test("source readiness is verified metadata, not the presence of a stored API ke
     }),
   );
   await assert.rejects(connectionsApi.status(), /unsupported response/);
+});
+
+test("Claude Code metadata is secret-free and distinct from API keys and browser OAuth", async () => {
+  const id = "0123456789abcdef0123456789abcdef";
+  const metadata = {
+    available: true,
+    signed_in: false,
+    message: "Native sign-in required.",
+  };
+  const fetch = safeServer(metadata);
+  assert.equal(isApiKeyProvider("claude_code"), false);
+  assert.deepEqual(await connectionsApi.claudeCodeStatus(id), metadata);
+  const [path, request] = fetch.mock.calls[0].arguments;
+  assert.equal(path, `/api/connections/accounts/${id}/claude-code`);
+  assert.equal(request.method, undefined);
+  assert.equal(request.body, undefined);
+  assert.equal(request.credentials, "same-origin");
+  assert.equal(request.cache, "no-store");
+  assert.equal(request.redirect, "error");
+  assert.deepEqual(await connectionsApi.claudeCodeLogout(id), metadata);
+  const [logoutPath, logout] = fetch.mock.calls.at(-1).arguments;
+  assert.equal(logoutPath, `${path}/logout`);
+  assert.equal(logout.method, "POST");
+  assert.equal(logout.headers["X-CSRF-Token"], token);
+  assert.deepEqual(JSON.parse(logout.body), {});
+  for (const response of [
+    { ...metadata, token: "SYNTHETIC-PRIVATE-NATIVE-TOKEN" },
+    { ...metadata, verification_url: "https://unexpected.example" },
+    { ...metadata, signed_in: "yes" },
+    { ...metadata, signed_in: true, available: false },
+    { ...metadata, message: "x".repeat(2001) },
+  ]) {
+    fetch.mock.mockImplementation(async () => Response.json(response));
+    await assert.rejects(
+      connectionsApi.claudeCodeStatus(id),
+      /unsupported response/,
+    );
+  }
+  assert.equal(
+    claudeCodeLoginCommand(id),
+    `docker compose exec goose-worker python -m labcat.claude_auth login ${id}`,
+  );
+  for (const invalid of [
+    "",
+    "account",
+    `${id}; echo unsafe`,
+    `${id}\n`,
+    `$(echo unsafe)`,
+    `../${id}`,
+  ])
+    assert.equal(claudeCodeLoginCommand(invalid), null);
+});
+
+test("Claude Code failures hide provider diagnostics and never retry a native logout", async () => {
+  const fetch = mock.method(globalThis, "fetch", async (path) =>
+    Response.json(
+      path === "/api/session"
+        ? { csrf_token: token }
+        : { detail: "SYNTHETIC-PRIVATE-CLAUDE-CODE" },
+      { status: path === "/api/session" ? 200 : 503 },
+    ),
+  );
+  await assert.rejects(
+    connectionsApi.claudeCodeLogout("0123456789abcdef0123456789abcdef"),
+    (error) => {
+      assert.match(error.message, /not completed/);
+      assert.doesNotMatch(error.message, /SYNTHETIC-PRIVATE/);
+      return true;
+    },
+  );
+  assert.equal(fetch.mock.calls.length, 2);
 });

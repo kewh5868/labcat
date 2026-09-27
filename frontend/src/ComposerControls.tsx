@@ -7,6 +7,7 @@ import {
   connectionError,
   connectionsApi,
   isCloudProvider,
+  isAccountSignInProvider,
   providerLabels,
 } from "./connectionsApi";
 import type {
@@ -83,9 +84,7 @@ export default function ComposerControls({
         .filter(
           (item, index, accounts) =>
             item.profile.provider !== "none" &&
-            accounts.findIndex(
-              (other) => other.profile.provider === item.profile.provider,
-            ) === index,
+            accounts.findIndex((other) => other.id === item.id) === index,
         )
     : [];
   const blocked =
@@ -121,7 +120,7 @@ export default function ComposerControls({
     if (disabled) setPicker(null);
   }, [disabled]);
   // A saved account can keep its identity/model while its credentials, local
-  // endpoint or AWS profile change. Never reuse that connection's old catalog.
+  // endpoint changes. Never reuse that connection's old catalog.
   useLayoutEffect(() => {
     setCatalog(null);
     catalogEpoch.current++;
@@ -281,8 +280,14 @@ export default function ComposerControls({
   async function changeModel(
     operation: () => Promise<ConnectionStatus>,
     openSetup = false,
+    selectingAccount = false,
   ) {
-    if (changeBlocked || catalogLoading || operationLock.current) return;
+    if (
+      changeBlocked ||
+      (catalogLoading && !selectingAccount) ||
+      operationLock.current
+    )
+      return;
     operationLock.current = true;
     setModelBusy(true);
     setModelError("");
@@ -606,7 +611,7 @@ export default function ComposerControls({
                       type="button"
                       className="composer-choice"
                       aria-pressed={status?.active_account_id === saved.id}
-                      disabled={changeBlocked || catalogLoading}
+                      disabled={changeBlocked}
                       onClick={() => {
                         if (saved.id === status?.active_account_id) {
                           if (needsCredentials(saved)) manage("connections");
@@ -614,19 +619,19 @@ export default function ComposerControls({
                           void changeModel(
                             () => connectionsApi.selectAccount(saved.id),
                             needsCredentials(saved),
+                            true,
                           );
                       }}
                     >
                       <span>
-                        <strong>
-                          {providerLabels[saved.profile.provider]}
-                        </strong>
+                        <strong>{saved.label}</strong>
                         <small>
+                          {providerLabels[saved.profile.provider]} ·{" "}
                           {saved.profile.model || "Choose a model"}
                           {saved.credential_state === "locked"
-                            ? " · Unlock credentials"
+                            ? " · Reconnect or unlock"
                             : saved.credential_state === "missing"
-                              ? saved.profile.provider === "chatgpt"
+                              ? isAccountSignInProvider(saved.profile.provider)
                                 ? " · Sign in"
                                 : " · Add API key"
                               : ""}
@@ -700,10 +705,12 @@ export default function ComposerControls({
                         onClick={() => manage("connections")}
                       >
                         {account.credential_state === "locked"
-                          ? "Unlock credentials in Connections"
-                          : account.profile.provider === "chatgpt"
-                            ? "Sign in with ChatGPT in Connections"
-                            : "Add this account’s key in Connections"}
+                          ? "Reconnect or unlock in Connections"
+                          : account.profile.provider === "claude_code"
+                            ? "Sign in with Claude Code in Connections"
+                            : account.profile.provider === "chatgpt"
+                              ? "Sign in with ChatGPT in Connections"
+                              : "Add this account’s key in Connections"}
                       </button>
                     ) : (
                       <p className="composer-picker-help" role="status">

@@ -11,7 +11,7 @@ use Python 3.11+ and Node 22.12+ (CI uses Node 24):
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e '.[web,aws,connections,exports,dev]'
+python -m pip install -e '.[web,connections,exports,dev]'
 npm ci --prefix frontend
 npm run build --prefix frontend
 labcat serve
@@ -21,7 +21,7 @@ Open <http://127.0.0.1:8000>. On Windows use `py -m venv .venv` and
 `.venv\Scripts\Activate.ps1`. The base CLI requires no third-party runtime
 packages. For research, choose `--server` to use an already configured backend
 at its fixed same-machine address `127.0.0.1:8000`, or `--connections WORKSPACE_PATH`
-to use an explicitly saved and accessible API/Bedrock connection from Python.
+to use an explicitly saved and accessible API connection from Python.
 `--server` uses the app's saved settings and cannot be combined with `--config`
 or `--connections`. ChatGPT research uses the Docker backend and its Goose worker.
 
@@ -45,7 +45,7 @@ before each commit. After a hook edits files, review the changes and rerun it.
 The application tests and distribution checks above run separately from the hooks.
 See [scaffold and hook provenance](scaffolding.md).
 
-See the [three-page design note](design-note.pdf), [evaluation](evaluation.md),
+See the [architecture reference](architecture.md), [evaluation](evaluation.md),
 [validation record](validation.md), and [preserved earlier layout](ui-layouts.md).
 Hard evidence rules cannot be overridden through settings, prompts, models or
 retrieved content. This is a single-user loopback service, not shared lab hosting.

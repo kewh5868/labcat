@@ -109,11 +109,9 @@ OS webview requirements. Docker remains required for the native application.
    context to that provider, and choose **Save and test connections**. After a
    successful check, choose **Continue**. Unsaved model or consent changes must
    be saved first. Connection checks do not run model inference.
-3. **Compute:** keep the default local workspace. [AWS setup](aws.md) is optional;
-   local workspace processing still uses your selected provider for AI.
-4. **Public sources:** keep the databases you want to search. A Materials Project
+3. **Public sources:** keep the databases you want to search. A Materials Project
    API key is optional; enter and verify it on its database card if you have one.
-5. **Ready:** review the selected model and choose **Finish setup**. Start a
+4. **Ready:** review the selected model and choose **Finish setup**. Start a
    **New chat**, or create a project and enter a research question. Research may
    use your provider's allowance or incur charges.
 

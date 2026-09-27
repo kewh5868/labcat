@@ -10,6 +10,7 @@ worker/callback URL is accepted.
 import hmac
 import json
 import os
+import re
 import secrets
 import stat
 import threading
@@ -27,7 +28,6 @@ from labcat.goose_runtime import (
     GOOSE_VERSION,
     MAX_RUNTIME_SECONDS,
     GooseRuntimeError,
-    _aws_credentials,
 )
 from labcat.models import ModelError, bounded_context
 from labcat.research_intent import valid_assessment_arguments
@@ -122,6 +122,8 @@ def _worker_request(path: str, body: dict | None = None) -> dict:
         "/auth/cancel",
         "/auth/take",
         "/auth/callback",
+        "/claude/status",
+        "/claude/logout",
     }:
         raise ModelError(_SAFE_FAILURE)
     key = _channel_key()
@@ -410,7 +412,15 @@ def _worker_diagnostics(value):
 
 
 def run_remote_goose(
-    profile, secret, prompt, *, context=None, tool_session, chatgpt_tokens=None
+    profile,
+    secret,
+    prompt,
+    *,
+    context=None,
+    tool_session,
+    chatgpt_tokens=None,
+    claude_account_id=None,
+    claude_session_id=None,
 ) -> dict:
     """Call one fixed worker once; never fall back to a process in the
     workspace."""
@@ -424,6 +434,18 @@ def run_remote_goose(
 
     if request_violation(prompt):
         raise ModelError("This request cannot be sent to the research worker.")
+    if profile.get("provider") == "claude_code":
+        if (
+            any(
+                not isinstance(value, str) or not re.fullmatch(r"[a-f0-9]{32}", value)
+                for value in (claude_account_id, claude_session_id)
+            )
+            or secret is not None
+            or chatgpt_tokens is not None
+        ):
+            raise ModelError("The Claude Code account identity is invalid.")
+    elif claude_account_id is not None or claude_session_id is not None:
+        raise ModelError("Claude Code sessions require the selected provider.")
     _channel_key()
     job_id, token = secrets.token_hex(16), secrets.token_hex(32)
     body = {
@@ -435,8 +457,13 @@ def run_remote_goose(
         "context": bounded_context(context),
         "chatgpt_tokens": chatgpt_tokens,
         "build_plan": tool_session.build_plan,
-        "aws_credentials": (
-            _aws_credentials(profile) if profile.get("provider") == "bedrock" else None
+        **(
+            {
+                "claude_account_id": claude_account_id,
+                "claude_session_id": claude_session_id,
+            }
+            if claude_account_id is not None
+            else {}
         ),
     }
     with _callbacks(tool_session, job_id, token) as trace:

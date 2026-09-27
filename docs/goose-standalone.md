@@ -52,24 +52,29 @@ Test projects use disposable volumes and never the scientist's live workspace.
 
 ## Provider setup after these checks
 
-The supported connection families are local Ollama, OpenAI Platform, Anthropic,
-Kimi, AWS Bedrock and the specific ChatGPT account integration. Provider and model
+The [provider guide](providers.md) lists supported API connections, ChatGPT
+account sign-in and native Claude Code sign-in. Local Ollama remains available
+for future optional use and does not satisfy current account-required setup. Provider and model
 choices are passed to Goose's backend subprocess. Each provider retains its own
 supported authentication method; consumer subscriptions are not generic API keys.
-No browser, host Codex, Goose or AWS credential directory is imported.
+No browser, host Codex or Goose credential directory is imported.
 
 Goose's stock `configure` command requires a terminal, can make a model test call,
 and falls back to a plaintext secrets file when a keyring is unavailable. It is
 therefore not exposed as an unrestricted shell in the application. The app's
-structured setup stores credentials in its encrypted vault and supplies selected
-credentials to the isolated subprocess only for a run. OAuth temporary files live
-on container memory-backed storage. A raw configure experiment, if needed, must
+structured setup keeps API keys and ChatGPT credentials in session memory or the
+optional encrypted vault and supplies the selected credentials to the isolated
+subprocess for a run. Their temporary OAuth files live on container memory-backed
+storage. Claude Code instead owns its native authentication files in separate
+worker tmpfs; they never enter Labcat's vault. A raw configure experiment, if needed, must
 use disposable storage and an explicitly authorized test account.
 
 ChatGPT uses a provider-owned verification flow. It does not collect a ChatGPT
-password or reuse an existing host login. Other providers use supported API or
-AWS credentials; Claude subscription sign-in is not implemented. Real account
-connection, catalog and low-cost inference checks remain a separate explicit step.
+password or reuse an existing host login. Claude Code uses its unmodified native
+terminal flow with the [account-specific command in Connections](onboarding.md#claude-code-account-sign-in).
+Other providers use supported API credentials. The synthetic diagnostics above
+do not validate Claude account authorization, entitlement or inference. Real
+account connection and inference checks remain a separate explicit step.
 
 See [runtime design](goose.md), [provider connections](providers.md) and the
 [validation record](validation.md) for current results and limitations.

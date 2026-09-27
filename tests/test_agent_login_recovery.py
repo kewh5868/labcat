@@ -118,15 +118,17 @@ def test_other_account_cannot_receive_pending_challenge_or_credentials(tmp_path)
     manager, first, broker = _setup(tmp_path)
     second = _account(manager, "Second recovery test")
     original = manager.agent.start_login(first, {"secret_storage": "session"})
-    with pytest.raises(ConnectionError, match="other saved"):
-        manager.agent.start_login(second, {"secret_storage": "session"})
-    assert broker.starts == 1
-    assert broker.takes == 0
-    assert manager.agent.start_login(first, {"secret_storage": "session"}) == original
-    broker.state = "expired"
+    broker.fail_poll = True
     next_flow = manager.agent.start_login(second, {"secret_storage": "session"})
+    assert broker.starts == 2
+    assert broker.takes == 0
+    assert broker.cancelled == [original["flow_id"]]
     assert next_flow["flow_id"] != original["flow_id"]
     assert manager.agent._flows[next_flow["flow_id"]]["account_id"] == second
+    with pytest.raises(ConnectionError, match="unavailable"):
+        manager.agent.login_action(first, original["flow_id"], "poll")
+    assert manager.vault.get("oauth_" + first) is None
+    assert manager.vault.get("oauth_" + second) is None
 
 
 def test_new_storage_choice_replaces_pending_flow_without_rebinding_it(tmp_path):

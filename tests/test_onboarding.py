@@ -85,7 +85,7 @@ def test_locked_vault_rechecks_after_unlock(tmp_path, authenticated_model_factor
     assert manager.setup.complete()["can_research"]
     manager.vault_action({"action": "lock"})
     assert manager.setup.status()["model"]["status"] == "credentials_locked"
-    with pytest.raises(SetupRequired, match="Unlock"):
+    with pytest.raises(SetupRequired, match="Reconnect"):
         manager.setup.require_ready()
     manager.vault_action({"action": "unlock", "passphrase": "fixture passphrase only"})
     assert manager.setup.require_ready()["can_research"]
@@ -144,35 +144,6 @@ def test_provider_metadata_error_does_not_authorize_or_leak_credentials(
     assert manager.setup.verify()["model"]["status"] == "error"
     with pytest.raises(SetupRequired):
         manager.setup.complete()
-
-
-def test_bedrock_requires_account_authentication_and_selected_model_catalog(
-    tmp_path, monkeypatch
-):
-    manager = ConnectionManager(tmp_path / "w.sqlite3")
-    manager.configure(
-        {
-            "profile": {
-                **DEFAULT_PROFILE,
-                "provider": "bedrock",
-                "model": "fixture-bedrock-model",
-                "allow_paid_inference": True,
-            },
-            "secret_storage": "session",
-        }
-    )
-    checks = []
-    monkeypatch.setattr(
-        "labcat.connections.check_connection", lambda *args: checks.append("sts")
-    )
-    monkeypatch.setattr("labcat.aws.model_options", lambda *args: [])
-    assert not manager.setup.verify()["can_research"]
-    monkeypatch.setattr(
-        "labcat.aws.model_options",
-        lambda *args: [{"id": "fixture-bedrock-model", "label": "Fixture"}],
-    )
-    assert manager.setup.verify()["can_research"]
-    assert checks == ["sts", "sts"]
 
 
 def test_existing_chatgpt_account_requires_provider_verified_metadata(

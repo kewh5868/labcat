@@ -432,7 +432,10 @@ def parse_args(argv=None):
 
 
 def main() -> None:
+    from smoke_claude_runtime import run_image_probe
+
     args = parse_args()
+    run_image_probe(args.image, args.platform)
     project = "labcat-smoke-" + uuid.uuid4().hex[:10]
     occupied = socket.socket()
     try:
@@ -560,7 +563,6 @@ def main() -> None:
             setup = api(base, "/api/connections/setup")
             assert setup["required"] is True and setup["can_research"] is False
             assert setup["completed"] is False
-            assert setup["optional"]["aws_required"] is False
             assert setup["optional"]["data_apis_required"] is False
             assert (
                 api(base, "/api/connections/setup/verify", {})["can_research"] is False
@@ -592,8 +594,8 @@ def main() -> None:
             assert updated["current_step"] == "review"
             assert updated["completed"] is False and updated["can_research"] is False
             print(
-                "Required model setup blocks new API/CLI searches; optional AWS "
-                "and data connections remain skippable. No inference invoked.",
+                "Required model setup blocks new API/CLI searches; optional "
+                "data connections remain skippable. No inference invoked.",
                 flush=True,
             )
 
@@ -1597,6 +1599,268 @@ store.append_research(sys.argv[1], scope, prompt, result)
             )
             expect_missing(base, f"/api/chats/{probe['id']}")
 
+        def check_vault_recovery(base: str, saved: dict) -> None:
+            """Exercise recovery using only this disposable project's
+            synthetic keys."""
+            vault_path = "/api/connections/vault"
+            source_path = "/api/connections/sources/materials_project"
+            before = api(base, "/api/connections")
+            original_phrase = saved["vault_passphrase"]
+            replacement = "synthetic-session-replacement-" + uuid.uuid4().hex
+            new_phrase = "synthetic-rotated-passphrase-" + uuid.uuid4().hex
+
+            def fingerprint():
+                return compose(
+                    "exec",
+                    "--no-TTY",
+                    "labcat",
+                    "python",
+                    "-c",
+                    "from pathlib import Path; import hashlib; "
+                    "p=Path('/var/lib/labcat/workspace.credentials.enc.json'); "
+                    "print(hashlib.sha256(p.read_bytes()).hexdigest() "
+                    "if p.exists() else 'absent')",
+                )
+
+            def rejected(body):
+                try:
+                    api(base, vault_path, body)
+                except HTTPError as error:
+                    assert error.code == 422
+                    error.close()
+                else:
+                    raise AssertionError("Invalid vault recovery request accepted")
+
+            # Explicitly remember an already-entered model key without retyping it.
+            account_id = saved["account_ids"][0]
+            account = next(
+                item for item in before["accounts"] if item["id"] == account_id
+            )
+            model_body = {
+                "label": account["label"],
+                "profile": account["profile"],
+                "secret_storage": "session",
+                "api_key": replacement,
+            }
+            status = api(
+                base,
+                f"/api/connections/accounts/{account_id}",
+                model_body,
+                method="PUT",
+            )
+            assert status["credentials"]["openai"] == "session"
+            status = api(
+                base,
+                f"/api/connections/accounts/{account_id}",
+                {**model_body, "secret_storage": "encrypted", "api_key": ""},
+                method="PUT",
+            )
+            assert status["credentials"]["openai"] == "encrypted"
+            assert replacement not in json.dumps(status)
+            api(base, "/api/connections/local-defaults", {"persist": True})
+            original_ciphertext = fingerprint()
+            assert original_ciphertext != "absent"
+            rotation = {
+                "action": "change_passphrase",
+                "current_passphrase": original_phrase,
+                "new_passphrase": new_phrase,
+            }
+            request = Request(
+                base + vault_path,
+                data=json.dumps(rotation).encode(),
+                headers={"Origin": base, "Content-Type": "application/json"},
+            )
+            try:
+                urlopen(request, timeout=10)
+            except HTTPError as error:
+                assert error.code == 403
+                error.close()
+            else:
+                raise AssertionError("Vault password change accepted without CSRF")
+            assert fingerprint() == original_ciphertext
+            api(base, vault_path, {"action": "lock"})
+
+            # The optional vault never owns provider/account selection. Metadata
+            # edits and fresh same/new keys must work without decrypting old keys.
+            def select(identifier):
+                return api(base, f"/api/connections/accounts/{identifier}/select", {})
+
+            status = select(account_id)
+            assert status["active_account_id"] == account_id
+            assert status["credentials"]["openai"] == "locked"
+            status = api(
+                base,
+                f"/api/connections/accounts/{account_id}",
+                {
+                    "label": "Locked account with a revised model",
+                    "profile": {**account["profile"], "model": "synthetic-model"},
+                    "secret_storage": "encrypted",
+                },
+                method="PUT",
+            )
+            assert status["profile"]["model"] == "synthetic-model"
+            assert status["credentials"]["openai"] == "locked"
+            assert fingerprint() == original_ciphertext
+            model_replacement = "synthetic-new-model-key-" + uuid.uuid4().hex
+            for key in (replacement, model_replacement):
+                status = api(
+                    base,
+                    f"/api/connections/accounts/{account_id}",
+                    {**model_body, "api_key": key},
+                    method="PUT",
+                )
+                assert status["vault"]["locked"]
+                assert status["credentials"]["openai"] == "session"
+                assert fingerprint() == original_ciphertext
+                assert key not in json.dumps(status)
+
+            second_id = saved["account_ids"][1]
+            second = next(a for a in before["accounts"] if a["id"] == second_id)
+            status = api(
+                base,
+                f"/api/connections/accounts/{second_id}",
+                {
+                    "label": second["label"],
+                    "profile": second["profile"],
+                    "secret_storage": "session",
+                    "api_key": "synthetic-second-account-key-" + uuid.uuid4().hex,
+                },
+                method="PUT",
+            )
+            assert status["active_account_id"] == second_id
+            status = api(
+                base,
+                "/api/connections/accounts",
+                {
+                    "label": "Disposable different provider",
+                    "profile": {**account["profile"], "provider": "anthropic"},
+                    "secret_storage": "session",
+                    "api_key": "synthetic-other-provider-key-" + uuid.uuid4().hex,
+                },
+            )
+            third_id = status["active_account_id"]
+            assert status["credentials"]["anthropic"] == "session"
+            for identifier, provider in (
+                (account_id, "openai"),
+                (third_id, "anthropic"),
+                (second_id, "openai"),
+                (account_id, "openai"),
+            ):
+                status = select(identifier)
+                assert status["active_account_id"] == identifier
+                assert status["profile"]["provider"] == provider
+                assert status["credentials"][provider] == "session"
+                assert status["vault"]["locked"]
+                assert fingerprint() == original_ciphertext
+            api(base, "/api/connections/local-defaults", {"persist": True})
+            print(
+                "Locked-vault connection switching passed: metadata changes, "
+                "same/new keys, two accounts for one provider, and another "
+                "provider all work without changing saved ciphertext. No inference.",
+                flush=True,
+            )
+            for key in (saved["source_test_key"], replacement):
+                status = api(
+                    base,
+                    source_path,
+                    {"api_key": key, "secret_storage": "session"},
+                    method="PUT",
+                )
+                assert status["vault"]["locked"]
+                assert status["credentials"]["materials_project"] == "session"
+                assert fingerprint() == original_ciphertext
+                assert key not in json.dumps(status)
+            api(base, vault_path, {"action": "lock"})
+            status = api(
+                base,
+                vault_path,
+                {
+                    "action": "unlock",
+                    "passphrase": original_phrase,
+                },
+            )
+            assert status["credentials"]["materials_project"] == "encrypted"
+            rejected({**rotation, "current_passphrase": "synthetic-wrong-password"})
+            assert api(base, "/api/connections") == status
+            assert fingerprint() == original_ciphertext
+            status = api(base, vault_path, rotation)
+            assert status["credentials"]["materials_project"] == "encrypted"
+            assert status["credentials"]["openai"] == "encrypted"
+            assert fingerprint() != original_ciphertext
+            compose(
+                "up",
+                "--detach",
+                "--force-recreate",
+                "--no-deps",
+                "--wait",
+                "--wait-timeout",
+                "60",
+                "labcat",
+            )
+            base = check_http()
+            assert api(base, "/api/connections")["vault"]["locked"]
+            rejected({"action": "unlock", "passphrase": original_phrase})
+            status = api(
+                base,
+                vault_path,
+                {
+                    "action": "unlock",
+                    "passphrase": new_phrase,
+                },
+            )
+            assert status["credentials"]["materials_project"] == "encrypted"
+            assert status["credentials"]["openai"] == "encrypted"
+            api(base, vault_path, {"action": "lock"})
+            api(
+                base,
+                source_path,
+                {
+                    "api_key": replacement,
+                    "secret_storage": "session",
+                },
+                method="PUT",
+            )
+            rejected({"action": "reset"})
+            status = api(base, vault_path, {"action": "reset", "confirm": True})
+            assert fingerprint() == "absent"
+            assert status["vault"]["can_create"] and not status["vault"]["exists"]
+            assert all(value == "missing" for value in status["credentials"].values())
+            assert all(
+                item["credential_state"] == "missing" for item in status["accounts"]
+            )
+            assert status["profile"] == before["profile"]
+            assert all(
+                value not in json.dumps(status)
+                for value in (
+                    replacement,
+                    original_phrase,
+                    new_phrase,
+                    saved["source_test_key"],
+                )
+            )
+            for chat_id, detail in saved["details"].items():
+                assert api(base, f"/api/chats/{chat_id}") == detail
+            api(base, vault_path, {"action": "create", "passphrase": new_phrase})
+            status = api(
+                base,
+                source_path,
+                {
+                    "api_key": saved["source_test_key"],
+                    "secret_storage": "encrypted",
+                },
+                method="PUT",
+            )
+            assert status["credentials"]["materials_project"] == "encrypted"
+            api(base, vault_path, {"action": "reset", "confirm": True})
+            assert fingerprint() == "absent"
+            print(
+                "Vault recovery passed: same/new session keys work while locked; "
+                "saved ciphertext is retained, password rotation preserves keys, "
+                "old passwords fail, and confirmed reset clears encrypted/session "
+                "credentials without changing chats. No real credentials or inference.",
+                flush=True,
+            )
+
         try:
             run_args = [
                 "run",
@@ -1731,7 +1995,9 @@ for target in ('http://labcat:8000/api/connections',
                 compose("down")  # Retain only this test project's named data volume.
                 compose("up", "--detach", "--wait", "--wait-timeout", "60")
                 assert compose("ps", "--quiet", "labcat") != original
-                check_saved(check_http(), saved)
+                base = check_http()
+                check_saved(base, saved)
+                check_vault_recovery(base, saved)
                 print(
                     "Chats, report pins, ranking profiles and encrypted "
                     "test credentials survived replacement; project isolation, "

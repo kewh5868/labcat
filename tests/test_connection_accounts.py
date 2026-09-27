@@ -2,12 +2,10 @@
 provider/model."""
 
 import json
-from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
 
-from labcat import aws
 from labcat.connections import DEFAULT_PROFILE, ConnectionManager
 from labcat.credentials import ConnectionError
 from labcat.web import create_app
@@ -217,19 +215,6 @@ def test_account_api_requires_csrf_and_does_not_echo_secret(tmp_path):
         assert about["developer"] == "Keith White" and about["github_url"] is None
 
 
-def test_aws_profile_options_only_reads_profile_names(monkeypatch):
-    import boto3
-
-    session = SimpleNamespace(
-        available_profiles=["work", "../../invalid"],
-        get_available_regions=lambda service: ["us-west-2"],
-    )
-    monkeypatch.setattr(boto3, "Session", lambda: session)
-    result = aws.profile_options()
-    assert result["profiles"] == ["work"] and result["regions"] == ["us-west-2"]
-    assert "Do not mount host folders" in result["setup"]["message"]
-
-
 def test_status_profiles_are_detached_from_live_consent_and_account_state(tmp_path):
     manager = ConnectionManager(tmp_path / "workspace.sqlite3")
     identifier = account(manager)["active_account_id"]
@@ -348,49 +333,3 @@ def test_malformed_vault_salt_is_a_safe_error_on_unlock(tmp_path):
     assert reopened.status()["vault"]["locked"] is True
     assert "private-test-passphrase" not in json.dumps(reopened.status())
     assert json.loads(manager.vault.path.read_text()) == saved
-
-
-def test_aws_model_catalog_filters_bad_labels_and_drops_unrelated_fields(monkeypatch):
-    import boto3
-
-    closed = []
-    values = [
-        {
-            "modelId": "provider.good-v1",
-            "modelName": "Readable name",
-            "account": "do-not-return",
-        },
-        {"modelId": "provider.bad-label-v1", "modelName": {"private": "do-not-return"}},
-        {"modelId": "provider.non-finite-v1", "modelName": float("nan")},
-        {"modelId": "provider.control-v1", "modelName": "name\nsecret"},
-        {"modelId": "provider.large-v1", "modelName": "x" * 201},
-        {"modelId": "bad identifier", "modelName": "Discard"},
-    ]
-    client = SimpleNamespace(
-        list_foundation_models=lambda **kw: {"modelSummaries": values},
-        list_inference_profiles=lambda **kw: {"inferenceProfileSummaries": []},
-        close=lambda: closed.append(True),
-    )
-
-    def session(**kwargs):
-        assert kwargs == {"profile_name": "work", "region_name": "us-west-2"}
-        return SimpleNamespace(client=lambda *a, **kw: client)
-
-    monkeypatch.setattr(boto3, "Session", session)
-    models = aws.model_options("work", "us-west-2")
-    assert len(models) == 5 and closed == [True]
-    assert models[0]["label"] == "Readable name"
-    assert all(row["label"] == row["id"] for row in models[1:])
-    assert "do-not-return" not in json.dumps(models, allow_nan=False)
-
-
-@pytest.mark.parametrize(
-    "profile,region",
-    [(None, "us-west-2"), ("work", float("nan")), ("../../secret", "us-west-2")],
-)
-def test_aws_invalid_identifiers_never_reach_sdk(monkeypatch, profile, region):
-    import boto3
-
-    monkeypatch.setattr(boto3, "Session", lambda *a, **k: pytest.fail("SDK reached"))
-    with pytest.raises(aws.AWSConnectionError):
-        aws.model_options(profile, region)

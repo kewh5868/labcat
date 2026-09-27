@@ -10,22 +10,21 @@ Scikit-package provides packaging structure, not an agent runtime.
 One constrained Python workflow serves the CLI and the React/TypeScript
 application through FastAPI. Vite compiles the interface into the same Docker
 image. Native Tauri, browser and headless modes share that backend. The Docker
-image embeds pinned Goose with a closed intake decision and two research tools.
+image embeds pinned Goose with a closed intake decision and five bounded research tools.
 The workspace runs locally; new research requires a verified model connection.
 
 ## Implemented milestones and remaining gates
 
-| Area                       | Current implementation                                                                                                                               | Remaining verification or extension                                                                      |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Foundation and deployment  | Python package, strict configuration, React/FastAPI, two container architectures, native shell and host launchers                                    | Target-host installation coverage; signing/notarization for native distribution                          |
-| Research workspace         | Standalone/project chats, history, saved reports, source links, pins and Project Contents                                                            | Broader multi-user operation requires authentication and roles                                           |
-| Public scientific search   | Selected repositories, targeted open-access passages for missing attributes, normalized evidence, deterministic ranking and cited reports            | Broader verified fields and source coverage; literature leads remain unscored                            |
-| Ranking profiles           | Class/application presets, custom profiles, grouped attributes, independent importance and automatic normalization                                   | Unsupported attributes remain explicitly unscored; adding a profile does not implement a new utility     |
-| Model planning             | Embedded Goose with mandatory suitability assessment and two fixed research tools; supported account/model connections and actual plan/usage records | Live account checks are listed separately in validation; Claude subscription login remains unimplemented |
-| Onboarding and credentials | Required model verification, optional cloud/data connections, saved nonsecret profiles, session keys and encrypted vault controls                    | Site-managed secret injection and account setup remain deployment responsibilities                       |
-| Report presentation        | Written Summary and full Technical View, selected outputs, verbosity and terminology; TXT/JSON/PDF/Word downloads                                    | Target-host document-reader compatibility; exact checks are in the validation record                     |
-| Developer settings         | Explicit developer edition, bounded stage/history controls, search budgets and default model connection; absent user-edition API                     | Multi-user authentication, policy drafts, evaluation comparison, activation and rollback remain planned  |
-| Shared cloud hosting       | Bedrock can perform optional inference through an authorized AWS profile                                                                             | Hosting the whole service on ECS Fargate remains planned; no automatic provisioning                      |
+| Area                       | Current implementation                                                                                                                    | Remaining verification or extension                                                                          |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Foundation and deployment  | Python package, strict configuration, React/FastAPI, two container architectures, native shell and host launchers                         | Target-host installation coverage; signing/notarization for native distribution                              |
+| Research workspace         | Standalone/project chats, history, saved reports, source links, pins and Project Contents                                                 | Broader multi-user operation requires authentication and roles                                               |
+| Public scientific search   | Selected repositories, targeted open-access passages for missing attributes, normalized evidence, deterministic ranking and cited reports | Broader verified fields and source coverage; literature leads remain unscored                                |
+| Ranking profiles           | Class/application presets, custom profiles, grouped attributes, independent importance and automatic normalization                        | Unsupported attributes remain explicitly unscored; adding a profile does not implement a new utility         |
+| Model planning             | Embedded Goose with five bounded research tools; API, ChatGPT and native Claude Code connections; actual plan/usage records               | Live account checks are listed separately in validation; native Claude account inference remains unvalidated |
+| Onboarding and credentials | Required model verification, optional public-data connections, saved nonsecret profiles, session keys and encrypted vault controls        | Site-managed secret injection and account setup remain deployment responsibilities                           |
+| Report presentation        | Written Summary and full Technical View, selected outputs, verbosity and terminology; TXT/JSON/PDF/Word downloads                         | Target-host document-reader compatibility; exact checks are in the validation record                         |
+| Developer settings         | Explicit developer edition, bounded stage/history controls, search budgets and default model connection; absent user-edition API          | Multi-user authentication, policy drafts, evaluation comparison, activation and rollback remain planned      |
 
 Container checks exercise conflict-free startup, read-only/non-root hardening,
 offline research, source/report pins, profile persistence, project isolation,
@@ -47,7 +46,7 @@ adapters; an API key does not authorize private or paywalled access.
 Only source adapters create material facts. User text, pasted values/citations,
 model memory and prior reports cannot fill an evidence field. Models receive
 bounded untrusted prompt/project context. Goose must assess suitability before its
-two empty-argument research tools can execute. Models cannot select destinations,
+other research tools can execute. Models cannot select destinations,
 generate evidence or relax policy. Unclear and refused turns create conversation
 messages without reports, sources or scored candidates.
 Rendering uses source-backed fields and labeled deterministic derivations.
@@ -95,17 +94,16 @@ saved report without recomputing facts with a language model.
 
 The default performs local deterministic work. Optional Ollama requires a local
 runtime and downloaded model; no model weights ship in the application image.
-Hosted adapters require supported API credentials or an AWS profile plus explicit
-cost/data consent. Consumer chat subscriptions are not universal application
-logins. Model-list and AWS identity checks do not establish inference permission,
+Hosted adapters require supported account authorization or API credentials plus
+explicit cost/data consent. Consumer chat subscriptions are not universal
+application logins. Model-list checks do not establish inference permission,
 available quota or structured-output compatibility, and do not invoke a model.
 
 Nonsecret profiles persist. Credentials are session-only unless the scientist
 chooses an encrypted vault. Passphrase vaults restart locked; deployment-provided
 keys can support automatic unlock. No key/passphrase enters ordinary config,
-SQLite or browser storage. “Use local defaults” disables the model provider but
-retains a configured Materials Project key; it is a compute choice, not an offline
-switch. There is no silent paid fallback.
+SQLite or browser storage. Local workspace processing still requires a verified
+model connection. There is no silent paid fallback.
 
 Keep this version single-user and local. Host/Origin validation and connection
 CSRF checks do not replace authentication. Shared cloud hosting and the
@@ -127,10 +125,9 @@ Use the versioned image archive and host launchers described in
 4. Add an authenticated developer console with explicit roles, read-only evidence
    inspection, validated policy drafts, regression comparisons and rollback.
 5. Design shared/cloud hosting with identity, authorization, deployment-managed
-   secrets and operational controls. Optional Bedrock inference does not host
-   the application or provision an AWS deployment.
+   secrets and operational controls.
 
 Keep image smoke tests, distribution privacy checks and normal/adversarial
-evaluations as release gates for every source change. The design note, README
-and evaluation examples describe this prototype; the
+evaluations as release gates for every source change. The architecture reference,
+README and evaluation examples describe this prototype; the
 [validation record](validation.md) identifies the tested artifacts and limits.

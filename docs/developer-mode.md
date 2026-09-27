@@ -91,7 +91,7 @@ locked, forgotten or failed credentials invalidate readiness. Automatic source
 selection may use another enabled public repository; requiring an unverified
 API fails with a connection explanation. Keyless public services remain usable.
 
-**Connections** owns compute, model accounts, provider/model selection, public
+**Connections** owns model accounts, provider/model selection, public
 API credentials and the data registry. Keys are write-only and stay in memory
 or the optional encrypted vault outside the repository. No connection grants
 access to private science or changes the evidence policy.

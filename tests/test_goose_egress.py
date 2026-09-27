@@ -11,9 +11,7 @@ import pytest
 from labcat import goose_egress as proxy
 
 
-@pytest.mark.parametrize(
-    "host", sorted(proxy.HTTPS_HOSTS) + ["bedrock-runtime.us-west-2.amazonaws.com"]
-)
+@pytest.mark.parametrize("host", sorted(proxy.HTTPS_HOSTS))
 def test_only_fixed_provider_https_destinations(host):
     assert proxy._destination("CONNECT", host + ":443") == (host, 443, None)
 
@@ -29,6 +27,7 @@ def test_only_fixed_provider_https_destinations(host):
         ("CONNECT", "api.openai.com@labcat:443"),
         ("CONNECT", "api%2eopenai.com:443"),
         ("CONNECT", "api.openai.com.:443"),
+        ("CONNECT", "bedrock-runtime.us-west-2.amazonaws.com:443"),
         ("CONNECT", "bedrock-runtime.us-west-2.amazonaws.com.evil.example:443"),
         ("GET", "http://host.docker.internal:8000/api/connections"),
         ("GET", "http://labcat:8000/api/connections"),

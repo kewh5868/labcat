@@ -17,7 +17,6 @@ recursive-include tests/fixtures *.json *.md
 recursive-include docs *.md *.png *.css
 include mkdocs.yml
 recursive-include third_party *
-include docs/design-note.pdf
 include docs/evaluation-results.json
 recursive-include config *.toml
 recursive-include requirements *.txt *.lock
@@ -46,3 +45,9 @@ global-exclude *.sqlite *.sqlite3 *.sqlite-journal *.sqlite3-journal *.sqlite-wa
 global-exclude *.connections.json *.credentials.enc.json
 global-exclude *.setup.json
 global-exclude *.agent-usage.json auth.json tokens.json
+global-exclude credentials.json secrets.json secrets.yaml secrets.yml
+global-exclude *.credentials.json *.key *.pem *.p12 *.pfx vault-key deployment-secret
+prune .secrets
+prune .ssh
+prune .aws
+prune .codex

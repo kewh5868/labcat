@@ -72,11 +72,6 @@ def main(argv: list[str] | None = None) -> int:
         metavar="PROFILE_ID",
         help="Saved ranking profile for --server (otherwise infer from prompt)",
     )
-    aws = sub.add_parser("aws-check", help="Check an explicit AWS profile (read-only)")
-    aws.add_argument("--profile", required=True, help="Named AWS CLI/SSO profile")
-    aws.add_argument(
-        "--region", required=True, help="AWS region for the connection check"
-    )
     serve = sub.add_parser("serve", help="Run the optional local browser interface")
     serve.add_argument("--host", choices=("127.0.0.1", "0.0.0.0"), default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8000)
@@ -185,14 +180,6 @@ def main(argv: list[str] | None = None) -> int:
                     )
                 ]
             )
-    elif args.command == "aws-check":
-        from labcat.aws import AWSConnectionError, check_connection
-
-        try:
-            result = check_connection(args.profile, args.region)
-        except AWSConnectionError as exc:
-            parser.error(str(exc))
-        print(json.dumps(result, indent=2))
     else:
         if not 1 <= args.port <= 65535:
             parser.error("Port must be between 1 and 65535.")

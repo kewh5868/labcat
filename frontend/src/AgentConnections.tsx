@@ -325,6 +325,8 @@ export function ChatGPTSignIn({
     account?.credential_state === "session" ||
     account?.credential_state === "encrypted";
   const locked = account?.credential_state === "locked";
+  const vaultLocked = Boolean(connection.status?.vault.locked);
+  const signInStorage = vaultLocked ? "session" : storage;
   const blocked =
     disabled || busy || connection.busy || connection.loading || !saved;
   useEffect(() => {
@@ -385,8 +387,8 @@ export function ChatGPTSignIn({
   function start() {
     if (blocked || connection.error) return;
     startedAt.current = Date.now();
-    setFlowStorage(storage);
-    void update(() => connectionsApi.startLogin(accountId, storage));
+    setFlowStorage(signInStorage);
+    void update(() => connectionsApi.startLogin(accountId, signInStorage));
   }
   useEffect(() => {
     if (!startRequested || blocked || connection.error) return;
@@ -396,10 +398,10 @@ export function ChatGPTSignIn({
   function restartSignIn() {
     if (blocked || connection.error || flow?.status !== "pending") return;
     startedAt.current = Date.now();
-    setFlowStorage(storage);
+    setFlowStorage(signInStorage);
     void update(async () => {
       await connectionsApi.cancelLogin(accountId, flow.flow_id);
-      return connectionsApi.startLogin(accountId, storage);
+      return connectionsApi.startLogin(accountId, signInStorage);
     });
   }
   async function logout() {
@@ -411,7 +413,11 @@ export function ChatGPTSignIn({
       await connection.apply(() => connectionsApi.logout(accountId));
       if (mounted.current) {
         setFlow(null);
-        setNotice("This ChatGPT connection is signed out.");
+        setNotice(
+          vaultLocked
+            ? "This session has ended. Any saved encrypted sign-in remains locked. Reconnect or unlock it when needed."
+            : "This ChatGPT connection is signed out.",
+        );
       }
     } catch (error) {
       if (mounted.current) setError(connectionError(error));
@@ -453,6 +459,13 @@ export function ChatGPTSignIn({
           </p>
         </div>
       )}
+      {locked && (
+        <p className="model-needed-note">
+          Reconnect for this server session without unlocking the vault. Your
+          saved encrypted sign-in stays unchanged. You can also unlock it in
+          Advanced credential options to reuse it.
+        </p>
+      )}
       {!saved ? (
         <>
           {onPrepare ? (
@@ -476,10 +489,6 @@ export function ChatGPTSignIn({
             </p>
           )}
         </>
-      ) : locked ? (
-        <p className="model-needed-note">
-          Unlock the credential vault to use this saved sign-in.
-        </p>
       ) : (
         <>
           {flow?.status === "pending" ? (
@@ -554,7 +563,9 @@ export function ChatGPTSignIn({
                 disabled={blocked || Boolean(connection.error)}
                 onClick={start}
               >
-                {signedIn ? "Reconnect ChatGPT" : "Sign in with ChatGPT"}
+                {signedIn || locked
+                  ? "Reconnect ChatGPT"
+                  : "Sign in with ChatGPT"}
               </button>
               {signedIn && (
                 <button
@@ -563,7 +574,7 @@ export function ChatGPTSignIn({
                   disabled={blocked || Boolean(connection.error)}
                   onClick={() => void logout()}
                 >
-                  Sign out this account
+                  {vaultLocked ? "End session" : "Sign out this account"}
                 </button>
               )}
             </div>
@@ -573,13 +584,19 @@ export function ChatGPTSignIn({
           )}
         </>
       )}
+      {signedIn && vaultLocked && (
+        <p className="field-help">
+          End session clears the current login only. Any saved encrypted sign-in
+          remains in the locked vault.
+        </p>
+      )}
       {error && (
         <p className="connection-error-text" role="alert">
           {error}{" "}
           {!error.startsWith("Connection setup needs attention.") &&
             (flow?.status === "pending"
               ? "Your sign-in challenge is retained. Check its status to resume."
-              : "Reload the saved connection before another change. To finish or cancel a pending sign-in on another account, select that connection first.")}
+              : "Reload the saved connection, then retry sign-in. You can also select another account to connect.")}
         </p>
       )}
       {notice && (
@@ -592,7 +609,7 @@ export function ChatGPTSignIn({
           ? flowStorage
           : signedIn
             ? account?.credential_state
-            : storage) === "encrypted"
+            : signInStorage) === "encrypted"
           ? "Sign-in tokens use the encrypted credential vault."
           : "Sign-in tokens are held for this server session only."}{" "}
         Cloud research still requires the consent setting below.

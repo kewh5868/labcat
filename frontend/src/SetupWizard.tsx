@@ -129,7 +129,6 @@ export function SetupProvider({ children }: { children: ReactNode }) {
 
 const STEPS: { id: SetupStep; label: string; detail: string }[] = [
   { id: "model", label: "Model", detail: "Required" },
-  { id: "compute", label: "Compute", detail: "Optional" },
   { id: "sources", label: "Public sources", detail: "Optional" },
   { id: "review", label: "Ready", detail: "Review" },
 ];
@@ -139,7 +138,7 @@ const modelHeadings: Record<SetupStatus["model"]["status"], string> = {
   not_connected: "Connect your model account",
   model_required: "Choose a model for your account",
   consent_required: "Allow this provider to run research",
-  credentials_locked: "Unlock your saved connection",
+  credentials_locked: "Reconnect or unlock your saved connection",
   verification_required: "Your saved connection is ready to check",
   ready: "Saved model connection verified",
   error: "Your connection check needs attention",
@@ -156,7 +155,6 @@ export default function SetupWizard({
   const setup = useSetup();
   const connection = useConnections();
   const [step, setStep] = useState<SetupStep>("model");
-  const [configureAws, setConfigureAws] = useState(false);
   const [formState, setFormState] = useState<ConnectionFormState>({
     dirty: false,
     busy: false,
@@ -349,10 +347,10 @@ export default function SetupWizard({
           const verified = await setupApi.verify();
           if (!verified.can_research) return verified;
         }
-        return setupApi.progress("compute");
+        return setupApi.progress("sources");
       });
-      if (next.can_research && next.current_step === "compute")
-        setStep("compute");
+      if (next.can_research && next.current_step === "sources")
+        setStep("sources");
     } catch {
       setVerificationRetry(connection.status);
     } finally {
@@ -433,20 +431,16 @@ export default function SetupWizard({
           <h1 id="setup-heading" ref={heading} tabIndex={-1}>
             {step === "model"
               ? "Connect your research model."
-              : step === "compute"
-                ? "Choose where the model runs."
-                : step === "sources"
-                  ? "Give research a wider view."
-                  : "Your workspace is ready to connect."}
+              : step === "sources"
+                ? "Give research a wider view."
+                : "Your workspace is ready to connect."}
           </h1>
           <p id="setup-description">
             {step === "model"
               ? "Sign in to a supported account, choose a model, and verify the connection before starting research. Your provider handles account sign-in."
-              : step === "compute"
-                ? "Your workspace runs locally by default. You can optionally use Amazon Bedrock for model inference in AWS."
-                : step === "sources"
-                  ? "Supported public APIs add reference discovery and available materials properties. Database accounts are optional."
-                  : "Review your connection, then finish setup. Every new research request checks the selected model connection."}
+              : step === "sources"
+                ? "Supported public APIs add reference discovery and available materials properties. Database accounts are optional."
+                : "Review your connection, then finish setup. Every new research request checks the selected model connection."}
           </p>
         </header>
         {setup.error && (
@@ -498,53 +492,6 @@ export default function SetupWizard({
             </fieldset>
           </>
         )}
-        {step === "compute" && (
-          <>
-            <div className="setup-local-card">
-              <span aria-hidden="true">⌂</span>
-              <div>
-                <h2>Local workspace</h2>
-                <p>
-                  Chats, settings and reports stay in this installation. Your
-                  selected provider runs the model; choosing AWS does not move
-                  the application or deploy cloud infrastructure.
-                </p>
-              </div>
-              <span className="credential-badge">Default</span>
-            </div>
-            <label className="setup-optional-toggle">
-              <input
-                type="checkbox"
-                checked={configureAws}
-                onChange={(event) => setConfigureAws(event.target.checked)}
-              />
-              <span>
-                <strong>Configure Amazon Bedrock</strong>
-                <small>
-                  Optional · Use an AWS profile provisioned for this
-                  installation. Requires AWS access to your chosen Bedrock model
-                  and may incur charges.
-                </small>
-              </span>
-            </label>
-            {configureAws && (
-              <>
-                <p className="field-help">
-                  Saving a Bedrock connection selects it for research. Verify it
-                  before finishing setup. AWS credentials are handled by the
-                  configured credential chain; no AWS password is collected
-                  here.
-                </p>
-                <ConnectionsPanel
-                  onboarding
-                  section="compute"
-                  onStateChange={setFormState}
-                  onVerifyModel={verifyModel}
-                />
-              </>
-            )}
-          </>
-        )}
         {step === "sources" && (
           <>
             <div className="setup-source-note">
@@ -571,15 +518,6 @@ export default function SetupWizard({
               onVerify={verifyReviewModel}
               onManage={() => void go("model")}
             />
-            <div>
-              <span>Workspace compute</span>
-              <strong>Local</strong>
-              <p>
-                {connection.status?.profile.provider === "bedrock"
-                  ? "Selected model inference runs on Amazon Bedrock."
-                  : "AWS is optional. No AWS deployment is created."}
-              </p>
-            </div>
             <div>
               <span>Public data APIs</span>
               <strong>Optional connections</strong>
@@ -616,14 +554,12 @@ export default function SetupWizard({
                 Back
               </button>
             )}
-            {(step === "compute" || step === "sources") && (
+            {step === "sources" && (
               <button
                 type="button"
                 className="quiet-button"
                 disabled={busy}
-                onClick={() =>
-                  void go(step === "compute" ? "sources" : "review")
-                }
+                onClick={() => void go("review")}
               >
                 Skip for now
               </button>
@@ -650,9 +586,7 @@ export default function SetupWizard({
                   (step === "model" && !ready && !canVerify)
                 }
                 onClick={() =>
-                  void (step === "model"
-                    ? continueModel()
-                    : go(step === "compute" ? "sources" : "review"))
+                  void (step === "model" ? continueModel() : go("review"))
                 }
               >
                 {step === "model" && !ready && canVerify

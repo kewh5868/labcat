@@ -31,6 +31,9 @@ HTTPS_HOSTS = frozenset(
         "auth.openai.com",
         "chatgpt.com",
         "api.anthropic.com",
+        # Native Claude Code owns OAuth login, exchange and refresh.
+        "claude.ai",
+        "platform.claude.com",
         "api.moonshot.ai",
         "generativelanguage.googleapis.com",
         "api.deepseek.com",
@@ -38,11 +41,7 @@ HTTPS_HOSTS = frozenset(
         "openrouter.ai",
     }
 )
-BEDROCK_HOST = re.compile(
-    r"bedrock-runtime\.(?:us|eu|ap|ca|sa|me|af|il|mx)"
-    r"-(?:north|south|east|west|central|northeast|southeast)"
-    r"-[1-9]\.amazonaws\.com"
-)
+
 OLLAMA_METHODS = {
     "/api/tags": "GET",
     "/api/version": "GET",
@@ -66,7 +65,7 @@ def _destination(method, target):
         if not match:
             raise ProxyError
         host = match.group(1)
-        if host not in HTTPS_HOSTS and not BEDROCK_HOST.fullmatch(host):
+        if host not in HTTPS_HOSTS:
             raise ProxyError
         return host, 443, None
     if method not in {"GET", "POST"}:

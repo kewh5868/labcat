@@ -11,7 +11,6 @@ import {
   secretLabels,
 } from "./connectionsApi";
 import type {
-  AwsProfiles,
   ConnectionProfile,
   ConnectionStatus,
   ConnectionTest,
@@ -24,6 +23,7 @@ import type {
 import PublicSourcesPanel from "./PublicSources";
 import MaterialsProjectConnection from "./MaterialsProjectConnection";
 import { AgentConnectionsCard, ChatGPTSignIn } from "./AgentConnections";
+import ClaudeCodeConnection from "./ClaudeCodeConnection";
 import { modelConnectionSummary } from "./modelConnectionSummary";
 import type { SetupStatus } from "./setupApi";
 import LabcatMascot from "./LabcatMascot";
@@ -171,22 +171,11 @@ export function ConnectionNotice({
   );
 }
 
-type ConnectionSection = "all" | "model" | "compute" | "sources";
+type ConnectionSection = "all" | "model" | "sources";
 export interface ConnectionFormState {
   dirty: boolean;
   busy: boolean;
 }
-function draftConnection(status: ConnectionStatus, section: ConnectionSection) {
-  return section === "compute" && status.profile.provider !== "bedrock"
-    ? {
-        ...status.profile,
-        provider: "bedrock" as const,
-        model: "",
-        allow_paid_inference: false,
-      }
-    : { ...status.profile };
-}
-
 export function ConnectionsPanel({
   onboarding = false,
   onDone,
@@ -261,20 +250,13 @@ function ConnectionForm({
   onVerifyModel?: () => Promise<ConnectionTest>;
 }) {
   const connection = useConnections();
-  const [profile, setProfile] = useState<ConnectionProfile>(() =>
-    draftConnection(status, section),
-  );
-  const [accountId, setAccountId] = useState(
-    section === "compute" && status.profile.provider !== "bedrock"
-      ? ""
-      : (status.active_account_id ?? ""),
-  );
+  const [profile, setProfile] = useState<ConnectionProfile>(() => ({
+    ...status.profile,
+  }));
+  const [accountId, setAccountId] = useState(status.active_account_id ?? "");
   const [accountLabel, setAccountLabel] = useState(
-    section === "compute" && status.profile.provider !== "bedrock"
-      ? "Amazon Bedrock"
-      : (status.accounts.find(
-          (account) => account.id === status.active_account_id,
-        )?.label ?? providerAccountLabels[status.profile.provider]),
+    status.accounts.find((account) => account.id === status.active_account_id)
+      ?.label ?? providerAccountLabels[status.profile.provider],
   );
   const [catalog, setCatalog] = useState<ModelCatalog | null>(null);
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -287,7 +269,6 @@ function ConnectionForm({
     revision: number;
   } | null>(null);
   const [signInRequested, setSignInRequested] = useState("");
-  const [aws, setAws] = useState<AwsProfiles | null>(null);
   const [secrets, setSecrets] = useState(emptySecrets);
   const [sourceState, setSourceState] = useState<ConnectionFormState>({
     dirty: false,
@@ -305,6 +286,10 @@ function ConnectionForm({
   const [passphrase, setPassphrase] = useState("");
   const [confirmPassphrase, setConfirmPassphrase] = useState("");
   const [confirmReset, setConfirmReset] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [credentialDraftRevision, setCredentialDraftRevision] = useState(0);
   const mounted = useRef(true);
   const lock = useRef(false);
   const savedProfile = JSON.stringify(status.profile);
@@ -322,36 +307,16 @@ function ConnectionForm({
       ?.label,
   ]);
   useEffect(() => {
-    setProfile(draftConnection(status, section));
+    setProfile({ ...status.profile });
   }, [savedProfile, section]);
   useEffect(() => {
-    setAccountId(
-      section === "compute" && status.profile.provider !== "bedrock"
-        ? ""
-        : (status.active_account_id ?? ""),
-    );
+    setAccountId(status.active_account_id ?? "");
     setAccountLabel(
-      section === "compute" && status.profile.provider !== "bedrock"
-        ? "Amazon Bedrock"
-        : (status.accounts.find(
-            (account) => account.id === status.active_account_id,
-          )?.label ?? providerAccountLabels[status.profile.provider]),
+      status.accounts.find((account) => account.id === status.active_account_id)
+        ?.label ?? providerAccountLabels[status.profile.provider],
     );
     setCatalog(null);
   }, [savedAccountIdentity, section]);
-  useEffect(() => {
-    if (profile.provider !== "bedrock") return;
-    const controller = new AbortController();
-    connectionsApi
-      .awsProfiles(controller.signal)
-      .then((value) => {
-        if (!controller.signal.aborted) setAws(value);
-      })
-      .catch((error: unknown) => {
-        if (!controller.signal.aborted) setError(connectionError(error));
-      });
-    return () => controller.abort();
-  }, [profile.provider]);
   useEffect(() => {
     if (!status.vault.available || status.vault.locked) setStorage("session");
   }, [status.vault.available, status.vault.locked]);
@@ -384,9 +349,7 @@ function ConnectionForm({
     (section === "sources" ||
       (modelRequired &&
         profile.provider !== "ollama" &&
-        Boolean(accountLabel.trim()) &&
-        (profile.provider !== "bedrock" ||
-          Boolean(profile.aws_profile && profile.aws_region))));
+        Boolean(accountLabel.trim())));
   useEffect(() => {
     onStateChange?.({
       dirty:
@@ -417,17 +380,12 @@ function ConnectionForm({
   const selectedAccount = status.accounts.find(
     (account) => account.id === accountId,
   );
-  const needsCredentialUnlock =
-    status.vault.locked &&
-    ((showModel && selectedAccount?.credential_state === "locked") ||
-      (showSources && status.credentials.materials_project === "locked"));
-  const [advancedCredentialsOpen, setAdvancedCredentialsOpen] = useState(
-    needsCredentialUnlock,
-  );
+  const needsCredentialUnlock = status.vault.locked;
+  const [advancedCredentialsOpen, setAdvancedCredentialsOpen] = useState(false);
   const advancedCredentials = useRef<HTMLDetailsElement>(null);
-  useEffect(() => {
-    if (needsCredentialUnlock) setAdvancedCredentialsOpen(true);
-  }, [needsCredentialUnlock]);
+  const providerAccounts = status.accounts.filter(
+    (account) => account.profile.provider === profile.provider,
+  );
   function revealCredentialOptions() {
     setAdvancedCredentialsOpen(true);
     const details = advancedCredentials.current;
@@ -557,7 +515,8 @@ function ConnectionForm({
           {
             label: accountLabel.trim(),
             profile,
-            secret_storage: storage,
+            secret_storage:
+              profile.provider === "claude_code" ? "session" : storage,
             ...(keyProvider && enteredSecrets[keyProvider]
               ? { api_key: enteredSecrets[keyProvider] }
               : {}),
@@ -590,17 +549,55 @@ function ConnectionForm({
         );
     });
   }
-  function selectProvider(provider: Provider) {
-    if (lock.current || busy || connection.error) return;
+  function clearConnectionDraft() {
     setSecrets(emptySecrets());
     setTests([]);
     setNotice("");
     setError("");
     setCatalog(null);
     setSignInRequested("");
-    // Retain provider sessions internally without making users manage named
-    // connections. Prefer the active account when a legacy workspace has more
-    // than one connection for this provider; never delete the others.
+  }
+  function startAnotherAccount(provider: Provider) {
+    if (lock.current || busy || connection.error) return;
+    clearConnectionDraft();
+    setProfile((current) => ({
+      ...current,
+      provider,
+      model: provider === "claude_code" ? "default" : "",
+      allow_paid_inference: false,
+    }));
+    setAccountId("");
+    const base = providerAccountLabels[provider];
+    const labels = new Set(status.accounts.map((account) => account.label));
+    let label = base,
+      suffix = 2;
+    while (labels.has(label)) label = `${base} ${suffix++}`;
+    setAccountLabel(provider === "none" ? "" : label);
+  }
+  function selectAccount(identifier: string) {
+    if (lock.current || busy || connection.error) return;
+    const account = status.accounts.find((item) => item.id === identifier);
+    if (!account) return;
+    clearConnectionDraft();
+    preferredAccounts.current.set(account.profile.provider, account.id);
+    if (account.id === status.active_account_id) {
+      restoreConnection(status);
+      return;
+    }
+    void task(async () => {
+      const next = await connection.apply(() =>
+        connectionsApi.selectAccount(account.id),
+      );
+      if (mounted.current) {
+        restoreConnection(next);
+        setNotice(`${account.label} selected.`);
+      }
+    });
+  }
+  function selectProvider(provider: Provider) {
+    if (lock.current || busy || connection.error) return;
+    // Keep each provider's last selected account available without discarding
+    // any saved account, model, consent or credential.
     const existing =
       status.accounts.find(
         (account) =>
@@ -618,30 +615,8 @@ function ConnectionForm({
           ["session", "encrypted"].includes(account.credential_state),
       ) ??
       status.accounts.find((account) => account.profile.provider === provider);
-    if (existing) {
-      if (existing.id === status.active_account_id) {
-        restoreConnection(status);
-      } else {
-        void task(async () => {
-          const next = await connection.apply(() =>
-            connectionsApi.selectAccount(existing.id),
-          );
-          if (mounted.current) {
-            restoreConnection(next);
-            setNotice(`${providerAccountLabels[provider]} selected.`);
-          }
-        });
-      }
-      return;
-    }
-    setProfile((current) => ({
-      ...current,
-      provider,
-      model: "",
-      allow_paid_inference: false,
-    }));
-    setAccountId("");
-    setAccountLabel(provider === "none" ? "" : providerAccountLabels[provider]);
+    if (existing) selectAccount(existing.id);
+    else startAnotherAccount(provider);
   }
   function restoreConnection(next: ConnectionStatus) {
     setProfile({ ...next.profile });
@@ -674,6 +649,22 @@ function ConnectionForm({
       }
     });
   }
+  async function prepareClaudeCodeSignIn() {
+    if (!validProfile) return;
+    await task(async () => {
+      const next = await connection.apply(() =>
+        connectionsApi.saveAccount(
+          {
+            label: accountLabel.trim() || providerAccountLabels.claude_code,
+            profile,
+            secret_storage: "session",
+          },
+          accountId || undefined,
+        ),
+      );
+      if (mounted.current) restoreConnection(next);
+    });
+  }
   function forget(name: SecretName) {
     setSecrets(emptySecrets());
     void task(async () => {
@@ -688,8 +679,13 @@ function ConnectionForm({
     });
   }
   function vault(action: VaultAction) {
-    if (action.action === "lock" || action.action === "reset")
+    if (action.action === "lock" || action.action === "reset") {
       setSecrets(emptySecrets());
+      setCredentialDraftRevision((value) => value + 1);
+    }
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmNewPassword("");
     setPassphrase("");
     setConfirmPassphrase("");
     setConfirmReset(false);
@@ -703,12 +699,20 @@ function ConnectionForm({
       if (mounted.current)
         setNotice(
           action.action === "reset"
-            ? "Encrypted keys removed. Connection preferences and chat history are unchanged."
-            : `Credential vault ${action.action === "create" ? "created" : action.action === "unlock" ? "unlocked" : "locked"}.`,
+            ? "Vault reset. Vault-managed saved and session-only credentials were cleared. Reconnect those accounts and keys; native Claude Code sessions, connection preferences and chat history are unchanged."
+            : action.action === "change_passphrase"
+              ? "Vault password changed. Your saved credentials are available without entering the API keys again."
+              : `Credential vault ${action.action === "create" ? "created" : action.action === "unlock" ? "unlocked" : "locked"}.`,
         );
     });
   }
   const passphraseValid = passphrase.length >= 12 && passphrase.length <= 1024;
+  const passwordChangeValid =
+    currentPassword.length >= 12 &&
+    currentPassword.length <= 1024 &&
+    newPassword.length >= 12 &&
+    newPassword.length <= 1024 &&
+    newPassword === confirmNewPassword;
   const vaultCard = (
     <section
       className={`connection-card vault-card card ${status.vault.locked ? "locked" : ""}`}
@@ -735,13 +739,14 @@ function ConnectionForm({
       {status.vault.can_create ? (
         <>
           <p>
-            Create an application vault passphrase to encrypt keys on this
-            machine. It is not an AWS or model-account password. You will need
-            it to unlock saved keys after restarting.
+            Create a vault password to remember credentials securely on this
+            machine. Unlock once after the Labcat server restarts; you do not
+            need to enter each saved API key again. This password is separate
+            from your provider account password.
           </p>
           <div className="connection-field-grid">
             <div>
-              <label htmlFor="vault-passphrase">New vault passphrase</label>
+              <label htmlFor="vault-passphrase">New vault password</label>
               <input
                 id="vault-passphrase"
                 type="password"
@@ -754,7 +759,7 @@ function ConnectionForm({
               />
             </div>
             <div>
-              <label htmlFor="vault-confirm">Confirm vault passphrase</label>
+              <label htmlFor="vault-confirm">Confirm vault password</label>
               <input
                 id="vault-confirm"
                 type="password"
@@ -767,8 +772,8 @@ function ConnectionForm({
             </div>
           </div>
           <p className="field-help">
-            Use at least 12 characters. This app does not save the passphrase.
-            If you forget it, encrypted keys must be reset and entered again.
+            Use at least 12 characters. The password is not saved on disk. If
+            you forget it, reset the vault and reconnect your credentials.
           </p>
           <button
             className="quiet-button"
@@ -784,11 +789,13 @@ function ConnectionForm({
       ) : status.vault.locked && status.vault.key_source === "passphrase" ? (
         <>
           <p>
-            Unlock the vault to make its encrypted keys available for this
-            server session. Saved chats remain available while the vault is
+            Enter your vault password once after the Labcat server restarts.
+            Your saved API keys and vault-managed account sign-ins become
+            available without entering them again. Saved keys are never sent
+            back to this browser. Chats remain available while the vault is
             locked.
           </p>
-          <label htmlFor="vault-unlock">Vault passphrase</label>
+          <label htmlFor="vault-unlock">Vault password</label>
           <input
             id="vault-unlock"
             type="password"
@@ -811,7 +818,7 @@ function ConnectionForm({
         <>
           <p>
             {status.vault.key_source === "passphrase"
-              ? "Locking clears all active keys from memory, including session-only keys. Saved encrypted keys remain on disk and can be unlocked again."
+              ? "Your saved credentials are available. Leave API-key fields blank to keep using them; their values are never sent to this browser. Locking clears active vault-managed credentials, including session-only keys. Native Claude Code sessions are separate. Saved encrypted keys remain on disk and can be unlocked again."
               : "This installation supplies the encryption key through its deployment configuration."}
           </p>
           {status.vault.key_source === "passphrase" && (
@@ -831,13 +838,80 @@ function ConnectionForm({
           administrator to restore it, or use session-only keys.
         </p>
       )}
+      {status.vault.exists && status.vault.key_source === "passphrase" && (
+        <details className="vault-change-password vault-reset">
+          <summary>Change vault password</summary>
+          <p>
+            Enter the current password and choose a new password of at least 12
+            characters. Saved credentials stay encrypted and remain available;
+            you will use the new password after the next server restart.
+          </p>
+          <label htmlFor="vault-current-password">Current vault password</label>
+          <input
+            id="vault-current-password"
+            type="password"
+            autoComplete="current-password"
+            maxLength={1024}
+            value={currentPassword}
+            disabled={busy}
+            onChange={(event) => setCurrentPassword(event.target.value)}
+          />
+          <label htmlFor="vault-new-password">New vault password</label>
+          <input
+            id="vault-new-password"
+            type="password"
+            autoComplete="new-password"
+            minLength={12}
+            maxLength={1024}
+            value={newPassword}
+            disabled={busy}
+            onChange={(event) => setNewPassword(event.target.value)}
+          />
+          <label htmlFor="vault-new-password-confirm">
+            Confirm new vault password
+          </label>
+          <input
+            id="vault-new-password-confirm"
+            type="password"
+            autoComplete="new-password"
+            maxLength={1024}
+            value={confirmNewPassword}
+            disabled={busy}
+            onChange={(event) => setConfirmNewPassword(event.target.value)}
+          />
+          <button
+            className="quiet-button"
+            type="button"
+            disabled={busy || !passwordChangeValid}
+            onClick={() =>
+              vault({
+                action: "change_passphrase",
+                current_passphrase: currentPassword,
+                new_passphrase: newPassword,
+              })
+            }
+          >
+            Change vault password
+          </button>
+        </details>
+      )}
       {status.vault.exists && (
         <details className="vault-reset">
-          <summary>Reset encrypted credentials</summary>
+          <summary>
+            {status.vault.key_source === "passphrase"
+              ? "Forgot password? Reset vault"
+              : "Reset credential vault"}
+          </summary>
           <p>
-            This deletes the encrypted API keys. Separately entered session-only
-            keys, connection preferences, projects and chat history are
-            retained. You will need to enter those keys again.
+            This clears all vault-managed saved encrypted and session-only
+            credentials, including saved account sign-ins
+            {status.vault.key_source === "passphrase"
+              ? ", and removes the vault password"
+              : ""}
+            . You will need to enter API keys or sign in again. Connection
+            preferences, projects, chats and reports are kept. Cleared
+            credentials cannot be recovered by Labcat. Native Claude Code
+            sessions are separate; use End Claude Code session to clear them.
           </p>
           <label className="reset-confirm">
             <input
@@ -846,7 +920,10 @@ function ConnectionForm({
               disabled={busy}
               onChange={(event) => setConfirmReset(event.target.checked)}
             />
-            <span>I understand that the encrypted keys will be deleted.</span>
+            <span>
+              I understand that all vault-managed encrypted and session-only
+              credentials will be cleared.
+            </span>
           </label>
           <button
             className="danger-button"
@@ -854,7 +931,7 @@ function ConnectionForm({
             disabled={busy || !confirmReset}
             onClick={() => vault({ action: "reset", confirm: true })}
           >
-            Reset encrypted keys
+            Reset vault and clear credentials
           </button>
         </details>
       )}
@@ -872,8 +949,8 @@ function ConnectionForm({
           <p className="eyebrow">LOCAL WORKSPACE · CONNECTIONS</p>
           <h1>Your sources and model connections.</h1>
           <p>
-            Connect a language model for research. AWS model compute and
-            additional public databases are optional.
+            Connect a language model for research. Additional public databases
+            are optional.
           </p>
           {onSetup && (
             <button className="quiet-button" type="button" onClick={onSetup}>
@@ -887,15 +964,19 @@ function ConnectionForm({
       {needsCredentialUnlock && (
         <div className="credential-unlock-notice" role="status">
           <p>
-            Your saved connection needs its credentials unlocked. Chats and
-            reports remain available.
+            {status.vault.key_source === "passphrase"
+              ? "The vault is optional. Switch accounts or connect again for this server session without unlocking. Unlock only to reuse saved credentials; a forgotten password can be reset in credential options."
+              : "The encryption key for saved credentials is unavailable. Review credential storage for session-only access or ask your administrator to restore it."}{" "}
+            Chats and reports remain available.
           </p>
           <button
             className="quiet-button"
             type="button"
             onClick={revealCredentialOptions}
           >
-            Review saved credentials
+            {status.vault.key_source === "passphrase"
+              ? "Unlock saved credentials"
+              : "Review credential storage"}
           </button>
         </div>
       )}
@@ -909,24 +990,20 @@ function ConnectionForm({
             <section className="connection-card card">
               <div className="connection-card-heading">
                 <div>
-                  <p className="eyebrow">
-                    {section === "compute"
-                      ? "OPTIONAL AWS MODEL CONNECTION"
-                      : "REQUIRED RESEARCH MODEL"}
-                  </p>
+                  <p className="eyebrow">REQUIRED RESEARCH MODEL</p>
                   <h2>Language model provider</h2>
                 </div>
               </div>
               <p>
-                Choose a provider, connect it, then select a model for research.
+                Choose a provider and account, then select a model for research.
+                The credential vault is optional; you can connect for this
+                server session.
               </p>
               <label htmlFor="model-provider">Model provider</label>
               <select
                 id="model-provider"
                 value={profile.provider}
-                disabled={
-                  busy || Boolean(connection.error) || section === "compute"
-                }
+                disabled={busy || Boolean(connection.error)}
                 onChange={(event) =>
                   selectProvider(event.target.value as Provider)
                 }
@@ -947,14 +1024,64 @@ function ConnectionForm({
                   </option>
                 ))}
               </select>
+              {providerAccounts.length > 0 && (
+                <>
+                  <label htmlFor="provider-account">Account</label>
+                  <select
+                    id="provider-account"
+                    value={accountId}
+                    disabled={busy || Boolean(connection.error)}
+                    onChange={(event) =>
+                      event.target.value
+                        ? selectAccount(event.target.value)
+                        : startAnotherAccount(profile.provider)
+                    }
+                  >
+                    {providerAccounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.label} ·{" "}
+                        {account.profile.model || "Choose a model"}
+                        {account.credential_state === "locked"
+                          ? " · Reconnect or unlock"
+                          : account.credential_state === "missing"
+                            ? " · Connect to use"
+                            : ""}
+                      </option>
+                    ))}
+                    <option value="" disabled={status.accounts.length >= 12}>
+                      Connect another account…
+                    </option>
+                  </select>
+                  {!accountId && (
+                    <>
+                      <label htmlFor="new-account-label">Account label</label>
+                      <input
+                        id="new-account-label"
+                        type="text"
+                        value={accountLabel}
+                        maxLength={80}
+                        disabled={busy}
+                        onChange={(event) =>
+                          setAccountLabel(event.target.value)
+                        }
+                      />
+                      <p className="field-help">
+                        Give this account a name you will recognize when
+                        switching. Your other accounts and their saved models
+                        stay available.
+                      </p>
+                    </>
+                  )}
+                </>
+              )}
               <p className="field-help">
                 {profile.provider === "chatgpt"
                   ? "Connect using your existing ChatGPT account in the browser."
-                  : profile.provider === "bedrock"
-                    ? "Use an AWS profile to access models available through Amazon Bedrock."
+                  : profile.provider === "claude_code"
+                    ? "Connect through the native Claude Code terminal sign-in. No API key or vault is required."
                     : profile.provider === "none" ||
                         profile.provider === "ollama"
-                      ? "ChatGPT supports account sign-in. Other providers use an API key or AWS profile."
+                      ? "ChatGPT and Claude Code support account sign-in. API providers use an API key."
                       : `Connect ${providerAccountLabels[profile.provider]} using its API key.`}
               </p>
 
@@ -993,9 +1120,20 @@ function ConnectionForm({
                     }
                   />
                   <p className="field-help">
-                    Use provider API credentials. A consumer chat subscription
-                    is not an API login.
+                    {accountId && status.credentials[keyProvider] !== "missing"
+                      ? "A key is already saved. Leave this field blank to keep it; saved key values are never sent to your browser. "
+                      : "Enter this provider’s API key. "}
+                    A consumer chat subscription is not an API login.
                   </p>
+                  {status.vault.locked && (
+                    <p className="field-help">
+                      To use your encrypted key, unlock saved credentials above.
+                      You can also paste the same or a different API key for
+                      this server session. Submitted keys stay in memory until
+                      the server stops; your saved encrypted keys stay
+                      unchanged.
+                    </p>
+                  )}
                   <button
                     className="quiet-button"
                     type="button"
@@ -1013,7 +1151,8 @@ function ConnectionForm({
                       busy ||
                       changed ||
                       !accountId ||
-                      status.credentials[keyProvider] === "missing"
+                      status.credentials[keyProvider] === "missing" ||
+                      status.vault.locked
                     }
                     onClick={() => forget(keyProvider)}
                   >
@@ -1038,119 +1177,24 @@ function ConnectionForm({
                   onStartHandled={() => setSignInRequested("")}
                 />
               )}
+              {profile.provider === "claude_code" && (
+                <ClaudeCodeConnection
+                  key={accountId || "new-claude-code-account"}
+                  accountId={accountId}
+                  disabled={
+                    busy ||
+                    Boolean(connection.error) ||
+                    (!accountId && !validProfile)
+                  }
+                  onPrepare={() => void prepareClaudeCodeSignIn()}
+                />
+              )}
               {profile.provider === "anthropic" && (
                 <p className="field-help">
-                  Claude models connect through an Anthropic API key here, or
-                  through Amazon Bedrock. Signing into a Claude consumer
-                  subscription is not supported by this connection.
+                  Claude models connect through an Anthropic API key here. For
+                  native Claude Code account sign-in, choose Anthropic (Claude
+                  Code sign-in) from Model provider.
                 </p>
-              )}
-              {profile.provider === "bedrock" && (
-                <section className="aws-connection-setup">
-                  <div className="connection-field-grid">
-                    <div>
-                      <label htmlFor="aws-profile">AWS profile</label>
-                      <select
-                        id="aws-profile"
-                        value={profile.aws_profile}
-                        disabled={busy}
-                        onChange={(event) =>
-                          setProfile((current) => ({
-                            ...current,
-                            aws_profile: event.target.value,
-                          }))
-                        }
-                      >
-                        <option value="" disabled>
-                          Choose an installed AWS profile…
-                        </option>
-                        {profile.aws_profile &&
-                          !aws?.profiles.includes(profile.aws_profile) && (
-                            <option value={profile.aws_profile}>
-                              {profile.aws_profile} · saved
-                            </option>
-                          )}
-                        {aws?.profiles.map((name) => (
-                          <option key={name} value={name}>
-                            {name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label htmlFor="aws-region">AWS region</label>
-                      <select
-                        id="aws-region"
-                        value={profile.aws_region}
-                        disabled={busy}
-                        onChange={(event) =>
-                          setProfile((current) => ({
-                            ...current,
-                            aws_region: event.target.value,
-                          }))
-                        }
-                      >
-                        <option value="">Choose a region…</option>
-                        {profile.aws_region &&
-                          !aws?.regions.includes(profile.aws_region) && (
-                            <option value={profile.aws_region}>
-                              {profile.aws_region}
-                            </option>
-                          )}
-                        {aws?.regions.map((region) => (
-                          <option key={region} value={region}>
-                            {region}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  <details className="aws-signin-guide">
-                    <summary>
-                      Connect an AWS profile available to this installation
-                    </summary>
-                    <p>
-                      {aws?.setup.message ??
-                        "Your site administrator can provision an AWS profile for this installation. Host account files are not imported automatically."}
-                    </p>
-                    {aws?.setup.commands.map((command) => (
-                      <pre key={command}>
-                        <code>{command}</code>
-                      </pre>
-                    ))}
-                    {aws && (
-                      <a
-                        href={aws.setup.documentation_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        AWS sign-in instructions{" "}
-                        <span aria-hidden="true">↗</span>
-                      </a>
-                    )}
-                    <p>
-                      AWS handles your sign-in. This application does not
-                      collect an AWS password. Bedrock runs model planning; the
-                      workspace continues to run locally.
-                    </p>
-                  </details>
-                  <button
-                    type="button"
-                    className="text-action"
-                    disabled={busy}
-                    onClick={() =>
-                      void task(async () => {
-                        const next = await connectionsApi.awsProfiles();
-                        if (mounted.current) {
-                          setAws(next);
-                          setNotice("Available AWS profiles refreshed.");
-                        }
-                      })
-                    }
-                  >
-                    Refresh AWS profiles
-                  </button>
-                </section>
               )}
               {modelRequired && (
                 <section
@@ -1208,9 +1252,11 @@ function ConnectionForm({
                       : catalog?.message ||
                         (catalogReady
                           ? "Choose a returned model, then save your selection below."
-                          : profile.provider === "chatgpt"
-                            ? "Finish provider sign-in to load available models automatically."
-                            : "Save your credentials above to load available models automatically.")}
+                          : profile.provider === "claude_code"
+                            ? "Finish native terminal sign-in, then check its status above. Available choices are Claude Code aliases; they do not verify account entitlement or run inference."
+                            : profile.provider === "chatgpt"
+                              ? "Finish provider sign-in to load available models automatically."
+                              : "Save your credentials above to load available models automatically.")}
                   </p>
                   {catalogError && (
                     <p className="connection-error-text" role="alert">
@@ -1218,28 +1264,30 @@ function ConnectionForm({
                       and use Refresh models to try again.
                     </p>
                   )}
-                  <details className="model-advanced">
-                    <summary>Advanced model settings</summary>
-                    <label htmlFor="custom-model-id">Model identifier</label>
-                    <input
-                      id="custom-model-id"
-                      value={profile.model}
-                      disabled={busy || !catalogReady}
-                      autoComplete="off"
-                      maxLength={200}
-                      onChange={(event) =>
-                        setProfile((current) => ({
-                          ...current,
-                          model: event.target.value,
-                        }))
-                      }
-                      placeholder="Exact identifier supplied by your provider"
-                    />
-                    <p className="field-help">
-                      Only use this when your provider documents a model that is
-                      absent from its returned list.
-                    </p>
-                  </details>
+                  {profile.provider !== "claude_code" && (
+                    <details className="model-advanced">
+                      <summary>Advanced model settings</summary>
+                      <label htmlFor="custom-model-id">Model identifier</label>
+                      <input
+                        id="custom-model-id"
+                        value={profile.model}
+                        disabled={busy || !catalogReady}
+                        autoComplete="off"
+                        maxLength={200}
+                        onChange={(event) =>
+                          setProfile((current) => ({
+                            ...current,
+                            model: event.target.value,
+                          }))
+                        }
+                        placeholder="Exact identifier supplied by your provider"
+                      />
+                      <p className="field-help">
+                        Only use this when your provider documents a model that
+                        is absent from its returned list.
+                      </p>
+                    </details>
+                  )}
                 </section>
               )}
               {cloud && (
@@ -1337,6 +1385,7 @@ function ConnectionForm({
           refreshKey={JSON.stringify(status.source_connections ?? {})}
           materialsProjectCard={
             <MaterialsProjectConnection
+              key={credentialDraftRevision}
               disabled={working}
               onCredentialOptions={revealCredentialOptions}
               onStateChange={setSourceCredentialState}
@@ -1354,8 +1403,9 @@ function ConnectionForm({
       >
         <summary>Advanced credential options</summary>
         <p className="credential-privacy-note">
-          Connection credentials are kept out of chat and session history.
-          Choose whether to remember them after a restart.
+          Unlock saved credentials, change your vault password, or reset a
+          forgotten password here. Connection credentials are kept out of chat
+          and session history and are never sent back to the browser.
         </p>
         <div className="advanced-credential-controls">
           <section className="connection-card card">
@@ -1364,9 +1414,10 @@ function ConnectionForm({
             <p>
               Keys entered here are write-only and never placed in browser
               storage. Connection preferences are remembered separately from
-              secrets. This choice applies to newly submitted model credentials.
-              Research database keys use the storage option in their own card;
-              saved credentials stay unchanged.
+              secrets. Choose encrypted storage to remember an available model
+              key without entering it again, then save the connection. Leaving
+              the key field blank keeps its value. Research database keys use
+              the storage option in their own card.
             </p>
             <div className="storage-options">
               <label>
@@ -1381,8 +1432,10 @@ function ConnectionForm({
                 <span>
                   <strong>This server session</strong>
                   <small>
-                    Keys are held in memory and must be re-entered after the
-                    server restarts.
+                    Submitted keys stay in memory until the server stops. Any
+                    existing encrypted key stays saved and is used again after
+                    restarting and unlocking. Leave the key blank to keep its
+                    saved value.
                   </small>
                 </span>
               </label>
@@ -1401,7 +1454,7 @@ function ConnectionForm({
                   <strong>Encrypted credential vault</strong>
                   <small>
                     {status.vault.available && !status.vault.locked
-                      ? "Encrypt submitted keys on disk using the unlocked vault."
+                      ? "Encrypt submitted or already available model keys on disk when you save the connection."
                       : "Create or unlock the credential vault below before selecting this option."}
                   </small>
                 </span>
@@ -1440,9 +1493,7 @@ function ConnectionForm({
               <strong>
                 {result.target === "materials_project"
                   ? "Materials Project"
-                  : result.target === "aws"
-                    ? "AWS credentials"
-                    : "Model connection"}{" "}
+                  : "Model connection"}{" "}
                 ·{" "}
                 {result.status === "ok"
                   ? "Ready"

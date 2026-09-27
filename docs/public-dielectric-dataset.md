@@ -34,8 +34,8 @@ phase dependence and calculation limitations remain caveats.
 ## Transport and validation
 
 Only `https://ndownloader.figshare.com/files/13213475` is requested. One redirect
-is permitted to the exact reviewed HTTPS object path on
-`s3-eu-west-1.amazonaws.com`; only the expected S3 signing parameters are accepted.
+is permitted to the exact reviewed HTTPS object-store destination and path; only
+the expected signing parameters are accepted.
 The temporary signed URL is not returned, logged or stored as provenance. No
 cookies, account credentials, environmental proxy or arbitrary URL is used.
 Every host resolves to public addresses before a socket connects to that checked

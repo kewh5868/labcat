@@ -20,6 +20,8 @@ FROM python:3.13-slim@sha256:9d2e5553305c7c7b0097999bb17187c69b921ccd6bc9d40e4bb
 ARG TARGETARCH
 COPY scripts/install_goose.py /build/install_goose.py
 RUN python /build/install_goose.py "$TARGETARCH"
+COPY scripts/install_claude.py /build/install_claude.py
+RUN python /build/install_claude.py "$TARGETARCH"
 
 FROM python:3.13-slim@sha256:9d2e5553305c7c7b0097999bb17187c69b921ccd6bc9d40e4bb5ebe652c00285 AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 LABCAT_DATA_DIR=/var/lib/labcat LABCAT_AGENT_ENGINE=goose
@@ -29,9 +31,12 @@ RUN python -m pip install --no-cache-dir --require-hashes -r requirements/runtim
 COPY --from=build /wheels /wheels
 COPY --from=agents /agent-bin/goose /usr/local/bin/goose
 COPY --from=agents /agent-bin/codex /usr/local/bin/codex
+COPY --from=agents /agent-bin/claude /usr/local/bin/claude
 COPY third_party/ /usr/share/licenses/labcat/
 RUN python -m pip install --no-cache-dir --no-deps /wheels/*.whl \
     && rm -rf /wheels \
+    && printf '#!/bin/sh\nexec python -I -m labcat.claude_runtime_wrapper "$@"\n' > /usr/local/bin/labcat-claude-runtime \
+    && chmod 0755 /usr/local/bin/labcat-claude-runtime \
     && groupadd --gid 10001 labcat \
     && useradd --uid 10001 --gid labcat --create-home labcat \
     && install -d -m 0700 -o 10001 -g 10001 /var/lib/labcat

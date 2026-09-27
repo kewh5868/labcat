@@ -44,8 +44,6 @@ const profile = (
   model,
   allow_paid_inference,
   ollama_url: "http://localhost:11434",
-  aws_profile: "",
-  aws_region: "",
 });
 function statusFixture(accounts = []) {
   return {
@@ -216,8 +214,6 @@ test("composer profiles are per-request and model changes retain credentials and
         checked_at: modelStatus === "ready" ? "2026-09-10T12:00:00Z" : null,
       },
       optional: {
-        compute: "local",
-        aws_required: false,
         data_apis_required: false,
       },
     };
@@ -544,13 +540,13 @@ test("composer profiles are per-request and model changes retain credentials and
       "the closed model popup does not fetch a catalog",
     );
     await click(trigger("model"));
-    await click(choice("OpenAI API (ChatGPT models)"));
+    await click(choice("Research account"));
     assert.equal(state.active_account_id, "cloud");
     const legacyDuplicate = {
       id: "legacy-openai",
       label: "Older private account label",
       profile: profile("openai", "legacy-model"),
-      credential_state: "missing",
+      credential_state: "session",
     };
     state.accounts.unshift(legacyDuplicate);
     await act(async () => {
@@ -560,24 +556,39 @@ test("composer profiles are per-request and model changes retain credentials and
       [...document.querySelectorAll(".composer-account-list strong")].map(
         (item) => item.textContent,
       ),
-      ["OpenAI API (ChatGPT models)", "Anthropic (Claude) API"],
-      "one provider choice is shown, with the active account first even when a legacy duplicate precedes it",
+      ["Research account", "Older private account label", "Locked account"],
+      "every account remains selectable, with the active account first",
     );
     assert.equal(
-      choice("OpenAI API (ChatGPT models)").getAttribute("aria-pressed"),
+      choice("Research account").getAttribute("aria-pressed"),
       "true",
     );
+    assert.match(choice("Research account").textContent, /saved-model/);
     assert.match(
-      choice("OpenAI API (ChatGPT models)").textContent,
-      /saved-model/,
+      choice("Older private account label").textContent,
+      /OpenAI API.*legacy-model/,
     );
-    assert.doesNotMatch(
-      document.querySelector(".composer-account-list").textContent,
-      /Research account|Locked account|Older private account label|legacy-model/,
-      "internal saved account names and duplicate rows are not shown",
+    deferCatalog = true;
+    await click(button("Refresh models"));
+    const oldAccountCatalog = catalogs.at(-1);
+    assert.equal(
+      choice("Older private account label").disabled,
+      false,
+      "background catalog loading does not block account switching",
     );
+    deferCatalog = false;
+    await click(choice("Older private account label"));
+    assert.equal(state.active_account_id, "legacy-openai");
+    assert.equal(oldAccountCatalog.signal.aborted, true);
+    await act(async () => oldAccountCatalog.finish());
+    assert.equal(
+      document.querySelector(".composer-active-model select").value,
+      "legacy-model",
+    );
+    await click(choice("Research account"));
+    assert.equal(state.active_account_id, "cloud");
     const beforeCurrentClick = calls.length;
-    await click(choice("OpenAI API (ChatGPT models)"));
+    await click(choice("Research account"));
     assert.equal(
       calls.length,
       beforeCurrentClick,
@@ -628,6 +639,7 @@ test("composer profiles are per-request and model changes retain credentials and
     );
     assert.equal(document.querySelector("#setup-probe").dataset.ready, "false");
 
+    const beforeCredentialCatalogs = catalogs.length;
     deferCatalog = true;
     cloud.credential_state = "session";
     state.credentials.openai = "session";
@@ -636,10 +648,10 @@ test("composer profiles are per-request and model changes retain credentials and
     });
     assert.equal(
       catalogs.length,
-      1,
+      beforeCredentialCatalogs + 1,
       "a changed credential state automatically reloads its catalog",
     );
-    const oldCatalog = catalogs[0];
+    const oldCatalog = catalogs.at(-1);
     assert.ok(document.querySelector(".composer-active-model select").disabled);
     cloud.credential_state = "encrypted";
     state.credentials.openai = "encrypted";
@@ -651,7 +663,7 @@ test("composer profiles are per-request and model changes retain credentials and
       true,
       "the old credential lookup is aborted",
     );
-    assert.equal(catalogs.length, 2);
+    assert.equal(catalogs.length, beforeCredentialCatalogs + 2);
     await act(async () => oldCatalog.finish());
     assert.ok(
       document.querySelector(".composer-active-model select").disabled,
@@ -661,7 +673,7 @@ test("composer profiles are per-request and model changes retain credentials and
       document.querySelector(".composer-active-model").textContent,
       /inference was not tested/,
     );
-    await act(async () => catalogs[1].finish());
+    await act(async () => catalogs.at(-1).finish());
     assert.ok(
       !document.querySelector(".composer-active-model select").disabled,
     );
@@ -810,7 +822,7 @@ test("composer profiles are per-request and model changes retain credentials and
     );
     assert.ok(document.querySelector(".composer-picker-error"));
     assert.doesNotMatch(document.body.textContent, /private diagnostic/);
-    assert.ok(choice("Anthropic (Claude) API").disabled);
+    assert.ok(choice("Locked account").disabled);
     const saves = calls.filter((item) => item.method === "PUT").length;
     await click(button("Reload saved connection"));
     assert.equal(
@@ -823,9 +835,9 @@ test("composer profiles are per-request and model changes retain credentials and
       /next-model/,
       "recovery accepts the model actually committed before the error",
     );
-    assert.ok(!choice("Anthropic (Claude) API").disabled);
+    assert.ok(!choice("Locked account").disabled);
     rejectSave = false;
-    await click(choice("Anthropic (Claude) API"));
+    await click(choice("Locked account"));
     assert.equal(connectionsOpened, 1, "locked account opens secure setup");
     assert.equal(state.active_account_id, "locked");
     assert.equal(document.querySelector('[role="dialog"]'), null);

@@ -74,8 +74,6 @@ for (const method of ["device", "browser"])
       model: "test-model",
       allow_paid_inference: false,
       ollama_url: "http://localhost:11434",
-      aws_profile: "",
-      aws_region: "",
     };
     const account = {
       id: "test-account",

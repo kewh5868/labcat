@@ -1,0 +1,34 @@
+Claude Code 2.1.274
+Copyright Anthropic PBC. All rights reserved.
+
+The Docker image includes the unmodified official Linux native Claude Code
+binary. It is a separate upstream product and is not licensed under Labcat's
+license or the Apache licenses of the other embedded agent binaries.
+
+Official release manifest, reviewed 2026-09-27:
+https://downloads.claude.ai/claude-code-releases/2.1.274/manifest.json
+Release build date: 2026-09-16T21:56:00Z
+
+Linux arm64: 230482160 bytes
+SHA256: 2db904daea17addff9de557ba26a725916888aa7b546e2c5dd989c20d9d49ab3
+Linux x64 (Docker amd64): 230580536 bytes
+SHA256: 15e2d05148f801b5774032faad87e624ecd172e9903288bda448b892eb58fa07
+
+Binary URLs use the manifest's platform names beneath:
+https://downloads.claude.ai/claude-code-releases/2.1.274/
+The Labcat build downloads the raw binary, verifies its exact size and SHA256,
+and installs it without modifying it or executing a downloaded installer.
+
+Claude Code use and redistribution remain subject to Anthropic's terms:
+https://code.claude.com/docs/en/legal-and-compliance
+https://www.anthropic.com/legal/commercial-terms
+https://www.anthropic.com/legal/consumer-terms
+
+Platforms hosting Claude Code must comply with Anthropic's stated conditions,
+including keeping the binary and its authentication methods unmodified. Users
+must authenticate through the native Claude Code flow using their own eligible
+account or credentials. Labcat does not obtain a right to collect or intermediate
+Claude account tokens, resell usage, or represent Anthropic endorsement.
+
+The runtime launcher invokes the published binary with supported command-line
+tool restrictions; those restrictions do not replace its authentication flow.

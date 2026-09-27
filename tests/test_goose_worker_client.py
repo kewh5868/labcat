@@ -173,27 +173,6 @@ def test_worker_cannot_insert_prose_evidence_or_wrong_provider_tokens(
     assert len(calls) == 1
 
 
-def test_bedrock_resolves_only_selected_parent_session(monkeypatch):
-    calls = _wire(monkeypatch)
-    aws = {
-        "AWS_ACCESS_KEY_ID": "test-access",
-        "AWS_SECRET_ACCESS_KEY": "test-secret",
-        "AWS_REGION": "us-west-2",
-        "AWS_DEFAULT_REGION": "us-west-2",
-        "AWS_EC2_METADATA_DISABLED": "true",
-        "BEDROCK_MAX_RETRIES": "0",
-    }
-    selected = []
-    monkeypatch.setattr(
-        client, "_aws_credentials", lambda value: selected.append(value) or aws
-    )
-    client.run_remote_goose(
-        profile("bedrock"), None, "Find oxides", tool_session=session()
-    )
-    assert selected == [profile("bedrock")]
-    assert calls[0][1]["aws_credentials"] == aws
-
-
 @pytest.mark.skipif(
     not hasattr(os, "O_NOFOLLOW"), reason="POSIX container key permissions"
 )

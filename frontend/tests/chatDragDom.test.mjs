@@ -125,8 +125,6 @@ test("general chat drops move once, preserve drafts and history, and reject unre
       provider: "none",
       model: "",
       ollama_url: "http://localhost:11434",
-      aws_profile: "",
-      aws_region: "",
       allow_paid_inference: false,
     },
     credentials: {
@@ -225,8 +223,6 @@ test("general chat drops move once, preserve drafts and history, and reject unre
           checked_at: at,
         },
         optional: {
-          compute: "local",
-          aws_required: false,
           data_apis_required: false,
         },
       });

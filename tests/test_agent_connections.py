@@ -326,6 +326,7 @@ def test_goose_report_comes_from_server_tools_not_generated_model_text(
         session.call("generate_ranked_report", {})
         return {
             "provider": "anthropic",
+            "model": "fixture-model",
             "runtime": "goose",
             "status": "completed",
             "usage": {"total_tokens": 100},

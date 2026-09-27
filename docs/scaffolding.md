@@ -11,7 +11,8 @@ Cookiecutter's Python API into a temporary directory, then adapted the output.
 Retained the `src` layout, setuptools backend, contributor/license metadata,
 requirements directory and test/CI foundation. Replaced demonstration vector
 math and NumPy/Matplotlib dependencies with the actual application shell.
-Core runtime has no third-party dependencies; web and AWS are optional extras.
+Core runtime has no third-party dependencies; web, connection and export support
+are optional extras.
 The browser shell uses React/TypeScript and Vite. Its compiled assets are bundled
 into the wheel and served by FastAPI; Node is a build-time dependency only.
 

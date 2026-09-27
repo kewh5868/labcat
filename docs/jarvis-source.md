@@ -18,10 +18,9 @@ provider-reported MD5 `c3179161ef0d029cf1fa70da463aac6e`.
 
 The fixed anonymous download route is
 `https://ndownloader.figshare.com/files/64391379`. Its observed single redirect
-targets the exact HTTPS object path
-`/pfigshare-u-files/64391379/jdft_3d9242025.json.zip` on
-`s3-eu-west-1.amazonaws.com`, with the same six AWS signing parameters already
-reviewed for the public dielectric reader. Temporary signed URLs were not saved
+targets the exact reviewed HTTPS object-store destination and path
+`/pfigshare-u-files/64391379/jdft_3d9242025.json.zip`, with the same six signing
+parameters already reviewed for the public dielectric reader. Temporary signed URLs were not saved
 in documentation or provenance. No account credentials or proxy were used.
 
 ## Observed size and schema

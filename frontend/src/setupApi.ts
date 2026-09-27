@@ -1,7 +1,7 @@
 import type { Provider } from "./connectionsApi";
 import { providerLabels } from "./connectionsApi";
 
-export type SetupStep = "model" | "compute" | "sources" | "review";
+export type SetupStep = "model" | "sources" | "review";
 export interface SetupStatus {
   version: 1;
   completed: boolean;
@@ -24,8 +24,6 @@ export interface SetupStatus {
     checked_at: string | null;
   };
   optional: {
-    compute: "local" | "aws_bedrock";
-    aws_required: false;
     data_apis_required: false;
   };
 }
@@ -41,7 +39,7 @@ export function canSubmitResearch(status: SetupStatus | null): boolean {
         status.model.model.trim()),
   );
 }
-const steps: SetupStep[] = ["model", "compute", "sources", "review"];
+const steps: SetupStep[] = ["model", "sources", "review"];
 function invalid() {
   return new Error(
     "Setup returned an unsupported response. Reload setup before continuing.",
@@ -83,7 +81,7 @@ export function parseSetup(value: unknown): SetupStatus {
     "message",
     "checked_at",
   ]);
-  exact(optional, ["compute", "aws_required", "data_apis_required"]);
+  exact(optional, ["data_apis_required"]);
   if (
     item.version !== 1 ||
     typeof item.completed !== "boolean" ||
@@ -105,8 +103,6 @@ export function parseSetup(value: unknown): SetupStatus {
     !short(model.message) ||
     (model.account_id !== null && !short(model.account_id, 128)) ||
     (model.checked_at !== null && !short(model.checked_at, 80)) ||
-    !["local", "aws_bedrock"].includes(optional.compute as string) ||
-    optional.aws_required !== false ||
     optional.data_apis_required !== false ||
     (item.can_research && model.status !== "ready")
   )

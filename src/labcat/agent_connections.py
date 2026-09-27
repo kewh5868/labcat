@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from labcat.credentials import (
+    ConnectionBusy,
     ConnectionError,
     atomic_write,
     read_private_file,
@@ -96,6 +97,12 @@ class AgentConnections:
         self._flows = {}
         self._auth_lock = threading.RLock()
         self._auth_epoch = 0
+        self._run_lock = threading.Lock()
+        self._running_oauth_account = None
+        self._credential_revisions = {}
+        self._claude_sessions = {}
+        self._claude_revisions = {}
+        self._claude_locks = {}
 
     @property
     def uses_goose(self):
@@ -166,31 +173,17 @@ class AgentConnections:
                 key: flow for key, flow in self._flows.items() if not flow["completed"]
             }
             for flow_id, pending in tuple(self._flows.items()):
+                if pending["account_id"] != identifier or pending["storage"] != storage:
+                    # An explicit account/storage choice replaces only the old
+                    # challenge. Saved credentials remain bound to their account.
+                    self.login_action(pending["account_id"], flow_id, "cancel")
+                    continue
                 # A remounted UI or interrupted start response can rediscover its
                 # challenge without creating another provider login. Poll through
                 # the normal path so completed credentials are saved exactly once.
-                current = self.login_action(pending["account_id"], flow_id, "poll")
-                same_account = pending["account_id"] == identifier
-                same_storage = pending["storage"] == storage
-                if (
-                    same_account
-                    and same_storage
-                    and current["status"]
-                    in {
-                        "pending",
-                        "complete",
-                    }
-                ):
+                current = self.login_action(identifier, flow_id, "poll")
+                if current["status"] in {"pending", "complete"}:
                     return current
-                if current["status"] == "pending":
-                    if not same_account:
-                        raise ConnectionError(
-                            "Finish or cancel the sign-in for the other saved "
-                            "ChatGPT connection first."
-                        )
-                    # An explicit new storage choice replaces an unfinished login;
-                    # never reassign the old challenge's eventual credentials.
-                    self.login_action(identifier, flow_id, "cancel")
                 # Terminal broker states remove stale manager entries in
                 # login_action, allowing recovery after the provider deadline.
             flow = self._broker().start()
@@ -234,6 +227,11 @@ class AgentConnections:
                         self.manager.vault.update(
                             {"oauth_" + identifier: _pack(auth)}, [], flow["storage"]
                         )
+                        self._credential_revisions[identifier] = (
+                            self._credential_revisions.get(identifier, 0) + 1
+                        )
+                        if self.manager._active_account_id == identifier:
+                            self.manager.setup.invalidate()
                     # A repeated poll never repeats a sign-in or secret write.
                     flow["completed"] = True
                 except ConnectionError:
@@ -264,7 +262,18 @@ class AgentConnections:
                 if flow["account_id"] == identifier:
                     self._broker().cancel(flow_id)
                     del self._flows[flow_id]
-            self.manager.vault.update({}, ["oauth_" + identifier], "session")
+            slot = "oauth_" + identifier
+            if self.manager.vault.status()["locked"]:
+                # End this session without requiring access to the optional vault.
+                # The returned locked state still advertises the retained login.
+                self.manager.vault.forget_session(slot)
+            else:
+                self.manager.vault.update({}, [slot], "session")
+            self._credential_revisions[identifier] = (
+                self._credential_revisions.get(identifier, 0) + 1
+            )
+            if self.manager._active_account_id == identifier:
+                self.manager.setup.invalidate()
             return self.manager.status()
 
     def _credential_snapshot(self, identifier):
@@ -278,11 +287,36 @@ class AgentConnections:
                 )
             return _unpack(packed), packed, self.manager.vault.slots()[slot]
 
-    def _save_refreshed(self, identifier, old, document, storage):
+    def _credential_revision(self, identifier):
+        return self._auth_epoch, self._credential_revisions.get(identifier, 0)
+
+    def require_account_available(self, identifier):
+        with self.manager._lock:
+            if identifier is not None and identifier == self._running_oauth_account:
+                raise ConnectionBusy(
+                    "This account is in use by research. Choose another account "
+                    "or wait for that research to finish."
+                )
+
+    def _save_refreshed(
+        self,
+        identifier,
+        old,
+        document,
+        storage,
+        *,
+        revision=None,
+        ignore_superseded=False,
+    ):
         with self.manager._lock:
             slot = "oauth_" + identifier
             # A concurrent sign-out, lock or new sign-in wins over this response.
-            if self.manager.vault.get(slot) != old:
+            if self.manager.vault.get(slot) != old or (
+                revision is not None
+                and revision != self._credential_revision(identifier)
+            ):
+                if ignore_superseded:
+                    return
                 raise ConnectionError(
                     "The account changed during this request. Reload it."
                 )
@@ -290,13 +324,105 @@ class AgentConnections:
 
     def metadata(self, identifier):
         with self._auth_lock:
+            self.require_account_available(identifier)
             document, old, storage = self._credential_snapshot(identifier)
+            revision = self._credential_revision(identifier)
             public, refreshed = self._broker().metadata(document)
-            self._save_refreshed(identifier, old, refreshed, storage)
+            self._save_refreshed(identifier, old, refreshed, storage, revision=revision)
             return public
 
-    def models(self):
-        identifier = self.manager.status()["active_account_id"]
+    def claude_status(self, identifier, *, logout=False):
+        """Only native sign-in readiness crosses the worker boundary."""
+        with self.manager._lock:
+            account = next(
+                (a for a in self.manager._accounts if a["id"] == identifier), None
+            )
+            if not account or account["profile"]["provider"] != "claude_code":
+                raise ConnectionError("Choose a saved Claude Code account.")
+            lock = self._claude_locks.setdefault(identifier, threading.Lock())
+        # The panel and model catalog can probe together. Serialize each account's
+        # native operations without blocking selection or another account's probe.
+        # Logout shares this lock, so an older read cannot restore its session.
+        with lock:
+            return self._claude_status_locked(identifier, logout=logout)
+
+    def _claude_status_locked(self, identifier, *, logout=False):
+        from labcat.goose_worker_client import _worker_request
+
+        with self.manager._lock:
+            account = next(
+                (a for a in self.manager._accounts if a["id"] == identifier), None
+            )
+            if not account or account["profile"]["provider"] != "claude_code":
+                raise ConnectionError("Choose a saved Claude Code account.")
+            revision = self._claude_revisions.get(identifier, 0) + 1
+            self._claude_revisions[identifier] = revision
+            if logout:
+                self._claude_sessions.pop(identifier, None)
+                if self.manager._active_account_id == identifier:
+                    self.manager.setup.invalidate()
+        try:
+            value = _worker_request(
+                "/claude/logout" if logout else "/claude/status",
+                {"account_id": identifier},
+            )
+            import re
+
+            if (
+                set(value) != {"available", "signed_in", "session_id", "message"}
+                or type(value["available"]) is not bool
+                or type(value["signed_in"]) is not bool
+                or not isinstance(value["message"], str)
+                or len(value["message"]) > 400
+                or (
+                    value["signed_in"]
+                    and (
+                        not value["available"]
+                        or not isinstance(value["session_id"], str)
+                        or not re.fullmatch(r"[a-f0-9]{32}", value["session_id"])
+                    )
+                )
+                or (not value["signed_in"] and value["session_id"] is not None)
+            ):
+                raise ValueError
+        except (ModelError, ValueError, TypeError, KeyError):
+            raise ConnectionError(
+                "The native Claude Code connection could not be checked. Use the "
+                "current Docker application."
+            ) from None
+        with self.manager._lock:
+            if self._claude_revisions.get(identifier) != revision:
+                raise ConnectionError(
+                    "The Claude Code connection changed during its check. "
+                    "Check the current session again."
+                )
+            previous = self._claude_sessions.get(identifier)
+            self._claude_sessions[identifier] = value
+            if previous != value and self.manager._active_account_id == identifier:
+                self.manager.setup.invalidate()
+        return {key: value[key] for key in ("available", "signed_in", "message")}
+
+    def claude_models(self, identifier=None):
+        from labcat.claude_auth import MODELS
+
+        if identifier is None:
+            identifier = self.manager.status()["active_account_id"]
+        state = self.claude_status(identifier)
+        if not state["signed_in"]:
+            raise ConnectionError(state["message"])
+        return {
+            "provider": "claude_code",
+            "models": [dict(row) for row in MODELS],
+            "message": (
+                "Claude Code model aliases. Sign-in is present; model entitlement, "
+                "quota and inference have not been tested."
+            ),
+            "inference_tested": False,
+        }
+
+    def models(self, identifier=None):
+        if identifier is None:
+            identifier = self.manager.status()["active_account_id"]
         data = self.metadata(identifier)
         if data.get("account_ready") is not True:
             raise ConnectionError(
@@ -384,40 +510,45 @@ class AgentConnections:
             atomic_write(self.usage_path, saved)
 
     def run(self, prompt, context, tool_session):
-        # Serialize credential consumers with metadata refresh and sign-out.
-        # Reject a competing run rather than queueing a later billable request.
-        if not self._auth_lock.acquire(blocking=False):
-            from labcat.models import ModelBusy
+        from labcat.models import ModelBusy
 
+        if not self._run_lock.acquire(blocking=False):
             raise ModelBusy("A model connection operation is already in progress.")
         try:
+            # Fail promptly for a competing metadata operation; never queue inference.
+            if not self._auth_lock.acquire(blocking=False):
+                raise ModelBusy("A model connection operation is already in progress.")
+            self._auth_lock.release()
             return self._run_locked(prompt, context, tool_session)
         finally:
-            self._auth_lock.release()
+            with self.manager._lock:
+                self._running_oauth_account = None
+            self._run_lock.release()
 
     def _run_locked(self, prompt, context, tool_session):
         from labcat.goose_worker_client import run_remote_goose
+        from labcat.models import ModelBusy
 
-        self.manager.setup.require_ready()
-        with self.manager._lock:
-            status = self.manager.status()
-            profile, identifier = status["profile"], status["active_account_id"]
-            provider = profile["provider"]
-            secret = (
-                self.manager.vault.get(self.manager._model_slot(provider))
-                if provider in API_KEY_PROVIDERS
-                else None
-            )
-        if provider not in {"none", "ollama"} and not profile["allow_paid_inference"]:
-            raise ModelError(
-                "Allow the selected provider to receive research context first."
-            )
-        tokens, old, storage = None, None, None
-        if provider == "chatgpt":
-            from labcat.chatgpt_auth import goose_token_cache
+        if not self._auth_lock.acquire(blocking=False):
+            raise ModelBusy("A model connection operation is already in progress.")
+        try:
+            verified = self.manager.setup.require_ready()
+            with self.manager._lock:
+                snapshot = self.manager._capture_verified_connection(verified)
+                profile, identifier = snapshot["profile"], snapshot["account_id"]
+                provider = profile["provider"]
+                secret = snapshot["secret"] if provider in API_KEY_PROVIDERS else None
+                tokens, old, storage, revision = None, None, None, None
+                if provider == "chatgpt":
+                    from labcat.chatgpt_auth import goose_token_cache
 
-            document, old, storage = self._credential_snapshot(identifier)
-            tokens = goose_token_cache(document)
+                    old, storage = snapshot["secret"], snapshot["storage"]
+                    document = _unpack(old)
+                    tokens = goose_token_cache(document)
+                    revision = self._credential_revision(identifier)
+                    self._running_oauth_account = identifier
+        finally:
+            self._auth_lock.release()
         try:
             result = run_remote_goose(
                 profile,
@@ -426,11 +557,20 @@ class AgentConnections:
                 context=context,
                 tool_session=tool_session,
                 chatgpt_tokens=tokens,
+                **(
+                    {
+                        "claude_account_id": identifier,
+                        "claude_session_id": snapshot["claude_session_id"],
+                    }
+                    if provider == "claude_code"
+                    else {}
+                ),
             )
         except ModelError as error:
             # Bind this diagnostic to the profile actually sent to the worker;
             # never recover model identity from provider prose or a later selection.
             error.research_attempt = {"provider": provider, "model": profile["model"]}
+            error.connection_generation = snapshot["generation"]
             refreshed = getattr(error, "refreshed_chatgpt_tokens", None)
             if refreshed is not None and provider == "chatgpt":
                 from labcat.chatgpt_auth import update_from_goose_tokens
@@ -440,6 +580,8 @@ class AgentConnections:
                     old,
                     update_from_goose_tokens(document, refreshed),
                     storage,
+                    revision=revision,
+                    ignore_superseded=True,
                 )
             raise
         result = dict(result)
@@ -448,7 +590,12 @@ class AgentConnections:
             from labcat.chatgpt_auth import update_from_goose_tokens
 
             self._save_refreshed(
-                identifier, old, update_from_goose_tokens(document, refreshed), storage
+                identifier,
+                old,
+                update_from_goose_tokens(document, refreshed),
+                storage,
+                revision=revision,
+                ignore_superseded=True,
             )
         self._record_usage(identifier, provider, profile["model"], result)
         return {

@@ -74,8 +74,6 @@ async function harness(t, provider = "chatgpt", credentialState = "session") {
       model: "current-model",
       allow_paid_inference: true,
       ollama_url: "http://localhost:11434",
-      aws_profile: "saved-profile",
-      aws_region: "us-west-2",
     },
     credential_state: credentialState,
   };
@@ -212,8 +210,6 @@ async function harness(t, provider = "chatgpt", credentialState = "session") {
         checked_at: controls.verificationReady ? "2026-09-11T12:00:00Z" : null,
       },
       optional: {
-        compute: "local",
-        aws_required: false,
         data_apis_required: false,
       },
     };

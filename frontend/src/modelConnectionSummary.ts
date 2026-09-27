@@ -1,5 +1,6 @@
 import {
   isApiKeyProvider,
+  isAccountSignInProvider,
   isCloudProvider,
   providerAccountLabels,
 } from "./connectionsApi";
@@ -62,14 +63,7 @@ export function modelConnectionSummary({
   const accountMatches =
     account &&
     (
-      [
-        "provider",
-        "model",
-        "ollama_url",
-        "aws_profile",
-        "aws_region",
-        "allow_paid_inference",
-      ] as const
+      ["provider", "model", "ollama_url", "allow_paid_inference"] as const
     ).every((key) => account.profile[key] === profile[key]);
   const credential = accountMatches
     ? account.credential_state
@@ -84,19 +78,20 @@ export function modelConnectionSummary({
   const state = matched ? readiness.model.status : null;
   if (credential === "locked" || state === "credentials_locked") {
     return summary(
-      "Connection locked",
-      "Unlock saved credentials in Connections.",
+      "Saved credentials locked",
+      "Reconnect, switch accounts or unlock saved credentials in Connections.",
     );
   }
-  const needsCredential = provider === "chatgpt" || isApiKeyProvider(provider);
+  const needsCredential =
+    isAccountSignInProvider(provider) || isApiKeyProvider(provider);
   if (
     (needsCredential &&
       credential !== "session" &&
       credential !== "encrypted") ||
     state === "not_connected"
   ) {
-    return provider === "chatgpt"
-      ? summary("Not signed in", "Sign in to ChatGPT in Connections.")
+    return isAccountSignInProvider(provider)
+      ? summary("Not signed in", `Sign in to ${name} in Connections.`)
       : summary("Not connected", "Connect this provider in Connections.");
   }
   if (state === "error")
@@ -122,8 +117,10 @@ export function modelConnectionSummary({
     readiness.model.checked_at
   ) {
     return summary(
-      provider === "chatgpt" ? "Signed in" : "Connected",
-      "Account and model verified. Ready for research.",
+      isAccountSignInProvider(provider) ? "Signed in" : "Connected",
+      provider === "claude_code"
+        ? "Native sign-in detected; model alias configured. Inference not tested."
+        : "Account and model verified. Ready for research.",
       true,
     );
   }

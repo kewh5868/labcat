@@ -445,34 +445,6 @@
   color: #8b8059;
   font-size: 11px;
 }
-.aws-connection-setup {
-  margin-top: 24px;
-}
-.aws-signin-guide {
-  margin: 20px 0 16px;
-  border: 1px solid #dfe6d7;
-  background: #f6f8f0;
-  border-radius: 8px;
-  padding: 15px 17px;
-}
-.aws-signin-guide summary {
-  color: #5d785a;
-  font-size: 12px;
-  cursor: pointer;
-}
-.aws-signin-guide pre {
-  padding: 11px 13px;
-  border-radius: 5px;
-  background: #eaf0e2;
-  color: #4e694f;
-  font-size: 11px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.aws-signin-guide a {
-  color: #5d7d54;
-  font-size: 11px;
-}
 @media (max-width: 560px) {
   .account-selection {
     flex-direction: column;

@@ -736,8 +736,6 @@ test("recoverable removal preference is saved only on confirmation and recalled 
       provider: "none",
       model: "",
       ollama_url: "http://localhost:11434",
-      aws_profile: "",
-      aws_region: "",
       allow_paid_inference: false,
     },
     credentials: {
@@ -828,8 +826,6 @@ test("recoverable removal preference is saved only on confirmation and recalled 
           checked_at: at,
         },
         optional: {
-          compute: "local",
-          aws_required: false,
           data_apis_required: false,
         },
       });

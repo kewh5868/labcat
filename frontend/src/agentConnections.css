@@ -194,3 +194,14 @@
     justify-content: center;
   }
 }
+
+.claude-code-command {
+  max-width: 100%;
+  padding: 0.85rem;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  border: 1px solid #dbe4d6;
+  border-radius: 0.65rem;
+  background: #f4f7ef;
+  font-size: 0.82rem;
+}

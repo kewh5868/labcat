@@ -68,10 +68,15 @@ if the browser does not open automatically. Keep Docker running while using Labc
 
 ### 3. Connect a model
 
-In setup, choose **Model provider**. Sign in with ChatGPT or connect a supported
-API provider, select a model, enable consent for sending research context, then
-choose **Save and test connections**. Continue through the optional compute and
-public-source settings, then finish setup.
+Labcat's developer currently recommends **ChatGPT account sign-in** because it
+is the application's most thoroughly tested model connection.
+
+In setup, choose **Model provider**. Sign in with ChatGPT, use the
+[native Claude Code terminal flow](onboarding.md#claude-code-account-sign-in), or
+connect a supported API provider. Select a model, enable consent for sending
+research context, then choose **Save and test connections**. Review the optional
+public-source settings, then finish setup. Claude Code offers configured model
+aliases; native sign-in detection does not test entitlement or inference.
 
 A Materials Project API key is optional. The workspace runs locally, while AI
 research uses the provider you connect and may consume its allowance or incur

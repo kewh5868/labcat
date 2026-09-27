@@ -333,7 +333,12 @@ def test_unavailable_optional_api_preserves_healthy_source_results(
         def run(prompt, context, session):
             session.call("assess_research_intent", {"decision": "materials_research"})
             session.call("generate_ranked_report", {})
-            return {"provider": "openai", "runtime": "goose", "status": "completed"}
+            return {
+                "provider": "openai",
+                "model": "fixture-model",
+                "runtime": "goose",
+                "status": "completed",
+            }
 
         monkeypatch.setattr(manager.agent, "run", run)
     outcome = research(
@@ -509,7 +514,7 @@ def test_goose_failure_invalidates_the_key_acquired_after_model_planning(
         session.call("assess_research_intent", {"decision": "materials_research"})
         session.call("generate_ranked_report", {})
         assert session._key is None
-        return {"provider": "openai", "status": "completed"}
+        return {"provider": "openai", "model": "fixture-model", "status": "completed"}
 
     monkeypatch.setattr(science, "retrieve_live", failed_repository)
     monkeypatch.setattr(manager.agent, "run", model_run)

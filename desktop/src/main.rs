@@ -122,7 +122,6 @@ fn public_reference(url: &Url) -> bool {
                     | "europepmc.org"
                     | "arxiv.org"
                     | "info.arxiv.org"
-                    | "docs.aws.amazon.com"
             )
         ) || discovery_reference_path(url)
             || (url.host_str() == Some("learn.chatgpt.com")
@@ -993,7 +992,6 @@ mod tests {
             "https://nomad-lab.eu/prod/v1/gui/search/entries/entry/id/example",
             "https://europepmc.org/articles/PMC1234567",
             "https://arxiv.org/abs/2401.00001",
-            "https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sso.html",
         ] {
             assert!(public_reference(&Url::parse(raw).unwrap()), "{raw}");
         }

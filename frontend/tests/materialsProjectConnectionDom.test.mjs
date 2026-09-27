@@ -22,8 +22,6 @@ function fixture(credential = "missing") {
     model: "saved-model",
     allow_paid_inference: true,
     ollama_url: "http://localhost:11434",
-    aws_profile: "",
-    aws_region: "",
   };
   return {
     configured: true,
@@ -123,6 +121,7 @@ async function environment(t, initialStatus = fixture(), options = {}) {
   const { default: MaterialsProjectConnection } = await import(
     pathToFileURL(join(output, "MaterialsProjectConnection.js")).href
   );
+  dom.window.HTMLElement.prototype.scrollIntoView = () => {};
   const root = createRoot(document.getElementById("root"));
   const status = structuredClone(initialStatus),
     calls = [],
@@ -159,6 +158,14 @@ async function environment(t, initialStatus = fixture(), options = {}) {
       return Response.json(status);
     }
     if (path === "/api/connections/test") {
+      if (body.target === "model")
+        return Response.json({
+          target: "model",
+          status: "ok",
+          message: "Synthetic model readiness.",
+          billable: false,
+          inference_tested: false,
+        });
       assert.deepEqual(body, { target: "materials_project" });
       if (options.verify) {
         const response = await options.verify(status);
@@ -174,8 +181,48 @@ async function environment(t, initialStatus = fixture(), options = {}) {
       });
     }
     if (path === "/api/connections/vault") {
-      assert.ok(["create", "unlock"].includes(body.action));
-      status.vault = { ...unlockedVault };
+      if (options.vault) {
+        const response = await options.vault(body, status);
+        if (response) return response;
+      }
+      if (body.action === "reset") {
+        status.vault = {
+          available: false,
+          locked: false,
+          exists: false,
+          can_create: true,
+          key_source: "unavailable",
+        };
+        for (const name of Object.keys(status.credentials))
+          status.credentials[name] = "missing";
+        for (const account of status.accounts)
+          account.credential_state = "missing";
+        status.source_connections.materials_project = readiness();
+      } else {
+        assert.ok(
+          ["create", "unlock", "change_passphrase"].includes(body.action),
+        );
+        status.vault = { ...unlockedVault };
+        for (const [name, value] of Object.entries(status.credentials))
+          if (value === "locked") status.credentials[name] = "encrypted";
+        for (const account of status.accounts)
+          if (account.credential_state === "locked")
+            account.credential_state = "encrypted";
+        if (status.source_connections.materials_project.status === "locked")
+          status.source_connections.materials_project = readiness(
+            "verification_required",
+          );
+      }
+      return Response.json(status);
+    }
+    if (path.startsWith("/api/connections/accounts/")) {
+      assert.equal(request.method, "PUT");
+      status.profile = structuredClone(body.profile);
+      status.accounts[0].profile = structuredClone(body.profile);
+      if (body.api_key || body.secret_storage === "encrypted") {
+        status.accounts[0].credential_state = body.secret_storage;
+        status.credentials.openai = body.secret_storage;
+      }
       return Response.json(status);
     }
     if (path === "/api/connections/models")
@@ -501,6 +548,16 @@ test("an existing source key can move between encrypted and session storage with
     assert.equal(env.status.credentials.materials_project, "encrypted");
     assert.equal(env.remember().checked, true);
     await env.click(env.remember());
+    assert.match(
+      env.card().textContent,
+      /Saving this choice removes the saved encrypted copy/,
+    );
+    assert.match(env.card().textContent, /enter it again after restarting/);
+    assert.equal(
+      env.key().value,
+      "",
+      "the storage change reuses the available key",
+    );
     await env.click(env.submit());
     assert.equal(env.status.credentials.materials_project, "session");
     assert.equal(env.remember().checked, false);
@@ -526,7 +583,7 @@ test("an existing source key can move between encrypted and session storage with
   }
 });
 
-test("locked source keys require unlocking before replacement, storage changes or forgetting", async (t) => {
+test("locked source keys accept explicit session overrides while saved-key use and forgetting still need unlock", async (t) => {
   const status = fixture("locked");
   status.vault = { ...unlockedVault, locked: true };
   status.source_connections.materials_project = readiness("locked");
@@ -535,21 +592,34 @@ test("locked source keys require unlocking before replacement, storage changes o
     await env.render();
     assert.equal(env.remember().checked, true);
     assert.equal(env.submit().disabled, true);
-    await env.click(env.remember());
-    await env.change(env.key(), keyFixture);
+    await env.click(env.button("Unlock secure storage"));
+    assert.equal(env.revealCount, 1);
+    await env.click(env.button("Use a key for this session"));
+    assert.equal(env.remember().checked, false);
+    assert.equal(document.activeElement, env.key());
     assert.equal(
       env.submit().disabled,
       true,
-      "unchecking remember cannot bypass the locked-vault boundary",
+      "a blank field cannot read a locked saved key",
     );
-    await env.click(env.button("Unlock secure storage"));
-    assert.equal(env.revealCount, 1);
+    await env.change(env.key(), keyFixture);
+    assert.equal(env.submit().disabled, false);
+    assert.match(env.card().textContent, /saved encrypted keys stay unchanged/);
+    assert.doesNotMatch(
+      env.card().textContent,
+      /removes the saved encrypted copy/,
+    );
     assert.equal(
       env.button("Forget key").disabled,
       true,
       "forgetting a locked encrypted slot requires vault access",
     );
     assert.equal(env.calls.filter((call) => call.path === endpoint).length, 0);
+    await env.click(env.submit());
+    assert.equal(env.status.credentials.materials_project, "session");
+    assert.equal(env.status.vault.locked, true);
+    assert.equal(env.key().value, "");
+    assert.equal(env.button("Forget key").disabled, true);
     env.status.vault = { ...unlockedVault };
     env.status.credentials.materials_project = "encrypted";
     env.status.source_connections.materials_project = readiness(
@@ -561,7 +631,7 @@ test("locked source keys require unlocking before replacement, storage changes o
       env.calls
         .filter((call) => call.path === endpoint)
         .map((call) => call.body),
-      [{ forget: true }],
+      [{ secret_storage: "session", api_key: keyFixture }, { forget: true }],
     );
     assert.equal(env.key().value, "");
     assert.equal(env.remember().checked, false);
@@ -735,3 +805,357 @@ for (const action of ["create", "unlock"])
       await env.close();
     }
   });
+
+function lockedFixture() {
+  const status = fixture("locked");
+  status.vault = { ...unlockedVault, available: false, locked: true };
+  status.credentials.openai = "locked";
+  status.accounts[0].credential_state = "locked";
+  status.source_connections.materials_project = readiness("locked");
+  return status;
+}
+
+test("unlocking remembered keys once restores model and source access without re-entering or returning API keys", async (t) => {
+  let rejectPassword = true;
+  const env = await environment(t, lockedFixture(), {
+    vault: () =>
+      rejectPassword
+        ? Response.json(
+            { detail: "SYNTHETIC-PRIVATE-PASSWORD" },
+            { status: 422 },
+          )
+        : undefined,
+  });
+  try {
+    await env.render(true);
+    await env.click(env.button("Unlock saved credentials"));
+    assert.equal(document.querySelector(".advanced-credentials").open, true);
+    assert.match(
+      document.querySelector(".vault-card").textContent,
+      /without entering them again/,
+    );
+    assert.equal(env.key().value, "");
+    assert.equal(document.querySelector("#provider-key").value, "");
+    await env.change(
+      document.querySelector("#vault-unlock"),
+      "SYNTHETIC-PRIVATE-PASSWORD",
+    );
+    await env.click(env.button("Unlock credentials"));
+    assert.equal(document.querySelector("#vault-unlock").value, "");
+    assert.equal(env.status.vault.locked, true);
+    assert.doesNotMatch(document.body.textContent, /SYNTHETIC-PRIVATE/);
+    assert.equal(
+      env.calls.filter((call) => call.path.endsWith("/vault")).length,
+      1,
+    );
+    rejectPassword = false;
+    await env.change(
+      document.querySelector("#vault-unlock"),
+      "SYNTHETIC-CORRECT-PASSWORD",
+    );
+    await env.click(env.button("Unlock credentials"));
+    await env.flush();
+    assert.equal(env.status.vault.locked, false);
+    assert.equal(env.status.credentials.openai, "encrypted");
+    assert.equal(env.status.credentials.materials_project, "encrypted");
+    assert.equal(document.querySelector("#provider-key").value, "");
+    assert.equal(env.key().value, "");
+    await env.click(env.submit());
+    assert.equal(
+      env.calls.filter((call) => call.path === endpoint).length,
+      0,
+      "the saved source key is verified without resubmitting it",
+    );
+    await env.click(env.button("Save and test connections"));
+    const saved = env.calls.find((call) =>
+      call.path.startsWith("/api/connections/accounts/"),
+    );
+    assert.equal(saved.body.secret_storage, "encrypted");
+    assert.equal(Object.hasOwn(saved.body, "api_key"), false);
+    assert.equal(env.dom.window.localStorage.length, 0);
+    assert.equal(env.dom.window.sessionStorage.length, 0);
+    assert.deepEqual(env.errors, []);
+  } finally {
+    await env.close();
+  }
+});
+
+for (const locked of [false, true])
+  test(`vault password change ${locked ? "while locked" : "while unlocked"} requires matching confirmation, clears submitted passwords and preserves credentials`, async (t) => {
+    const initial = locked ? lockedFixture() : fixture("encrypted");
+    if (!locked) initial.vault = { ...unlockedVault };
+    let finishChange;
+    const env = await environment(t, initial, {
+      vault: () =>
+        new Promise((resolve) => {
+          finishChange = resolve;
+        }),
+    });
+    const current = "SYNTHETIC-CURRENT-PASSWORD",
+      next = "SYNTHETIC-NEW-PASSWORD";
+    try {
+      await env.render(true);
+      const button = env.button("Change vault password");
+      assert.equal(button.disabled, true);
+      await env.change(
+        document.querySelector("#vault-current-password"),
+        current,
+      );
+      await env.change(document.querySelector("#vault-new-password"), next);
+      await env.change(
+        document.querySelector("#vault-new-password-confirm"),
+        "SYNTHETIC-MISMATCH",
+      );
+      assert.equal(button.disabled, true);
+      await env.change(
+        document.querySelector("#vault-new-password-confirm"),
+        next,
+      );
+      await env.click(button);
+      assert.equal(button.disabled, true);
+      for (const id of [
+        "vault-current-password",
+        "vault-new-password",
+        "vault-new-password-confirm",
+      ])
+        assert.equal(document.getElementById(id).value, "");
+      assert.deepEqual(
+        env.calls
+          .filter((call) => call.path.endsWith("/vault"))
+          .map((call) => call.body),
+        [
+          {
+            action: "change_passphrase",
+            current_passphrase: current,
+            new_passphrase: next,
+          },
+        ],
+      );
+      await env.act(async () => finishChange());
+      await env.flush();
+      assert.equal(env.status.vault.locked, false);
+      assert.equal(env.status.credentials.materials_project, "encrypted");
+      assert.equal(
+        env.status.credentials.openai,
+        locked ? "encrypted" : "session",
+      );
+      assert.equal(env.status.accounts[0].profile.model, "saved-model");
+      assert.match(
+        document.querySelector(".connection-saved").textContent,
+        /password changed/,
+      );
+      assert.equal(
+        env.calls.filter(
+          (call) => call.path === endpoint || call.path.includes("/accounts/"),
+        ).length,
+        0,
+      );
+      assert.equal(env.dom.window.localStorage.length, 0);
+      assert.equal(env.dom.window.sessionStorage.length, 0);
+      assert.deepEqual(env.errors, []);
+    } finally {
+      await env.close();
+    }
+  });
+
+test("forgotten vault password reset needs confirmation, explains all credential loss and clears pending key drafts", async (t) => {
+  const initial = lockedFixture();
+  initial.credentials.anthropic = "session";
+  const env = await environment(t, initial);
+  try {
+    await env.render(true);
+    assert.ok(
+      [...document.querySelectorAll("summary")].some(
+        (item) => item.textContent === "Forgot password? Reset vault",
+      ),
+    );
+    const reset = env.button("Reset vault and clear credentials");
+    assert.equal(reset.disabled, true);
+    assert.match(
+      reset.closest("details").textContent,
+      /encrypted and session-only credentials/,
+    );
+    assert.match(reset.closest("details").textContent, /account sign-ins/);
+    assert.match(
+      reset.closest("details").textContent,
+      /projects, chats and reports are kept/,
+    );
+    await env.change(env.key(), keyFixture);
+    await env.change(
+      document.querySelector("#provider-key"),
+      "SYNTHETIC-MODEL-DRAFT",
+    );
+    assert.equal(
+      env.calls.filter((call) => call.path.endsWith("/vault")).length,
+      0,
+    );
+    await env.click(document.querySelector(".reset-confirm input"));
+    await env.click(reset);
+    await env.flush();
+    assert.deepEqual(
+      env.calls
+        .filter((call) => call.path.endsWith("/vault"))
+        .map((call) => call.body),
+      [{ action: "reset", confirm: true }],
+    );
+    assert.equal(env.status.vault.can_create, true);
+    assert.ok(
+      Object.values(env.status.credentials).every(
+        (state) => state === "missing",
+      ),
+    );
+    assert.equal(env.status.profile.model, "saved-model");
+    assert.equal(env.status.accounts.length, 1);
+    assert.ok(
+      [...document.querySelectorAll('input[type="password"]')].every(
+        (input) => input.value === "",
+      ),
+    );
+    assert.match(
+      document.querySelector(".connection-saved").textContent,
+      /session-only credentials were cleared/,
+    );
+    assert.equal(
+      env.calls.filter(
+        (call) => call.path === endpoint || call.path.includes("/accounts/"),
+      ).length,
+      0,
+    );
+    assert.deepEqual(env.errors, []);
+  } finally {
+    await env.close();
+  }
+});
+
+test("locked model credentials accept a new session key and keep the saved account identity", async (t) => {
+  const env = await environment(t, lockedFixture());
+  try {
+    await env.render(true);
+    const key = document.querySelector("#provider-key");
+    assert.equal(key.disabled, false);
+    assert.match(
+      key.parentElement.textContent,
+      /same or a different API key for this server session/,
+    );
+    await env.change(key, "SYNTHETIC-SESSION-MODEL-KEY");
+    await env.click(env.button("Save API key"));
+    await env.flush();
+    const request = env.calls.find((call) =>
+      call.path.startsWith("/api/connections/accounts/"),
+    );
+    assert.equal(request.path, "/api/connections/accounts/saved-model-account");
+    assert.equal(request.body.secret_storage, "session");
+    assert.equal(request.body.api_key, "SYNTHETIC-SESSION-MODEL-KEY");
+    assert.equal(env.status.vault.locked, true);
+    assert.equal(env.status.credentials.openai, "session");
+    assert.equal(env.status.credentials.materials_project, "locked");
+    assert.equal(key.value, "");
+    assert.equal(
+      env.calls.filter((call) => call.path.endsWith("/vault")).length,
+      0,
+    );
+    assert.deepEqual(env.errors, []);
+  } finally {
+    await env.close();
+  }
+});
+
+test("remembering an available model key uses encrypted storage without asking for the key again", async (t) => {
+  const initial = fixture();
+  initial.vault = { ...unlockedVault };
+  const env = await environment(t, initial);
+  try {
+    await env.render(true);
+    assert.equal(document.querySelector("#provider-key").value, "");
+    assert.equal(
+      document.querySelector('input[name="secret-storage"][value="encrypted"]')
+        .checked,
+      true,
+    );
+    await env.click(env.button("Save and test connections"));
+    const request = env.calls.find((call) =>
+      call.path.startsWith("/api/connections/accounts/"),
+    );
+    assert.equal(request.body.secret_storage, "encrypted");
+    assert.equal(Object.hasOwn(request.body, "api_key"), false);
+    assert.equal(env.status.credentials.openai, "encrypted");
+    assert.deepEqual(env.errors, []);
+  } finally {
+    await env.close();
+  }
+});
+
+test("a rejected password change clears sensitive fields, preserves the locked vault and never retries automatically", async (t) => {
+  const env = await environment(t, lockedFixture(), {
+    vault: () =>
+      Response.json(
+        { detail: "SYNTHETIC-PRIVATE-ROTATION-INPUT" },
+        { status: 422 },
+      ),
+  });
+  try {
+    await env.render(true);
+    await env.change(
+      document.querySelector("#vault-current-password"),
+      "SYNTHETIC-WRONG-PASSWORD",
+    );
+    await env.change(
+      document.querySelector("#vault-new-password"),
+      "SYNTHETIC-NEW-PASSWORD",
+    );
+    await env.change(
+      document.querySelector("#vault-new-password-confirm"),
+      "SYNTHETIC-NEW-PASSWORD",
+    );
+    await env.click(env.button("Change vault password"));
+    assert.equal(env.status.vault.locked, true);
+    assert.equal(env.status.credentials.openai, "locked");
+    assert.equal(env.status.credentials.materials_project, "locked");
+    assert.equal(
+      env.calls.filter((call) => call.path.endsWith("/vault")).length,
+      1,
+    );
+    assert.ok(
+      [...document.querySelectorAll('input[type="password"]')].every(
+        (input) => input.value === "",
+      ),
+    );
+    assert.match(
+      document.querySelector(".workspace-error").textContent,
+      /not completed \(422\)/,
+    );
+    assert.doesNotMatch(
+      document.body.textContent,
+      /SYNTHETIC-PRIVATE|SYNTHETIC-WRONG|SYNTHETIC-NEW/,
+    );
+    assert.equal(env.button("Change vault password").disabled, true);
+    assert.deepEqual(env.errors, []);
+  } finally {
+    await env.close();
+  }
+});
+
+test("deployment-supplied vault keys show administrator guidance instead of a password-change form", async (t) => {
+  const initial = lockedFixture();
+  initial.vault.key_source = "environment";
+  const env = await environment(t, initial);
+  try {
+    await env.render(true);
+    assert.ok(env.button("Review credential storage"));
+    assert.match(
+      document.querySelector(".credential-unlock-notice").textContent,
+      /administrator/,
+    );
+    assert.equal(document.querySelector("#vault-current-password"), null);
+    assert.equal(document.querySelector("#vault-unlock"), null);
+    assert.ok(
+      [...document.querySelectorAll("summary")].some(
+        (item) => item.textContent === "Reset credential vault",
+      ),
+    );
+    assert.equal(document.querySelector("#provider-key").disabled, false);
+    assert.deepEqual(env.errors, []);
+  } finally {
+    await env.close();
+  }
+});

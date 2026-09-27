@@ -118,7 +118,7 @@ start without a connected model. Launcher help is available
 through `./labcat.sh --help` or `labcat.cmd help`.
 View diagnostics with `./labcat.sh logs` or `labcat.cmd logs`.
 The image contains no local LLM weights. First-run setup requires a supported
-model account; optional AWS and research data APIs can be skipped. Setup does
+model account; optional research data APIs can be skipped. Setup does
 not download a model, invoke inference or provision cloud resources.
 
 ### Checksums
@@ -139,19 +139,16 @@ bundle is current or from a trusted distributor.
 
 ### Model setup and optional connections
 
-First launch opens the Model, Compute, Public sources and Ready setup steps.
+First launch opens the Model, Public sources and Ready setup steps.
 Choose **Model provider** and connect ChatGPT through Goose-owned browser
-authorization, one of the API providers through its API key, or Bedrock through
-an existing container-provisioned AWS profile. Select a model, enable the
-hosted-context consent, then choose **Save and test connections**. Once verified,
-choose **Continue** through the optional steps and **Finish setup** on Ready to
+authorization, or one of the API providers through its API key. Select a model,
+enable hosted-context consent, then choose **Save and test connections**. Once
+verified, choose **Continue** through Public sources and **Finish setup** on Ready to
 open the main workspace. **Verify connection** checks already-saved settings;
 unsaved changes must first be saved.
 New research requires a connected account; the prior model-free and local-Ollama
 paths do not qualify in this release. The application and workspace run locally
-by default. Optional Bedrock offloads model inference to AWS; it does not host
-the entire application there. AWS profile setup requires site configuration;
-an interactive AWS SSO wizard is not included.
+by default.
 
 Supported keyless data APIs include NOMAD, HybriD³, Europe PMC and arXiv. A
 Materials Project API key adds its live quantitative source. These data API
@@ -161,8 +158,8 @@ prompt/project context to the chosen model. Goose can request only the fixed
 public-search and ranked-report stages; it cannot create scientific facts or
 select arbitrary network destinations. The direct Python planner uses closed
 intent enums instead of Goose tools.
-Model-list checks do not prove inference authorization. AWS checks use STS and
-do not prove Bedrock model access. No connection check invokes a paid model.
+Model-list checks do not prove inference authorization. No connection check
+invokes a paid model.
 
 Nonsecret profiles survive restart. Keys are session-only by default; optional
 encrypted storage uses a dedicated vault passphrase or a deployment-provided
@@ -306,7 +303,7 @@ and database compatibility before rollback.
   development builds do not establish that release gate.
 - **Remote Docker context:** switch to your local Docker context. These desktop
   launchers refuse remote endpoints because their loopback address is not this
-  machine. AWS hosting is a separate deployment path.
+  machine.
 - **Headless Linux/VM:** use the printed address on that host, or an SSH tunnel
   to its loopback port. Do not expose the single-user service publicly.
   Host/Origin checks and connection CSRF protection are not user authentication.
@@ -358,8 +355,8 @@ the application version. Pinned inputs do not alone guarantee byte-for-byte
 reproducible builds.
 
 Use a read-only mount of a specific configuration file when needed, not a mount
-of the repository or lab filesystem. AWS profiles and source credentials must
-never be baked into an image. Local mode does not require them. See [AWS setup](aws.md).
+of the repository or lab filesystem. Model-provider and source credentials must
+never be baked into an image.
 Deployment-wide egress restrictions require an explicit network
 design; these container flags alone do not implement a public-source firewall.
 
@@ -387,8 +384,8 @@ the target systems before their results can be claimed.
 
 ## Version and platform verification
 
-- Native CI builds the React interface and runs package/interface/config/AWS-mock tests on macOS, Windows and
-  Linux with Python 3.11 and 3.13. These jobs are configured; they have not run
+- Native CI builds the React interface and runs package, interface and
+  configuration tests on macOS, Windows and Linux with Python 3.11 and 3.13. These jobs are configured; they have not run
   on a remote repository in this setup session.
 - The manual container workflow builds amd64 and arm64 images and runs isolated
   health, UI/API, offline CLI, and workspace-persistence checks on Linux (ARM via

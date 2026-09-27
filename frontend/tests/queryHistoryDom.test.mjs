@@ -640,8 +640,6 @@ test("workspace follow-ups replace the main report while keeping prior query pre
           provider: "none",
           model: "",
           ollama_url: "http://localhost:11434",
-          aws_profile: "",
-          aws_region: "",
           allow_paid_inference: false,
         },
         credentials: {
@@ -680,8 +678,6 @@ test("workspace follow-ups replace the main report while keeping prior query pre
           checked_at: times[0],
         },
         optional: {
-          compute: "local",
-          aws_required: false,
           data_apis_required: false,
         },
       };

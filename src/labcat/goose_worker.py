@@ -45,7 +45,6 @@ _JOB_KEYS = {
     "context",
     "chatgpt_tokens",
     "build_plan",
-    "aws_credentials",
 }
 
 
@@ -113,39 +112,14 @@ class _NoRedirect(HTTPRedirectHandler):
         raise WorkerError("The private agent channel cannot redirect.")
 
 
-def _validate_aws(profile, value):
-    if profile["provider"] != "bedrock":
-        if value is not None:
-            raise WorkerError("AWS credentials require the selected AWS provider.")
-        return
-    required = {
-        "AWS_ACCESS_KEY_ID",
-        "AWS_SECRET_ACCESS_KEY",
-        "AWS_REGION",
-        "AWS_DEFAULT_REGION",
-        "AWS_EC2_METADATA_DISABLED",
-        "BEDROCK_MAX_RETRIES",
-    }
-    if (
-        not isinstance(value, dict)
-        or set(value) not in (required, required | {"AWS_SESSION_TOKEN"})
-        or any(
-            not isinstance(item, str) or not 1 <= len(item) <= 20000
-            for item in value.values()
-        )
-        or value["AWS_REGION"] != profile["aws_region"]
-        or value["AWS_DEFAULT_REGION"] != profile["aws_region"]
-        or value["AWS_EC2_METADATA_DISABLED"] != "true"
-        or value["BEDROCK_MAX_RETRIES"] != "0"
-    ):
-        raise WorkerError("The selected AWS session is invalid.")
-
-
 def _validate_job(value):
     from labcat.connections import validate_profile
     from labcat.models import MAX_PROMPT_CHARS
 
-    if not isinstance(value, dict) or set(value) != _JOB_KEYS:
+    if not isinstance(value, dict) or set(value) not in (
+        _JOB_KEYS,
+        _JOB_KEYS | {"claude_account_id", "claude_session_id"},
+    ):
         raise WorkerError("The agent request shape is invalid.")
     for key, pattern in (
         ("job_id", r"[a-f0-9]{32}"),
@@ -181,7 +155,19 @@ def _validate_job(value):
             raise WorkerError("The ChatGPT connection is invalid.")
     elif value["chatgpt_tokens"] is not None:
         raise WorkerError("ChatGPT credentials require the selected provider.")
-    _validate_aws(profile, value["aws_credentials"])
+    if profile["provider"] == "claude_code":
+        identities = (value.get("claude_account_id"), value.get("claude_session_id"))
+        if (
+            any(
+                not isinstance(identity, str)
+                or not re.fullmatch(r"[a-f0-9]{32}", identity)
+                for identity in identities
+            )
+            or value["secret"] is not None
+        ):
+            raise WorkerError("The Claude Code account identity is invalid.")
+    elif "claude_account_id" in value or "claude_session_id" in value:
+        raise WorkerError("Claude Code sessions require the selected provider.")
     return {**value, "profile": profile}
 
 
@@ -286,7 +272,11 @@ def _run(job):
             context=job["context"],
             tool_session=remote,
             chatgpt_tokens=job["chatgpt_tokens"],
-            aws_credentials=job["aws_credentials"],
+            **(
+                {key: job[key] for key in ("claude_account_id", "claude_session_id")}
+                if "claude_account_id" in job
+                else {}
+            ),
         )
         if remote.rejection_diagnostics["rejections"]:
             result["worker_rejection_diagnostics"] = remote.rejection_diagnostics
@@ -370,6 +360,36 @@ def make_server():
         def do_POST(self):
             if not self._authenticated():
                 self._send(403, {"status": "unavailable"})
+                return
+            if self.path in {"/claude/status", "/claude/logout"}:
+                try:
+                    if len(
+                        self.headers.get_all("Content-Length", [])
+                    ) != 1 or self.headers.get("Transfer-Encoding"):
+                        raise ValueError
+                    length = int(self.headers["Content-Length"])
+                    if not 0 < length <= 200:
+                        raise ValueError
+                    body = json.loads(
+                        self.rfile.read(length), object_pairs_hook=unique_json_object
+                    )
+                    if (
+                        not isinstance(body, dict)
+                        or set(body) != {"account_id"}
+                        or not isinstance(body["account_id"], str)
+                        or not re.fullmatch(r"[a-f0-9]{32}", body["account_id"])
+                    ):
+                        raise ValueError
+                    from labcat import claude_auth
+
+                    operation = (
+                        claude_auth.status
+                        if self.path == "/claude/status"
+                        else claude_auth.logout
+                    )
+                    self._send(200, operation(body["account_id"]))
+                except Exception:
+                    self._send(400, {"status": "failed"})
                 return
             if self.path in {
                 "/auth/start",

@@ -18,8 +18,6 @@ def profile(provider="openai"):
         "model": "gpt-4o",
         "allow_paid_inference": provider != "ollama",
         "ollama_url": "http://127.0.0.1:11434",
-        "aws_profile": "default",
-        "aws_region": "us-west-2",
     }
 
 

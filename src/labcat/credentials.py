@@ -173,7 +173,7 @@ class CredentialVault:
                     self._source = "passphrase"
                     self._fernet = None
                 elif self._fernet:
-                    self._decrypt()
+                    self._encrypted = self._decrypt(self._fernet)
             except (ValueError, TypeError, RecursionError, ConnectionError):
                 self._fernet = None
                 self._encrypted = {}
@@ -207,16 +207,19 @@ class CredentialVault:
                 "The external encryption key is unavailable or invalid."
             )
 
-    def _decrypt(self):
+    def _decrypt(self, fernet) -> dict[str, str]:
+        """Verify ciphertext before changing any usable in-memory
+        credentials."""
         try:
             value = json.loads(
-                self._fernet.decrypt(self._document["token"].encode("ascii"))
+                fernet.decrypt(self._document["token"].encode("ascii")),
+                object_pairs_hook=unique_json_object,
             )
-            self._encrypted = validate_secrets(value)
-            if set(self._encrypted) != set(self._document["slots"]):
+            values = validate_secrets(value)
+            if set(values) != set(self._document["slots"]):
                 raise ValueError
+            return values
         except Exception:
-            self._encrypted = {}
             raise ConnectionError(
                 "The encrypted vault could not be unlocked."
             ) from None
@@ -250,18 +253,22 @@ class CredentialVault:
             raise ConnectionError("Unsupported credential slot.")
         return self.session.get(slot, self._encrypted.get(slot))
 
-    def _persist(self, values: dict[str, str]):
+    @staticmethod
+    def _seal(values: dict[str, str], fernet, source: str, salt: str | None) -> dict:
         validate_secrets(values)
-        if self._fernet is None:
+        if fernet is None:
             raise ConnectionError("Unlock or create the encrypted vault first.")
-        token = self._fernet.encrypt(json.dumps(values).encode("utf-8")).decode("ascii")
-        document = {
+        token = fernet.encrypt(json.dumps(values).encode("utf-8")).decode("ascii")
+        return {
             "version": 1,
-            "mode": "passphrase" if self._source == "passphrase" else "external",
-            "salt": self._salt,
+            "mode": "passphrase" if source == "passphrase" else "external",
+            "salt": salt,
             "slots": sorted(values),
             "token": token,
         }
+
+    def _persist(self, values: dict[str, str]):
+        document = self._seal(values, self._fernet, self._source, self._salt)
         atomic_write(self.path, document)
         self._document = document
         self._present = True
@@ -295,6 +302,13 @@ class CredentialVault:
         else:
             for slot in values:
                 self.session.pop(slot, None)
+
+    def forget_session(self, slot: str):
+        """End a temporary override without changing locked saved
+        ciphertext."""
+        if not valid_slot(slot):
+            raise ConnectionError("Unsupported credential slot.")
+        self.session.pop(slot, None)
 
     def checkpoint(self):
         """Capture state in memory only while a connection update is
@@ -332,7 +346,7 @@ class CredentialVault:
                 "A vault or external encryption key is already configured."
             )
         salt = os.urandom(16)
-        self._derive(passphrase, salt)
+        self._fernet = self._derive(passphrase, salt)
         self._source = "passphrase"
         self._salt = base64.urlsafe_b64encode(salt).decode("ascii")
         try:
@@ -343,7 +357,8 @@ class CredentialVault:
             self._salt = None
             raise
 
-    def _derive(self, passphrase: str, salt: bytes):
+    @staticmethod
+    def _derive(passphrase: str, salt: bytes):
         if not isinstance(passphrase, str) or not 12 <= len(passphrase) <= 1024:
             raise ConnectionError(
                 "Use a vault passphrase between 12 and 1024 characters."
@@ -356,18 +371,32 @@ class CredentialVault:
                 "The vault passphrase has invalid characters."
             ) from None
         key = scrypt(salt=salt, length=32, n=2**15, r=8, p=1).derive(encoded)
-        self._fernet = fernet(base64.urlsafe_b64encode(key))
+        return fernet(base64.urlsafe_b64encode(key))
 
     def unlock(self, passphrase: str):
         if not self._document or self._document["mode"] != "passphrase":
             raise ConnectionError("This vault requires its configured external key.")
-        try:
-            self._derive(passphrase, base64.urlsafe_b64decode(self._salt))
-            self._decrypt()
-        except ConnectionError:
-            self._fernet = None
-            self._encrypted = {}
-            raise
+        fernet = self._derive(passphrase, base64.urlsafe_b64decode(self._salt))
+        encrypted = self._decrypt(fernet)
+        self._fernet, self._encrypted = fernet, encrypted
+
+    def change_passphrase(self, current_passphrase: str, new_passphrase: str):
+        """Replace the password atomically, keeping saved and session
+        keys intact."""
+        if not self._document or self._document["mode"] != "passphrase":
+            raise ConnectionError(
+                "Only a password-protected vault can change password."
+            )
+        current = self._derive(current_passphrase, base64.urlsafe_b64decode(self._salt))
+        encrypted = self._decrypt(current)
+        salt = os.urandom(16)
+        replacement = self._derive(new_passphrase, salt)
+        encoded_salt = base64.urlsafe_b64encode(salt).decode("ascii")
+        document = self._seal(encrypted, replacement, "passphrase", encoded_salt)
+        atomic_write(self.path, document)
+        self._document = document
+        self._fernet, self._encrypted = replacement, encrypted
+        self._source, self._salt = "passphrase", encoded_salt
 
     def lock(self):
         if self._source != "passphrase":

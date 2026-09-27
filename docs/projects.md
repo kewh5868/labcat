@@ -130,8 +130,8 @@ check** verifies it again. New research stays paused until readiness is verified
 Switching models preserves credentials and the existing hosted-call consent
 choice. **Connect a model** opens the secure Connections form; available
 sign-in methods depend on the Goose provider, including ChatGPT browser sign-in.
-Model selection applies to new requests throughout the workspace. **Local
-defaults** selects local compute; research still requires a verified model.
+Model selection applies to new requests throughout the workspace. Research
+requires a verified model.
 Opening either settings panel keeps the chat draft in place. After an uncertain
 connection save, reload the saved connection before retrying a change or sending.
 

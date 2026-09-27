@@ -24,7 +24,7 @@ import sys
 import tempfile
 import threading
 import time
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -340,7 +340,7 @@ def _runtime_directory(needs_oauth_storage):
             )
         except ChatGPTAuthError:
             raise ModelError(
-                "ChatGPT research needs memory-backed temporary storage. "
+                "Account sign-in research needs memory-backed temporary storage. "
                 "Use the Docker application."
             ) from None
         try:
@@ -369,39 +369,14 @@ def _private_json(path: Path, value):
         json.dump(value, handle, allow_nan=False)
 
 
-def _aws_credentials(profile: dict) -> dict:
-    """Resolve the chosen host profile, passing only temporary keys to
-    Goose."""
-    try:
-        import boto3
-
-        session = boto3.Session(
-            profile_name=profile["aws_profile"], region_name=profile["aws_region"]
-        )
-        credential = session.get_credentials().get_frozen_credentials()
-        result = {
-            "AWS_ACCESS_KEY_ID": credential.access_key,
-            "AWS_SECRET_ACCESS_KEY": credential.secret_key,
-            "AWS_REGION": profile["aws_region"],
-            "AWS_DEFAULT_REGION": profile["aws_region"],
-            "AWS_EC2_METADATA_DISABLED": "true",
-            "BEDROCK_MAX_RETRIES": "0",
-        }
-        if credential.token:
-            result["AWS_SESSION_TOKEN"] = credential.token
-        return result
-    except Exception:
-        raise ModelError("Refresh the selected AWS login before using Goose.") from None
-
-
 def _environment(
-    profile, secret, folder, broker, token, chatgpt_tokens, aws_credentials=None
+    profile, secret, folder, broker, token, chatgpt_tokens, claude_environment=None
 ):
     """Do not inherit parent keys, proxies, tracing, endpoints, or Goose
     config."""
     provider = profile.get("provider")
     model = profile.get("model")
-    if provider not in {*API_KEY_PROVIDERS, "ollama", "bedrock", "chatgpt"}:
+    if provider not in {*API_KEY_PROVIDERS, "ollama", "chatgpt", "claude_code"}:
         raise ModelError("This connection is not supported by the Goose runtime.")
     if not isinstance(model, str) or not re.fullmatch(
         r"[A-Za-z0-9_.:/-]{1,200}", model
@@ -454,15 +429,33 @@ def _environment(
         env.update(
             OPENAI_API_KEY=secret, OPENAI_HOST=host, OPENAI_BASE_PATH=path.lstrip("/")
         )
+    elif provider == "claude_code":
+        if (
+            secret is not None
+            or chatgpt_tokens is not None
+            or not isinstance(claude_environment, dict)
+            or set(claude_environment) != {"HOME", "CLAUDE_CONFIG_DIR"}
+            or any(
+                not isinstance(value, str) or not value
+                for value in claude_environment.values()
+            )
+        ):
+            raise ModelError("The Claude Code account session is unavailable.")
+        provider = "claude-code"
+        env.update(claude_environment)
+        env.update(
+            CLAUDE_CODE_COMMAND="/usr/local/bin/labcat-claude-runtime",
+            LABCAT_CLAUDE_RUNTIME_DIR=str(folder),
+            DISABLE_AUTOUPDATER="1",
+            CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1",
+            ENABLE_CLAUDEAI_MCP_SERVERS="false",
+            DISABLE_TELEMETRY="1",
+            DISABLE_ERROR_REPORTING="1",
+        )
     elif provider == "ollama":
         if "cloud" in model.lower():
             raise ModelError("Choose a downloaded local Ollama model.")
         env["OLLAMA_HOST"] = validate_ollama_url(profile.get("ollama_url"))
-    elif provider == "bedrock":
-        provider = "aws_bedrock"
-        if not isinstance(aws_credentials, dict):
-            raise ModelError("The selected AWS session is unavailable to the worker.")
-        env.update(aws_credentials)
     else:
         provider = "chatgpt_codex"
         if not isinstance(chatgpt_tokens, dict) or not chatgpt_tokens.get(
@@ -784,6 +777,21 @@ def _refreshed_tokens(folder, previous):
         ) from None
 
 
+@contextmanager
+def _claude_session(account_id, session_id):
+    from labcat.claude_auth import session_environment
+    from labcat.credentials import ConnectionError
+
+    try:
+        with session_environment(account_id, expected_session_id=session_id) as env:
+            yield env
+    except (ConnectionError, OSError):
+        raise ModelError(
+            "The Claude Code session is unavailable or changed. "
+            "Check the connection again."
+        ) from None
+
+
 def run_goose(
     profile,
     secret,
@@ -792,7 +800,8 @@ def run_goose(
     context=None,
     tool_session,
     chatgpt_tokens=None,
-    aws_credentials=None,
+    claude_account_id=None,
+    claude_session_id=None,
 ) -> dict:
     """Use the selected model as a coordinator; never return its report
     prose."""
@@ -810,11 +819,36 @@ def run_goose(
     ).encode()
     if len(payload) > 64_000:
         raise ModelError("The research context exceeds the Goose input limit.")
-    # OAuth requires verified tmpfs; every run removes its config, session, logs.
-    with _runtime_directory(chatgpt_tokens is not None) as folder:
+    # Native Claude owns its credentials. Pin its current session until this
+    # run ends, so reconnect/logout cannot change a running request's identity.
+    with ExitStack() as stack:
+        claude_environment = None
+        if profile.get("provider") == "claude_code":
+            if any(
+                not isinstance(value, str) or not re.fullmatch(r"[a-f0-9]{32}", value)
+                for value in (claude_account_id, claude_session_id)
+            ):
+                raise ModelError("The Claude Code account identity is invalid.")
+            claude_environment = stack.enter_context(
+                _claude_session(claude_account_id, claude_session_id)
+            )
+        elif claude_account_id is not None or claude_session_id is not None:
+            raise ModelError("Claude Code sessions require the selected provider.")
+        # Every run removes its Goose config, session and logs; OAuth uses tmpfs.
+        folder = stack.enter_context(
+            _runtime_directory(
+                chatgpt_tokens is not None or claude_environment is not None
+            )
+        )
         with _tool_broker(tool_session) as (broker, token, trace, report_retained):
             provider, env = _environment(
-                profile, secret, folder, broker, token, chatgpt_tokens, aws_credentials
+                profile,
+                secret,
+                folder,
+                broker,
+                token,
+                chatgpt_tokens,
+                claude_environment,
             )
             command = [
                 GOOSE_BINARY,
@@ -846,6 +880,20 @@ def run_goose(
                 )
             except ModelError as error:
                 failure = error
+            if (
+                claude_environment is not None
+                and failure is None
+                and not execution.stopped_after_report
+            ):
+                from labcat.claude_runtime_wrapper import FAILURE_MARKER
+
+                # Native result.is_error survives Goose's exit-zero/prose-only
+                # failure conversion as a private, content-free marker.
+                if (folder / FAILURE_MARKER).exists():
+                    failure = GooseRuntimeError(
+                        "Claude Code could not complete the selected model request.",
+                        failure_code="process_failed",
+                    )
             refreshed = (
                 _refreshed_tokens(folder, chatgpt_tokens)
                 if chatgpt_tokens is not None

@@ -149,7 +149,7 @@ not. A scientist tunes criteria and presentation, an admin configures connection
 and a field engineer adds/test-reviews adapters or utility functions in code.
 
 First-run setup requires model connection and verification, then offers optional
-AWS and public-source steps. The workspace runs locally by default. Nonsecret
+public-source connections and a final review. The workspace runs locally by default. Nonsecret
 setup progress persists; it cannot authorize research. Credential-bound readiness
 is short-lived and checked before new research; history remains accessible when
 locked or disconnected. Profiles remember nonsecret
@@ -160,12 +160,16 @@ supports administrator-managed unattended use. Atomic writes and validation
 report corruption instead of silently choosing an account. The app never asks
 for third-party passwords or stores secrets in browser storage, logs or images.
 Connection tests perform metadata/identity checks, not billable inference.
-ChatGPT uses a provider-owned device login through the pinned Codex helper.
-Temporary tokens stay on memory-backed storage; remembered tokens are encrypted.
-Available account quota windows and per-run usage are labeled separately.
-Claude uses API/Bedrock credentials; subscription login is not implemented.
-AWS uses an existing profile/SSO session for optional Bedrock planning; no cloud
-resources are provisioned and AWS credentials do not relocate the application.
+ChatGPT uses Goose-owned browser authorization, with the pinned Codex helper for
+account/model/usage metadata. Temporary tokens stay on memory-backed storage;
+remembered tokens are encrypted. Available account quota windows and per-run usage
+are labeled separately. Claude Code account sign-in uses its unmodified native CLI
+inside the isolated worker. Its private tmpfs sessions are separate from the vault
+and end when the worker restarts. Only the fixed Labcat research MCP actions are
+exposed; built-in shell, file and web capabilities are disabled. Its configured
+model aliases are not verified account entitlements, and live Claude account
+inference remains unvalidated. Anthropic API keys remain a separate connection.
+See the [native runtime and pinned adapter limitation](goose.md#native-claude-code-runtime).
 
 Evaluations cover broad material discovery and separate scoring fixtures, prompt-supplied false values, attempted
 policy override, malicious extra model fields, missing/conflicting data, redirect

@@ -4,8 +4,9 @@ Follow this walkthrough on the computer where you want to run Labcat. It uses
 Docker and your web browser; you do not need Python, Node, Rust, or a separate
 Labcat desktop build. The same in-app steps apply to the native desktop window.
 
-**Have ready:** an internet connection and either a supported ChatGPT account or
-an API key from a supported model provider. A Materials Project key is optional.
+**Have ready:** an internet connection and a supported ChatGPT account, an
+eligible Claude Code account, or an API key from a supported model provider.
+A Materials Project key is optional.
 Your selected provider runs the AI model and controls access, allowances and
 charges. Docker runs the Labcat workspace locally.
 
@@ -82,16 +83,20 @@ copy the local URL printed by the launcher into your browser's address bar.
 Use the printed port; it can differ between installations.
 
 **You should see:** the Labcat workspace and a setup dialog headed
-**Connect your research model.**, with **Model**, **Compute**, **Public sources**
-and **Ready** across the top. Keep Docker running for the following steps.
+**Connect your research model.**, with **Model**, **Public sources** and **Ready**
+across the top. Keep Docker running for the following steps.
 
 If setup is already complete, open **Connections** in the sidebar to review or
 change your model connection. Do not rebuild the image each time you open Labcat.
 
 ## 4. Connect your model
 
+Labcat's developer currently recommends **ChatGPT account sign-in** because it
+is the application's most thoroughly tested model connection.
+
 In the **Model** setup step, open the **Model provider** dropdown. Choose one
-of the routes below.
+of the routes below. A credential vault is optional; you can connect for the
+current server session without creating or unlocking one.
 
 === "ChatGPT account"
 
@@ -108,6 +113,32 @@ of the routes below.
     Your ChatGPT password belongs on the provider's sign-in page, never in
     Labcat. Account eligibility and available models depend on your provider.
 
+=== "Claude Code account"
+
+    1. Select **Anthropic (Claude Code sign-in)** in **Model provider**.
+    2. Click **Set up Claude Code sign-in**. Labcat saves the connection and
+       displays its account-specific terminal command.
+    3. Copy that command into Terminal or PowerShell from your `labcat` folder:
+
+       ```text
+       docker compose exec goose-worker python -m labcat.claude_auth login <account-id>
+       ```
+
+       Use the command shown in **Connections**, which already contains the
+       account ID; do not type the `<account-id>` placeholder literally.
+    4. Follow the native Claude Code instructions in that terminal. Open its
+       provider sign-in URL in your browser when instructed, and complete any
+       code entry in the native terminal flow. Do not paste a code or token into
+       Labcat.
+    5. Return to Labcat and click **Check Claude Code sign-in**.
+
+    The native CLI keeps its session on temporary memory-backed storage in the
+    Docker worker. **End Claude Code session** or a worker container restart
+    ends it. Creating, locking or resetting Labcat's vault does not affect this
+    separate session. The `default`, `sonnet` and `haiku` choices are aliases;
+    sign-in detection does not establish access to a particular model or test
+    inference. Live Claude account inference has not yet been validated in Labcat.
+
 === "Provider API key"
 
     1. Choose your provider in **Model provider**, such as OpenAI API,
@@ -118,12 +149,11 @@ of the routes below.
        says **Save API key**.
     4. Wait for the available models to load.
 
-    API use follows that provider's billing. For Amazon Bedrock, use the
-    separate [AWS profile setup instructions](aws.md).
+    API use follows that provider's billing.
 
-Then complete these steps for either route:
+Then complete these steps for your route:
 
-1. Open the **Model** dropdown and select one of the returned models. If the list fails to
+1. Open the **Model** dropdown and select a model or a Claude Code alias. If the list fails to
    load, check your connection and click **Refresh models**.
 2. Read the consent notice, then check **I allow this provider to receive that
    context and run potentially billable planning calls.** to enable research.
@@ -131,22 +161,27 @@ Then complete these steps for either route:
 4. When setup reports **Saved model connection verified**, click **Continue**.
    An existing saved connection may instead offer **Verify and continue**.
 
-This check verifies account and model access; it does not run a research prompt.
+This check uses authentication and available model metadata; it does not run a
+research prompt. For Claude Code it detects native sign-in and validates the
+configured alias, without checking model entitlement or inference.
 If **Continue** is disabled, scroll through the model step, save any changed
 model or consent setting, and resolve the displayed connection error. Clicking
 **View workspace** closes the dialog but does not make an unverified connection
 ready for research. [More connection help](onboarding.md)
 
-## 5. Finish the optional setup steps
+**Switch accounts or models later.** Open **Connections**, choose **Model
+provider**, then use **Account** to select a saved connection or **Connect another
+account…** to add one. Give a new alternate account an **Account label** if useful.
+Each connection keeps its own model choice. You can also open the language-model
+control below a chat prompt, choose a saved account, and change **Active model**.
+Changes apply to the next request.
 
-1. **Compute:** leave **Local workspace** as the default and leave
-   **Configure Amazon Bedrock** unchecked for this walkthrough. Click
-   **Continue**. Your chosen provider still runs the model; this does not
-   install a local AI model.
-2. **Public sources:** for a first run, keep the default public-source settings
+## 5. Choose public sources and finish setup
+
+1. **Public sources:** for a first run, keep the default public-source settings
    and click **Continue**. You can also click **Skip for now** to leave this
    optional step without applying unsaved changes.
-3. **Ready:** check that the displayed model is the one you selected, then click
+2. **Ready:** check that the displayed model is the one you selected, then click
    **Finish setup**. The setup dialog closes and the workspace is ready for a
    question.
 
@@ -269,10 +304,41 @@ This preserves saved chats and projects. Next time, start Docker and repeat the
 [open command](#3-open-the-application). If you need the current local address,
 run `./labcat.sh status` or `.\labcat.cmd status` from the same folder.
 
-Credentials are session-only by default, so you may need to sign in again or
-re-enter your API key after a backend restart. Optional encrypted storage is
-available under **Advanced credential options**; a passphrase vault must be
-unlocked after restart. Your saved research is independent of that sign-in.
+Credentials are session-only by default. To remember a model API key, open
+**Connections → Advanced credential options**, create a vault password, select
+**Encrypted credential vault**, then click **Save and test connections**. Leave
+the API-key field blank to remember an available key without typing it again.
+To remember a ChatGPT sign-in, choose encrypted storage before signing in or
+reconnecting. For Materials Project, choose **Remember key securely between
+sessions** in its own card, then **Save and verify**.
+
+After the Labcat server restarts, click **Unlock saved credentials**, enter your
+vault password, then click **Unlock credentials**. Do this once; saved keys can
+be reused without entering each one again. The API-key fields stay blank because
+Labcat never sends saved key values back to the browser. Provider sign-ins may
+still expire and need reconnecting.
+
+To change a known vault password, open **Advanced credential options → Change
+vault password**, enter the current password and the new password twice, then
+click **Change vault password**. If you forgot it, choose **Forgot password?
+Reset vault**, check the confirmation box, and click **Reset vault and clear
+credentials**. Reset clears the vault password and all vault-managed encrypted
+and session-only credentials, including API keys and ChatGPT sign-ins. You must
+reconnect those credentials; your projects, chats and reports remain. Native
+Claude Code sessions are separate: use **End Claude Code session** or restart
+the worker container to end them.
+
+You can keep the vault locked and continue with **This server session**. For
+ChatGPT, click **Reconnect ChatGPT** and sign in again; you do not need to sign
+out or reset the vault first. Use **Account → Connect another account…** for a
+separate connection. **End session** disconnects the fresh sign-in while the
+older saved sign-in stays encrypted and locked.
+
+For an API provider, paste the same or another model key and click **Save API
+key**. On the Materials Project card, choose **Use a key for this session**, paste
+the key, and click **Save and verify**. Saved encrypted credentials remain
+unchanged; session credentials last only until the server stops. Labcat does not
+persist credentials as plain text.
 
 Continue with [more example questions](examples.md), the
 [workspace user guide](user-guide.md), or

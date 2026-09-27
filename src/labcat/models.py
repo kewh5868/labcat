@@ -6,7 +6,6 @@ https://developers.openai.com/api/docs/guides/structured-outputs
 https://platform.claude.com/docs/en/api/overview
 https://platform.kimi.ai/docs/api/chat
 https://docs.ollama.com/api/generate
-https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_Converse.html
 """
 
 import json
@@ -210,39 +209,6 @@ def request_json(url: str, *, headers=None, body=None, timeout=10) -> dict:
         ) from None
 
 
-def _bedrock(profile: dict, *, prompt: str | None = None):
-    try:
-        import boto3
-        from botocore.config import Config
-    except ImportError:
-        raise ModelError("AWS support is not installed.") from None
-    try:
-        client = boto3.Session(
-            profile_name=profile["aws_profile"], region_name=profile["aws_region"]
-        ).client(
-            "bedrock-runtime",
-            config=Config(
-                connect_timeout=5,
-                read_timeout=45,
-                retries={"mode": "standard", "total_max_attempts": 1},
-                ignore_configured_endpoint_urls=True,
-            ),
-        )
-        try:
-            return client.converse(
-                modelId=profile["model"],
-                system=[{"text": SYSTEM}],
-                messages=[{"role": "user", "content": [{"text": prompt or ""}]}],
-                inferenceConfig={"maxTokens": 512},
-            )
-        finally:
-            client.close()
-    except Exception:
-        raise ModelError(
-            "Bedrock planning failed. Check login, model authorization and quota."
-        ) from None
-
-
 def bounded_context(context: dict | None) -> dict:
     """Allowlisted, bounded context fields only; drop report prose and
     source URLs."""
@@ -289,7 +255,7 @@ def plan_with_model(
     provider = profile["provider"]
     if provider == "none":
         return Plan()
-    if provider not in {"ollama", *API_KEY_PROVIDERS, "bedrock"}:
+    if provider not in {"ollama", *API_KEY_PROVIDERS}:
         raise ModelError("Model provider is not supported.")
     if not profile["model"]:
         raise ModelError("Choose a model identifier before using model planning.")
@@ -407,17 +373,6 @@ def plan_with_model(
             if choice["message"].get("tool_calls") or choice["message"].get("refusal"):
                 raise ValueError
             text = choice["message"]["content"]
-        else:
-            data = _bedrock(profile, prompt=user)
-            if data.get("stopReason") != "end_turn":
-                raise ValueError
-            if any("toolUse" in part for part in data["output"]["message"]["content"]):
-                raise ValueError
-            text = "".join(
-                part["text"]
-                for part in data["output"]["message"]["content"]
-                if "text" in part
-            )
         return parse_plan(text)
     except (KeyError, IndexError, TypeError, ValueError, AttributeError):
         raise ModelError(

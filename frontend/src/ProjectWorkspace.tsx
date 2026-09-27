@@ -1359,7 +1359,7 @@ export default function ProjectWorkspace({
               </strong>
             </span>
           </div>
-          <span className="preview-badge">Interview Prototype</span>
+          <span className="preview-badge">Prototype</span>
         </header>
         <main
           id="project-main"
@@ -1830,7 +1830,7 @@ function AboutPanel() {
         <p>
           Search Criterion controls ranking priorities and source selection.
           Report Format controls report presentation and previews. Connections
-          manages model accounts, compute choices and source credentials.
+          manages model accounts and source credentials.
         </p>
       </section>
     </section>

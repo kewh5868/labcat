@@ -122,8 +122,6 @@ const baseProfile = {
   model: "",
   allow_paid_inference: false,
   ollama_url: "http://localhost:11434",
-  aws_profile: "",
-  aws_region: "",
 };
 const baseStatus = () => ({
   configured: false,
@@ -402,8 +400,8 @@ test("unlock loads models automatically and switching accounts discards stale re
     assert.equal(models, 0, "locked credentials cannot fetch model metadata");
     assert.equal(
       document.querySelector(".advanced-credentials").open,
-      true,
-      "required unlock controls are revealed automatically",
+      false,
+      "the optional vault stays collapsed while account controls remain available",
     );
     assert.ok(document.querySelector(".credential-unlock-notice"));
     assert.equal(
@@ -418,14 +416,12 @@ test("unlock loads models automatically and switching accounts discards stale re
       /Anthropic/,
     );
     const advanced = document.querySelector(".advanced-credentials");
-    await env.click(advanced.querySelector("summary"));
-    await env.flush();
     assert.equal(advanced.open, false);
     let revealed = false;
     advanced.scrollIntoView = () => {
       revealed = true;
     };
-    await env.click(env.button("Review saved credentials"));
+    await env.click(env.button("Unlock saved credentials"));
     await env.flush();
     assert.equal(advanced.open, true);
     assert.equal(revealed, true);
@@ -627,6 +623,18 @@ test("advanced credentials are collapsed after reconnecting an unlocked vault an
       document.querySelectorAll('input[name="secret-storage"]').length,
       2,
       "only session memory and encrypted vault choices exist",
+    );
+    const sessionChoice = advanced
+      .querySelector('input[name="secret-storage"][value="session"]')
+      .closest("label");
+    assert.match(
+      sessionChoice.textContent,
+      /existing encrypted key stays saved/,
+    );
+    assert.match(sessionChoice.textContent, /restarting and unlocking/);
+    assert.match(
+      sessionChoice.textContent,
+      /Leave the key blank to keep its saved value/,
     );
     await env.change(
       document.querySelector("#provider-key"),

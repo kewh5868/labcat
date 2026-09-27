@@ -49,8 +49,6 @@ const setupFixture = () => ({
     checked_at: null,
   },
   optional: {
-    compute: "local",
-    aws_required: false,
     data_apis_required: false,
   },
 });
@@ -91,8 +89,6 @@ test("required model verification gates setup, optional services skip without wr
     model: "fixture-model",
     allow_paid_inference: true,
     ollama_url: "http://localhost:11434",
-    aws_profile: "",
-    aws_region: "",
   };
   const account = {
     id: "fixture-account",
@@ -200,17 +196,6 @@ test("required model verification gates setup, optional services skip without wr
       setup.completed = true;
       return Response.json(setup);
     }
-    if (path === "/api/connections/aws-profiles")
-      return Response.json({
-        profiles: ["fixture-research"],
-        regions: ["us-west-2"],
-        setup: {
-          commands: [],
-          documentation_url:
-            "https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sso.html",
-          message: "Fixture installation profiles only.",
-        },
-      });
     if (path === "/api/public-sources") return Response.json({ sources: [] });
     if (path === "/api/source-settings")
       return Response.json({
@@ -310,6 +295,14 @@ test("required model verification gates setup, optional services skip without wr
       /ChatGPT/,
     );
     assert.equal(document.querySelector("#model-account-name"), null);
+    assert.deepEqual(
+      [...document.querySelectorAll(".setup-progress strong")].map(
+        (item) => item.textContent,
+      ),
+      ["Model", "Public sources", "Ready"],
+    );
+    assert.equal(document.querySelector('option[value="bedrock"]'), null);
+    assert.doesNotMatch(document.body.textContent, /AWS|Bedrock|Compute/);
     assert.equal(
       calls.filter((item) => item.path.endsWith("/verify")).length,
       0,
@@ -412,15 +405,15 @@ test("required model verification gates setup, optional services skip without wr
     await act(async () => finishVerification());
     assert.equal(
       setup.current_step,
-      "compute",
-      "footer advances after successful verification",
+      "sources",
+      "footer advances directly to public sources after successful verification",
     );
     await click(button("Back"));
     const verifiedCount = calls.filter((item) =>
       item.path.endsWith("/verify"),
     ).length;
     await click(button("Continue"));
-    assert.equal(setup.current_step, "compute");
+    assert.equal(setup.current_step, "sources");
     assert.equal(
       calls.filter((item) => item.path.endsWith("/verify")).length,
       verifiedCount,
@@ -521,37 +514,6 @@ test("required model verification gates setup, optional services skip without wr
     );
     await click(button("Reload saved settings"));
     await click(button("Continue"));
-    assert.equal(setup.current_step, "compute");
-    assert.match(
-      document.body.textContent,
-      /does not move the application or deploy cloud infrastructure/,
-    );
-    assert.equal(
-      document.querySelector(".setup-optional-toggle input").checked,
-      false,
-    );
-    assert.ok(
-      button("Skip for now"),
-      "AWS has an explicit skip action before editing",
-    );
-    await click(document.querySelector(".setup-optional-toggle input"));
-    assert.equal(document.querySelector("#model-provider").value, "bedrock");
-    const awsProfile = document.querySelector("#aws-profile");
-    assert.equal(awsProfile.value, "");
-    assert.equal(awsProfile.options[0].disabled, true);
-    assert.doesNotMatch(awsProfile.textContent, /Default credential chain/);
-    assert.equal(
-      button("Save and test connections").disabled,
-      true,
-      "AWS save needs an installed named profile and region",
-    );
-    assert.equal(
-      profile.provider,
-      "chatgpt",
-      "merely opening optional AWS cannot change the active model",
-    );
-    await click(document.querySelector(".setup-optional-toggle input"));
-    await click(button("Continue"));
     assert.equal(setup.current_step, "sources");
     assert.match(
       document.body.textContent,
@@ -579,6 +541,11 @@ test("required model verification gates setup, optional services skip without wr
       "source selection lives in Search Criterion, not credential setup",
     );
     await click(button("Skip for now"));
+    assert.equal(setup.current_step, "review");
+    assert.doesNotMatch(document.body.textContent, /AWS|Bedrock|Compute/);
+    await click(button("Back"));
+    assert.equal(setup.current_step, "sources");
+    await click(button("Continue"));
     assert.equal(setup.current_step, "review");
     const reviewModel = document.querySelector("#setup-review-model");
     assert.ok(reviewModel, "the final review has an inline model selector");
@@ -670,10 +637,9 @@ test("required model verification gates setup, optional services skip without wr
     assert.ok(
       !calls.some(
         (item) =>
-          (item.path.includes("aws") && item.method !== "GET") ||
-          item.path.includes("local-defaults"),
+          item.path.includes("aws") || item.path.includes("local-defaults"),
       ),
-      "skipping AWS does not provision or change compute",
+      "setup does not discover deferred integrations or change local defaults",
     );
     assert.equal(window.localStorage.length, 0);
     assert.equal(window.sessionStorage.length, 0);
@@ -773,7 +739,7 @@ test("required model verification gates setup, optional services skip without wr
     await act(async () => root.render(tree("restart")));
     assert.match(
       document.querySelector(".setup-readiness").textContent,
-      /Unlock your saved connection/,
+      /Reconnect or unlock your saved connection/,
     );
     assert.equal(document.querySelector("#vault-unlock")?.type, "password");
     assert.equal(button("Continue").disabled, true);
@@ -881,8 +847,6 @@ for (const scenario of [
       model: "fixture-model",
       allow_paid_inference: true,
       ollama_url: "http://localhost:11434",
-      aws_profile: "",
-      aws_region: "",
     };
     const account = {
       id: "fixture-account",
@@ -1143,14 +1107,11 @@ test("setup transport rejects secret-bearing and inconsistent readiness and writ
   const calls = [];
   try {
     assert.deepEqual(parseSetup(state), state);
-    assert.equal(
-      parseSetup({
-        ...state,
-        optional: { ...state.optional, compute: "aws_bedrock" },
-      }).optional.compute,
-      "aws_bedrock",
-    );
     for (const invalid of [
+      { ...state, current_step: "compute" },
+      { ...state, optional: { ...state.optional, compute: "local" } },
+      { ...state, optional: { ...state.optional, aws_required: false } },
+      { ...state, model: { ...state.model, provider: "bedrock" } },
       { ...state, access_token: "FIXTURE_SECRET" },
       { ...state, model: { ...state.model, api_key: "FIXTURE_SECRET" } },
       { ...state, can_research: true },

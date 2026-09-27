@@ -37,7 +37,6 @@ nav:
       - Research safeguards: research-safeguards.md
   - Advanced:
       - Deployment and troubleshooting: deployment.md
-      - AWS options: aws.md
       - Developer guide: development.md
       - Architecture: architecture.md
       - Validation: validation.md

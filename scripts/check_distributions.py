@@ -6,6 +6,7 @@ wheel/sdist files in dist/.
 """
 
 import argparse
+import importlib.util
 import re
 import stat
 import tarfile
@@ -14,8 +15,16 @@ import zipfile
 from email.parser import BytesParser
 from pathlib import Path, PurePosixPath
 
+SECRET_CHECK_SPEC = importlib.util.spec_from_file_location(
+    "publication_secret_check", Path(__file__).with_name("check_secrets.py")
+)
+assert SECRET_CHECK_SPEC is not None and SECRET_CHECK_SPEC.loader is not None
+secret_check = importlib.util.module_from_spec(SECRET_CHECK_SPEC)
+SECRET_CHECK_SPEC.loader.exec_module(secret_check)
+
 METADATA_LIMIT = 1024 * 1024
 REQUIRED_SOURCE_SUPPORT = (
+    "scripts/check_secrets.py",
     "scripts/materials_prompt_matrix.json",
     "scripts/holdout_prompts.json",
     "frontend/tests/reportLayoutChecks.js",
@@ -55,6 +64,7 @@ def check_names(names: list[str]) -> None:
         seen.add(canonical)
         if (
             forbidden.intersection(parts)
+            or secret_check.private_path(name)
             or any(part.startswith(".env") for part in parts)
             or any(
                 part.endswith(
@@ -124,6 +134,13 @@ def check_wheel(archive: Path, name: str, version: str) -> None:
             raise SystemExit("Distribution metadata exceeds the inspection size limit.")
         with wheel.open(metadata_path) as stream:
             check_metadata(stream.read(METADATA_LIMIT + 1), name, version)
+        for path in files:
+            with wheel.open(path) as stream:
+                if secret_check.stream_findings(stream):
+                    raise SystemExit(
+                        f"Possible credential in distribution: {path} "
+                        "(contents redacted)"
+                    )
 
 
 def check_sdist(archive: Path, name: str, version: str) -> None:
@@ -161,6 +178,16 @@ def check_sdist(archive: Path, name: str, version: str) -> None:
             raise SystemExit("Source archive metadata is not a regular file.")
         with stream:
             check_metadata(stream.read(METADATA_LIMIT + 1), name, version)
+        for path, member in files.items():
+            stream = source.extractfile(member)
+            if stream is None:
+                raise SystemExit("Cannot inspect source member contents.")
+            with stream:
+                if secret_check.stream_findings(stream):
+                    raise SystemExit(
+                        f"Possible credential in distribution: {path} "
+                        "(contents redacted)"
+                    )
 
 
 def check_distributions(

@@ -14,10 +14,10 @@ LLM memory, user-supplied citations and retrieved instructions cannot establish
 facts, change policy or grant tool access. No private-data or wetlab tools.
 
 Use one Python core for CLI and FastAPI. React/TypeScript builds into static
-assets served by FastAPI; deliver one Docker image. Keep local compute default,
-AWS optional, and native Tauri desktop packaging separate from the Docker backend.
-Preserve Mac/Windows/Linux and
-amd64/arm64 portability; report actual test coverage without overclaiming it.
+assets served by FastAPI; deliver one Docker image. Keep workspace compute local
+and native Tauri desktop packaging separate from the Docker backend. Preserve
+Mac/Windows/Linux and amd64/arm64 portability; report actual test coverage without
+overclaiming it.
 
 For relevant changes, run `npm run build --prefix frontend`, Python tests and
 Ruff. Build distributions and run `scripts/check_distributions.py` when changing

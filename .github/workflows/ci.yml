@@ -31,7 +31,7 @@ jobs:
         working-directory: frontend
       - run: npm test --prefix frontend
       - run: python -m pip install --require-hashes -r requirements/runtime.lock
-      - run: python -m pip install -e ".[web,aws,connections,exports,dev]"
+      - run: python -m pip install -e ".[web,connections,exports,dev]"
       - name: Run Python tests
         run: python -m pytest -v --tb=short --durations=20
         timeout-minutes: 15

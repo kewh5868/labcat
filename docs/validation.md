@@ -1,9 +1,36 @@
-# Validation record — 2026-09-24
+# Validation record
 
 Version: `0.1.0.dev0`. The prototype supports public-evidence research across
 material classes through the shared Python CLI and FastAPI workflow. Numerical
 coverage depends on the connected adapters and reviewed fields; it is not a
 validated materials predictor or an exhaustive web search engine.
+
+## Native Claude Code connection — 2026-09-27
+
+The new account connection uses the unmodified, checksum-pinned Claude Code
+2.1.274 binary through Goose 1.50.0. Anthropic API access remains separate.
+ChatGPT account sign-in remains the developer's recommendation and Labcat's
+most thoroughly tested model connection.
+
+Local regression checks cover session-only native sign-in, account switching
+with a locked vault, independent native sessions, safe failure handling, model
+alias selection, and secret-free status/logout routes. CLI credentials stay in
+worker tmpfs; tests use synthetic metadata and never import personal logins.
+
+The actual ARM64 Docker image passed a network-disabled Goose-to-Claude startup
+check. Native initialization exposed exactly the five Labcat research tools,
+with no shell, file or general web tools. The maintained
+`scripts/smoke_claude_runtime.py` check runs within the container smoke suite.
+A native structured authentication error is preserved even when Goose reports
+exit zero; it invalidates connection readiness without inventing a report or
+exposing provider error content.
+
+A separate, disposable worker also reached the native browser sign-in URL and
+terminal code prompt through the restricted proxy, then cancelled. No user
+signed in during this check; authorization completion, subscription entitlement,
+quota and live Claude inference remain untested. The AMD64 binary is pinned and
+its download validation is covered by fixtures, but it was not executed locally.
+These checks do not claim new GitHub Actions or other-OS execution results.
 
 ## Full source preflight — 2026-09-24
 
@@ -1070,12 +1097,10 @@ provider/server messages. A disposable ARM64 Docker API successfully initiated
 the real official ChatGPT device flow, returned a pending challenge, cancelled
 it and removed its temporary files. No personal account or inference was used.
 
-OpenAI API, Anthropic API, Kimi and supported Bedrock models were verified to
+OpenAI API, Anthropic API and Kimi models were verified to
 dispatch through the same isolated Goose worker without direct-provider fallback.
 Provider tests passed with inert fixtures; this does not establish live account
-access or model inference. Bedrock discovery now includes active returned
-inference-profile IDs with bounded pagination. Exact pinned Goose models needing
-the unsupported Mantle/bearer-token path are excluded and cannot pass readiness.
+access or model inference.
 
 Final Linux Docker images passed full disposable workspace, export, restart,
 credential-isolation and structure HTTP checks, with all installed source,
@@ -1441,7 +1466,7 @@ leads with source locations and content hashes.
 The text adapter searches at most three attributes and attempts at most six
 article downloads within a 15-second stage budget. Deferred attributes remain
 visible. It reads available Europe PMC open-access XML, not arbitrary public
-websites. No personal model login, paid inference or AWS deployment was used.
+websites. No personal model login or paid inference was used.
 Native Windows/Linux execution remains untested.
 
 ## Written report milestone
@@ -1465,14 +1490,14 @@ unchanged; internal view identifiers remain compatible.
 | Installation / distributions | All three managed ARM64 services healthy after update; every pre-update workspace row retained and foreign keys intact. Wheel/source archives passed private-file exclusion checks                                                                                                                                       |
 
 Native layout checks used an isolated test workspace, separate from the user's
-history. No personal provider login, paid inference, new scientific search,
-AWS deployment or native Windows/Linux execution was performed for this change.
+history. No personal provider login, paid inference, new scientific search or
+native Windows/Linux execution was performed for this change.
 
 ## Required model setup milestone
 
 New research now requires a supported authenticated provider account, a selected
 model, explicit hosted-context consent and a successful model metadata check.
-First-run setup includes optional AWS Bedrock and public-source connections.
+First-run setup includes optional public-source connections.
 Saved workspace history remains accessible before setup and while credentials are
 locked. Earlier no-account research checks below describe previous behavior.
 
@@ -1490,7 +1515,7 @@ locked. Earlier no-account research checks below describe previous behavior.
 | Existing installation    | Updated the managed ARM64 stack; all three services healthy. Every pre-upgrade workspace row was retained and foreign keys remained intact                                                                                                                                                                             |
 | Design / distributions   | Updated three-page design note rendered and visually checked. Wheel/source archives passed private-file exclusion checks, including setup-progress files                                                                                                                                                               |
 
-No personal provider sign-in, paid model inference, AWS deployment or native
+No personal provider sign-in, paid model inference or native
 Windows/Linux execution was performed for this milestone. Provider transport
 checks use explicit simulated credentials, separate from runtime defaults.
 
@@ -1532,7 +1557,7 @@ CLI default and explicit `cli --offline` option.
 ## Earlier Goose isolation milestone (before broader live retrieval)
 
 The desktop was closed at the user's request while Goose was validated independently.
-No personal provider credential, browser login, host Codex account or AWS cache was
+No personal provider credential, browser login or host Codex account was
 imported. Real account authentication and model inference remain untested.
 
 | Check                    | Observed result                                                                                                                                                                                                                                                                                                         |
@@ -1628,8 +1653,8 @@ Targeted missing-attribute follow-up can read available open-access article XML;
 its attributed passages require review and never become scored property values.
 Missing coverage stays explicit.
 Live ChatGPT-hosted inference is verified only for the models and runs recorded
-above. No live Materials Project account, other model-provider account, Ollama
-service or AWS account was tested. Other provider calls and failure cases have
+above. No live Materials Project account, other model-provider account or Ollama
+service was tested. Other provider calls and failure cases have
 mocked tests; metadata-only connection tests are distinct from requested inference.
 No cloud resources were created and no external release was published.
 

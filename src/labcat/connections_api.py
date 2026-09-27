@@ -102,12 +102,6 @@ def create_connections_router(manager: ConnectionManager) -> APIRouter:
             raise HTTPException(422, "Model listing uses the saved connection.")
         return await run_in_threadpool(_call, manager.list_models)
 
-    @router.get("/aws-profiles")
-    def aws_profiles():
-        from labcat.aws import profile_options
-
-        return profile_options()
-
     @router.get("/agent")
     def agent():
         return _call(manager.agent.runtime_status)
@@ -145,6 +139,20 @@ def create_connections_router(manager: ConnectionManager) -> APIRouter:
         if await _body(request) != {}:
             raise HTTPException(422, "Choose only the account to disconnect.")
         return _call(manager.agent.forget_login, identifier)
+
+    @router.get("/accounts/{identifier}/claude-code")
+    def claude_code_status(identifier: str):
+        return _call(manager.agent.claude_status, identifier)
+
+    @router.post("/accounts/{identifier}/claude-code/logout")
+    async def claude_code_logout(identifier: str, request: Request):
+        from starlette.concurrency import run_in_threadpool
+
+        if await _body(request) != {}:
+            raise HTTPException(422, "Choose only the account to disconnect.")
+        return await run_in_threadpool(
+            _call, lambda: manager.agent.claude_status(identifier, logout=True)
+        )
 
     @router.post("/local-defaults")
     async def local_defaults(request: Request):

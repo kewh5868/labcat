@@ -122,8 +122,6 @@ const baseProfile = {
   model: "",
   allow_paid_inference: false,
   ollama_url: "http://localhost:11434",
-  aws_profile: "",
-  aws_region: "",
 };
 const baseStatus = () => ({
   configured: false,
@@ -153,10 +151,10 @@ const baseStatus = () => ({
 
 const providers = [
   "chatgpt",
+  "claude_code",
   "openai",
   "anthropic",
   "kimi",
-  "bedrock",
   "gemini",
   "deepseek",
   "xai",
@@ -220,17 +218,6 @@ test("a connected ChatGPT account still exposes every provider, and browsing uns
     if (path === "/api/connections") return Response.json(status);
     if (path === "/api/connections/models")
       return Response.json(catalog("chatgpt"));
-    if (path === "/api/connections/aws-profiles")
-      return Response.json({
-        profiles: ["test-profile"],
-        regions: ["us-east-1"],
-        setup: {
-          commands: [],
-          documentation_url:
-            "https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sso.html",
-          message: "Synthetic profile metadata.",
-        },
-      });
     assert.fail(`Unexpected request ${path}`);
   });
   try {
@@ -248,23 +235,27 @@ test("a connected ChatGPT account still exposes every provider, and browsing uns
     for (const provider of providers.filter((value) => value !== "chatgpt")) {
       await env.change(providerPicker(), provider);
       assert.equal(providerPicker().value, provider);
-      assert.equal(document.querySelector("#model-choice").value, "");
+      assert.equal(
+        document.querySelector("#model-choice").value,
+        provider === "claude_code" ? "default" : "",
+      );
       assert.equal(consent().checked, false);
       assert.equal(
         status.active_account_id,
         chatgpt.id,
         "browsing an unconnected provider does not switch the active account",
       );
-      if (provider === "bedrock") {
-        assert.equal(document.querySelector("#provider-key"), null);
-        assert.ok(document.querySelector("#aws-profile"));
-      } else {
-        const key = document.querySelector("#provider-key");
-        assert.equal(key.value, "");
-        assert.equal(key.type, "password");
-        await env.change(key, `SYNTHETIC-${provider}-DRAFT-SECRET`);
-        await env.click(consent());
+      assert.doesNotMatch(document.body.textContent, /AWS|Bedrock/);
+      const key = document.querySelector("#provider-key");
+      if (provider === "claude_code") {
+        assert.equal(key, null);
+        assert.ok(document.querySelector(".claude-code-sign-in"));
+        continue;
       }
+      assert.equal(key.value, "");
+      assert.equal(key.type, "password");
+      await env.change(key, `SYNTHETIC-${provider}-DRAFT-SECRET`);
+      await env.click(consent());
     }
     await env.change(providerPicker(), "chatgpt");
     assert.equal(document.querySelector("#provider-key"), null);
@@ -759,6 +750,676 @@ test("a lost account-selection response blocks further connection changes until 
       1,
       "recovery only reads authoritative state and metadata; it never repeats the mutation",
     );
+  } finally {
+    await env.close();
+  }
+});
+
+const accountPicker = () => document.querySelector("#provider-account");
+const lockedVault = {
+  available: false,
+  locked: true,
+  exists: true,
+  can_create: false,
+  key_source: "passphrase",
+};
+
+test("locked ChatGPT accounts can reconnect, switch pending sign-in and end only the session without vault actions", async (t) => {
+  const env = await environment();
+  const first = account("chatgpt", "chatgpt-first", "locked");
+  first.label = "Personal ChatGPT";
+  const second = account("chatgpt", "chatgpt-second", "locked");
+  second.label = "Research ChatGPT";
+  second.profile.model = "chatgpt-second-model";
+  let status = { ...stateWith([first, second]), vault: { ...lockedVault } };
+  const profiles = structuredClone(
+    status.accounts.map(({ id, label, profile }) => ({ id, label, profile })),
+  );
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async (path, options = {}) => {
+    const body = options.body ? JSON.parse(options.body) : null;
+    calls.push({ path, body });
+    if (path === "/api/session")
+      return Response.json({ csrf_token: "SYNTHETIC-CSRF-AT-LEAST-20" });
+    if (path === "/api/connections") return Response.json(status);
+    if (path.endsWith("/select")) {
+      const selected = status.accounts.find((item) =>
+        path.includes(`/${item.id}/`),
+      );
+      status = {
+        ...status,
+        active_account_id: selected.id,
+        profile: selected.profile,
+      };
+      return Response.json(status);
+    }
+    if (path.endsWith("/login")) {
+      assert.deepEqual(body, { secret_storage: "session" });
+      return Response.json({
+        flow_id: status.active_account_id + "-flow",
+        status: "pending",
+        verification_url: "https://auth.openai.com/codex/device",
+        user_code: "SYNTHETIC-CODE",
+      });
+    }
+    if (path.endsWith("/poll")) {
+      const selected = status.accounts.find(
+        (item) => item.id === status.active_account_id,
+      );
+      selected.credential_state = "session";
+      return Response.json({
+        flow_id: selected.id + "-flow",
+        status: "complete",
+      });
+    }
+    if (path === "/api/connections/models")
+      return Response.json(catalog("chatgpt"));
+    if (path.endsWith("/logout")) {
+      status.accounts.find(
+        (item) => item.id === status.active_account_id,
+      ).credential_state = "locked";
+      return Response.json(status);
+    }
+    assert.fail(`Unexpected request ${path}`);
+  });
+  try {
+    await env.render();
+    assert.equal(document.querySelector(".advanced-credentials").open, false);
+    assert.equal(accountPicker().disabled, false);
+    assert.match(
+      document.querySelector(".agent-sign-in").textContent,
+      /without unlocking/,
+    );
+    assert.equal(env.button("Reconnect ChatGPT").disabled, false);
+    await env.click(env.button("Reconnect ChatGPT"));
+    assert.ok(env.button("Check sign-in status"));
+    await env.change(accountPicker(), second.id);
+    assert.equal(accountPicker().value, second.id);
+    assert.equal(
+      document.querySelector("#model-choice").value,
+      second.profile.model,
+    );
+    await env.click(env.button("Reconnect ChatGPT"));
+    assert.deepEqual(
+      calls
+        .filter((item) => item.path.endsWith("/login"))
+        .map((item) => item.path),
+      [
+        "/api/connections/accounts/chatgpt-first/login",
+        "/api/connections/accounts/chatgpt-second/login",
+      ],
+    );
+    await env.click(env.button("Check sign-in status"));
+    await env.flush();
+    assert.equal(second.credential_state, "session");
+    assert.equal(status.vault.locked, true);
+    assert.equal(
+      env.button("Reconnect ChatGPT").disabled,
+      false,
+      "reconnect never requires logging out first",
+    );
+    assert.match(
+      document.querySelector(".agent-sign-in").textContent,
+      /saved encrypted sign-in remains in the locked vault/,
+    );
+    await env.click(env.button("End session"));
+    assert.equal(second.credential_state, "locked");
+    assert.equal(env.button("Reconnect ChatGPT").disabled, false);
+    assert.match(
+      document.querySelector(".agent-sign-in").textContent,
+      /session has ended/,
+    );
+    assert.deepEqual(
+      status.accounts.map(({ id, label, profile }) => ({ id, label, profile })),
+      profiles,
+    );
+    assert.equal(
+      calls.some((item) => item.path.includes("/vault")),
+      false,
+    );
+    assert.equal(
+      calls.filter((item) => item.path.endsWith("/logout")).length,
+      1,
+    );
+    assert.equal(env.dom.window.localStorage.length, 0);
+    assert.equal(env.dom.window.sessionStorage.length, 0);
+  } finally {
+    await env.close();
+  }
+});
+
+test("connect another ChatGPT account creates a separate session without changing the locked saved account", async (t) => {
+  const env = await environment();
+  const original = account("chatgpt", "original-chatgpt", "locked");
+  original.label = "ChatGPT";
+  const before = structuredClone(original);
+  let status = { ...stateWith([original]), vault: { ...lockedVault } };
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async (path, options = {}) => {
+    const body = options.body ? JSON.parse(options.body) : null;
+    calls.push({ path, body });
+    if (path === "/api/session")
+      return Response.json({ csrf_token: "SYNTHETIC-CSRF-AT-LEAST-20" });
+    if (path === "/api/connections") return Response.json(status);
+    if (path === "/api/connections/accounts") {
+      assert.equal(body.secret_storage, "session");
+      assert.equal(Object.hasOwn(body, "api_key"), false);
+      const added = {
+        id: "another-chatgpt",
+        label: body.label,
+        profile: body.profile,
+        credential_state: "missing",
+      };
+      status = {
+        ...status,
+        accounts: [...status.accounts, added],
+        active_account_id: added.id,
+        profile: added.profile,
+      };
+      return Response.json(status);
+    }
+    if (path === "/api/connections/accounts/another-chatgpt/login") {
+      assert.deepEqual(body, { secret_storage: "session" });
+      return Response.json({
+        flow_id: "another-flow",
+        status: "pending",
+        verification_url: "https://auth.openai.com/codex/device",
+        user_code: "SYNTHETIC-CODE",
+      });
+    }
+    assert.fail(`Unexpected request ${path}`);
+  });
+  try {
+    await env.render();
+    const initial = calls.length;
+    await env.change(accountPicker(), "");
+    assert.equal(
+      calls.length,
+      initial,
+      "starting another draft performs no account or vault operation",
+    );
+    assert.equal(status.active_account_id, original.id);
+    assert.equal(
+      document.querySelector("#new-account-label").value,
+      "ChatGPT 2",
+    );
+    assert.equal(consent().checked, false);
+    assert.equal(document.querySelector("#model-choice").value, "");
+    await env.change(
+      document.querySelector("#new-account-label"),
+      "Other research login",
+    );
+    await env.click(env.button("Sign in with ChatGPT"));
+    assert.equal(status.active_account_id, "another-chatgpt");
+    assert.equal(status.accounts[1].label, "Other research login");
+    assert.deepEqual(original, before);
+    assert.ok(env.button("Check sign-in status"));
+    assert.equal(
+      calls.filter((item) => item.path === "/api/connections/accounts").length,
+      1,
+    );
+    assert.equal(
+      calls.some((item) => /vault|logout/.test(item.path)),
+      false,
+    );
+    assert.equal(status.vault.locked, true);
+  } finally {
+    await env.close();
+  }
+});
+
+test("same-provider account switching cancels stale model metadata, clears draft keys and preserves every saved model", async (t) => {
+  const env = await environment();
+  const first = account("openai", "first-openai"),
+    second = account("openai", "second-openai");
+  first.label = "First OpenAI";
+  second.label = "Second OpenAI";
+  second.profile.model = "second-model";
+  let status = { ...stateWith([first, second]), vault: { ...lockedVault } };
+  const before = structuredClone(status.accounts);
+  const calls = [];
+  let finishOld,
+    oldSignal,
+    models = 0;
+  t.mock.method(globalThis, "fetch", async (path, options = {}) => {
+    const body = options.body ? JSON.parse(options.body) : null;
+    calls.push({ path, body });
+    if (path === "/api/session")
+      return Response.json({ csrf_token: "SYNTHETIC-CSRF-AT-LEAST-20" });
+    if (path === "/api/connections") return Response.json(status);
+    if (path === "/api/connections/models") {
+      models++;
+      if (models === 1) {
+        oldSignal = options.signal;
+        return new Promise((resolve) => {
+          finishOld = resolve;
+        });
+      }
+      return Response.json({
+        ...catalog("openai"),
+        models: [{ id: "second-model", label: "Second account model" }],
+      });
+    }
+    if (path === "/api/connections/accounts/second-openai/select") {
+      status = {
+        ...status,
+        active_account_id: second.id,
+        profile: second.profile,
+      };
+      return Response.json(status);
+    }
+    assert.fail(`Unexpected request ${path}`);
+  });
+  try {
+    await env.render();
+    assert.equal(typeof finishOld, "function");
+    assert.equal(
+      accountPicker().disabled,
+      false,
+      "catalog loading does not block switching accounts",
+    );
+    await env.change(
+      document.querySelector("#provider-key"),
+      "SYNTHETIC-ABANDONED-KEY",
+    );
+    await env.change(accountPicker(), second.id);
+    assert.equal(oldSignal.aborted, true);
+    assert.equal(document.querySelector("#provider-key").value, "");
+    await env.act(async () =>
+      finishOld(
+        Response.json({
+          ...catalog("openai"),
+          models: [{ id: "old-only", label: "Old account only" }],
+        }),
+      ),
+    );
+    assert.equal(accountPicker().value, second.id);
+    assert.equal(document.querySelector("#model-choice").value, "second-model");
+    assert.doesNotMatch(
+      document.querySelector("#model-choice").textContent,
+      /Old account only/,
+    );
+    assert.deepEqual(status.accounts, before);
+    assert.equal(
+      calls.some((item) => /vault|login|logout/.test(item.path)),
+      false,
+    );
+    assert.equal(
+      calls.filter((item) => item.path.endsWith("/select")).length,
+      1,
+    );
+    assert.doesNotMatch(JSON.stringify(calls), /SYNTHETIC-ABANDONED-KEY/);
+  } finally {
+    await env.close();
+  }
+});
+
+test("connecting another API account never copies the selected account key, model or consent", async (t) => {
+  const env = await environment();
+  const original = account("openai", "old-openai", "locked");
+  original.label = "OpenAI";
+  const before = structuredClone(original);
+  let status = { ...stateWith([original]), vault: { ...lockedVault } };
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async (path, options = {}) => {
+    const body = options.body ? JSON.parse(options.body) : null;
+    calls.push({ path, body });
+    if (path === "/api/session")
+      return Response.json({ csrf_token: "SYNTHETIC-CSRF-AT-LEAST-20" });
+    if (path === "/api/connections") return Response.json(status);
+    if (path === "/api/connections/accounts") {
+      const added = {
+        id: "another-openai",
+        label: body.label,
+        profile: body.profile,
+        credential_state: "session",
+      };
+      status = {
+        ...status,
+        accounts: [...status.accounts, added],
+        active_account_id: added.id,
+        profile: added.profile,
+        credentials: { ...status.credentials, openai: "session" },
+      };
+      return Response.json(status);
+    }
+    if (path === "/api/connections/models")
+      return Response.json(catalog("openai"));
+    assert.fail(`Unexpected request ${path}`);
+  });
+  try {
+    await env.render();
+    await env.change(
+      document.querySelector("#provider-key"),
+      "SYNTHETIC-OLD-DRAFT",
+    );
+    await env.change(accountPicker(), "");
+    assert.equal(document.querySelector("#provider-key").value, "");
+    assert.equal(env.button("Connect OpenAI").disabled, true);
+    assert.equal(
+      document.querySelector("#new-account-label").value,
+      "OpenAI 2",
+    );
+    await env.change(
+      document.querySelector("#provider-key"),
+      "SYNTHETIC-NEW-ACCOUNT-KEY",
+    );
+    await env.click(env.button("Connect OpenAI"));
+    const created = calls.find(
+      (item) => item.path === "/api/connections/accounts",
+    );
+    assert.equal(created.body.label, "OpenAI 2");
+    assert.equal(created.body.api_key, "SYNTHETIC-NEW-ACCOUNT-KEY");
+    assert.equal(created.body.profile.model, "");
+    assert.equal(created.body.profile.allow_paid_inference, false);
+    assert.equal(created.body.secret_storage, "session");
+    assert.deepEqual(original, before);
+    assert.equal(status.accounts.length, 2);
+    assert.equal(accountPicker().value, "another-openai");
+    assert.equal(
+      calls.some((item) => /vault|login|logout/.test(item.path)),
+      false,
+    );
+    assert.doesNotMatch(JSON.stringify(calls), /SYNTHETIC-OLD-DRAFT/);
+  } finally {
+    await env.close();
+  }
+});
+
+test("Claude Code creates a session-only native account, checks metadata and ends it without OAuth, keys or vault actions", async (t) => {
+  const env = await environment();
+  const id = "0123456789abcdef0123456789abcdef";
+  const api = account("anthropic");
+  let status = stateWith([api]);
+  status.vault = {
+    available: true,
+    locked: false,
+    exists: true,
+    can_create: false,
+    key_source: "passphrase",
+  };
+  const original = structuredClone(api);
+  let signedIn = false;
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async (path, options = {}) => {
+    const body = options.body ? JSON.parse(options.body) : undefined;
+    calls.push({ path, method: options.method ?? "GET", body });
+    if (path === "/api/session")
+      return Response.json({ csrf_token: "SYNTHETIC-CSRF-AT-LEAST-20" });
+    if (path === "/api/connections") return Response.json(status);
+    if (path === "/api/connections/accounts") {
+      const created = {
+        id,
+        label: body.label,
+        profile: body.profile,
+        credential_state: "missing",
+      };
+      status = {
+        ...status,
+        accounts: [...status.accounts, created],
+        active_account_id: id,
+        profile: created.profile,
+      };
+      return Response.json(status);
+    }
+    if (path === `/api/connections/accounts/${id}`) {
+      status.accounts.find((item) => item.id === id).profile = body.profile;
+      status = { ...status, profile: body.profile };
+      return Response.json(status);
+    }
+    if (path === `/api/connections/accounts/${id}/claude-code/logout`)
+      signedIn = false;
+    if (
+      path === `/api/connections/accounts/${id}/claude-code` ||
+      path.endsWith("/claude-code/logout")
+    ) {
+      status.accounts.find((item) => item.id === id).credential_state = signedIn
+        ? "session"
+        : "missing";
+      return Response.json({
+        available: true,
+        signed_in: signedIn,
+        message: "Synthetic native sign-in metadata.",
+      });
+    }
+    if (path === "/api/connections/models")
+      return Response.json(
+        status.profile.provider === "claude_code"
+          ? {
+              provider: "claude_code",
+              models: ["default", "sonnet", "haiku"].map((id) => ({
+                id,
+                label: id,
+              })),
+              message:
+                "Claude Code aliases; account entitlement was not verified.",
+              inference_tested: false,
+            }
+          : catalog("anthropic"),
+      );
+    if (path === "/api/connections/test")
+      return Response.json({
+        target: "model",
+        status: "ok",
+        message: "Native metadata only.",
+        billable: false,
+        inference_tested: false,
+      });
+    assert.fail(`Unexpected request ${path}`);
+  });
+  try {
+    await env.render();
+    await env.change(providerPicker(), "claude_code");
+    assert.equal(document.querySelector("#provider-key"), null);
+    assert.equal(document.querySelector("#custom-model-id"), null);
+    assert.equal(document.querySelector("#model-choice").value, "default");
+    assert.equal(consent().checked, false);
+    assert.equal(document.querySelector(".claude-code-command"), null);
+    await env.click(env.button("Set up Claude Code sign-in"));
+    const created = calls.find(
+      (item) => item.path === "/api/connections/accounts",
+    ).body;
+    assert.equal(created.profile.provider, "claude_code");
+    assert.equal(created.profile.model, "default");
+    assert.equal(
+      created.secret_storage,
+      "session",
+      "an unrelated unlocked vault does not capture native authentication",
+    );
+    assert.equal(Object.hasOwn(created, "api_key"), false);
+    assert.equal(
+      document.querySelector(".claude-code-command").textContent,
+      `docker compose exec goose-worker python -m labcat.claude_auth login ${id}`,
+    );
+    assert.equal(
+      document.querySelectorAll(".claude-code-sign-in input").length,
+      0,
+    );
+    const copiedCommands = [];
+    const clipboard = {
+      writeText: async (value) => {
+        copiedCommands.push(value);
+      },
+    };
+    Object.defineProperty(navigator, "clipboard", {
+      value: clipboard,
+      configurable: true,
+    });
+    const beforeCopy = calls.length;
+    await env.click(env.button("Copy sign-in command"));
+    assert.deepEqual(copiedCommands, [
+      document.querySelector(".claude-code-command").textContent,
+    ]);
+    assert.match(
+      document.querySelector(".claude-code-sign-in").textContent,
+      /Command copied\. Paste it into your terminal/,
+    );
+    clipboard.writeText = async () => {
+      throw new Error("SYNTHETIC-PRIVATE-CLIPBOARD-ERROR");
+    };
+    await env.click(env.button("Copy sign-in command"));
+    assert.match(
+      document.querySelector(".claude-code-sign-in").textContent,
+      /Select and copy the command above manually/,
+    );
+    assert.doesNotMatch(
+      document.body.textContent,
+      /SYNTHETIC-PRIVATE-CLIPBOARD-ERROR/,
+    );
+    delete navigator.clipboard;
+    await env.click(env.button("Copy sign-in command"));
+    assert.match(
+      document.querySelector(".claude-code-sign-in").textContent,
+      /Select and copy the command above manually/,
+    );
+    assert.equal(
+      calls.length,
+      beforeCopy,
+      "copying never sends or starts the sign-in command",
+    );
+    assert.match(
+      document.querySelector(".claude-code-sign-in").textContent,
+      /code only in the native terminal, never in Labcat/,
+    );
+    assert.match(
+      document.querySelector(".claude-code-sign-in").textContent,
+      /without running inference/,
+    );
+    assert.match(
+      document.querySelector(".claude-code-sign-in").textContent,
+      /worker container restarts/,
+    );
+    signedIn = true;
+    await env.click(env.button("Check Claude Code sign-in"));
+    assert.match(
+      document.querySelector(".claude-code-sign-in").textContent,
+      /Signed in to Claude Code/,
+    );
+    assert.deepEqual(
+      [...document.querySelector("#model-choice").options].map(
+        (item) => item.value,
+      ),
+      ["", "default", "sonnet", "haiku"],
+    );
+    await env.change(document.querySelector("#model-choice"), "haiku");
+    await env.click(env.button("Save and test connections"));
+    assert.equal(
+      calls.find((item) => item.path === `/api/connections/accounts/${id}`).body
+        .secret_storage,
+      "session",
+    );
+    assert.equal(status.profile.model, "haiku");
+    assert.equal(status.profile.allow_paid_inference, false);
+    await env.click(env.button("End Claude Code session"));
+    assert.equal(
+      status.accounts.find((item) => item.id === id).credential_state,
+      "missing",
+    );
+    assert.match(
+      document.querySelector(".claude-code-sign-in").textContent,
+      /Complete terminal sign-in/,
+    );
+    assert.deepEqual(
+      api,
+      original,
+      "native sign-in does not alter the Anthropic API account",
+    );
+    assert.ok(
+      !calls.some((item) => /\/vault|\/login(?:\/|$)|\/usage/.test(item.path)),
+    );
+    assert.equal(env.dom.window.localStorage.length, 0);
+    assert.equal(env.dom.window.sessionStorage.length, 0);
+  } finally {
+    await env.close();
+  }
+});
+
+test("Claude Code status is independent of a locked vault and stale same-provider account probes cannot overwrite the next account", async (t) => {
+  const env = await environment();
+  const first = account(
+    "claude_code",
+    "11111111111111111111111111111111",
+    "missing",
+  );
+  const second = account(
+    "claude_code",
+    "22222222222222222222222222222222",
+    "session",
+  );
+  first.profile.model = "default";
+  second.profile.model = "sonnet";
+  let status = stateWith([first, second]);
+  status.vault = { ...lockedVault };
+  let pending;
+  const calls = [];
+  t.mock.method(globalThis, "fetch", async (path, options = {}) => {
+    calls.push(path);
+    if (path === "/api/session")
+      return Response.json({ csrf_token: "SYNTHETIC-CSRF-AT-LEAST-20" });
+    if (path === "/api/connections") return Response.json(status);
+    if (path === `/api/connections/accounts/${first.id}/claude-code`)
+      return new Promise((resolve) => {
+        pending = {
+          signal: options.signal,
+          finish: () =>
+            resolve(
+              Response.json({
+                available: true,
+                signed_in: false,
+                message: "First account.",
+              }),
+            ),
+        };
+      });
+    if (path === `/api/connections/accounts/${second.id}/select`) {
+      status = {
+        ...status,
+        active_account_id: second.id,
+        profile: second.profile,
+      };
+      return Response.json(status);
+    }
+    if (path === `/api/connections/accounts/${second.id}/claude-code`)
+      return Response.json({
+        available: true,
+        signed_in: true,
+        message: "Second account.",
+      });
+    if (path === "/api/connections/models")
+      return Response.json({
+        provider: "claude_code",
+        models: [{ id: "sonnet", label: "sonnet" }],
+        message: "Native alias only.",
+        inference_tested: false,
+      });
+    assert.fail(`Unexpected request ${path}`);
+  });
+  try {
+    await env.render();
+    assert.equal(
+      accountPicker().disabled,
+      false,
+      "background native metadata never blocks another saved account",
+    );
+    await env.change(accountPicker(), second.id);
+    assert.equal(pending.signal.aborted, true);
+    assert.match(
+      document.querySelector(".claude-code-sign-in").textContent,
+      /Signed in to Claude Code/,
+    );
+    await env.act(async () => pending.finish());
+    assert.match(
+      document.querySelector(".claude-code-sign-in").textContent,
+      /Signed in to Claude Code/,
+    );
+    assert.match(
+      document.querySelector(".claude-code-command").textContent,
+      new RegExp(second.id),
+    );
+    assert.equal(env.button("Check Claude Code sign-in").disabled, false);
+    assert.equal(env.button("End Claude Code session").disabled, false);
+    assert.equal(document.querySelector("#provider-key"), null);
+    assert.ok(!calls.some((path) => /\/vault|\/login(?:\/|$)/.test(path)));
   } finally {
     await env.close();
   }

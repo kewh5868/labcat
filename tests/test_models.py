@@ -143,7 +143,7 @@ def test_http_provider_errors_never_expose_body_headers_or_credentials(monkeypat
     assert "SENSITIVE" not in str(error.value)
 
 
-@pytest.mark.parametrize("provider", ["openai", "anthropic", "kimi", "bedrock"])
+@pytest.mark.parametrize("provider", ["openai", "anthropic", "kimi"])
 def test_hosted_planning_never_runs_without_explicit_paid_data_consent(
     provider, monkeypatch
 ):
@@ -220,47 +220,6 @@ def test_model_planner_rejects_invalid_prompt_before_network(monkeypatch, prompt
     )
     with pytest.raises(ModelError, match="20,000"):
         plan_with_model(DEFAULT_PROFILE, None, prompt)
-
-
-def test_bedrock_uses_explicit_profile_region_converse_and_no_tools(monkeypatch):
-    import boto3
-
-    output = json.dumps(Plan().to_dict())
-    seen = {}
-
-    class Client:
-        def converse(self, **kwargs):
-            seen["request"] = kwargs
-            return {
-                "stopReason": "end_turn",
-                "output": {"message": {"content": [{"text": output}]}},
-            }
-
-        def close(self):
-            seen["closed"] = True
-
-    class Session:
-        def __init__(self, **kwargs):
-            seen["session"] = kwargs
-
-        def client(self, service, **kwargs):
-            seen["service"] = service
-            seen["config"] = kwargs["config"]
-            return Client()
-
-    monkeypatch.setattr(boto3, "Session", Session)
-    profile = {
-        **DEFAULT_PROFILE,
-        "provider": "bedrock",
-        "model": "test-model",
-        "allow_paid_inference": True,
-    }
-    assert plan_with_model(profile, None, "Find oxides") == Plan()
-    assert seen["service"] == "bedrock-runtime"
-    assert seen["session"] == {"profile_name": "default", "region_name": "us-west-2"}
-    assert seen["closed"] is True
-    assert "toolConfig" not in seen["request"]
-    assert seen["config"].ignore_configured_endpoint_urls is True
 
 
 def test_invalid_output_never_falls_back_to_another_provider(monkeypatch):

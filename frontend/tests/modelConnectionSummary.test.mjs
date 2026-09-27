@@ -46,8 +46,6 @@ function fixture(provider = "chatgpt", credential = "session") {
     model: "fixture-selected-model",
     allow_paid_inference: true,
     ollama_url: "http://localhost:11434",
-    aws_profile: "fixture-profile",
-    aws_region: "us-west-2",
   };
   const account = {
     id: "fixture-account",
@@ -96,8 +94,6 @@ function fixture(provider = "chatgpt", credential = "session") {
         checked_at: "2026-09-11T12:00:00Z",
       },
       optional: {
-        compute: provider === "bedrock" ? "aws_bedrock" : "local",
-        aws_required: false,
         data_apis_required: false,
       },
     },
@@ -124,7 +120,7 @@ test("a matching verified ChatGPT session clearly confirms sign-in and the selec
   }
 });
 
-test("verified API and AWS connections use connected wording without claiming browser sign-in", () => {
+test("verified API connections use connected wording without claiming browser sign-in", () => {
   for (const [provider, label, credential] of [
     ["openai", "OpenAI", "encrypted"],
     ["anthropic", "Anthropic", "session"],
@@ -133,7 +129,6 @@ test("verified API and AWS connections use connected wording without claiming br
     ["deepseek", "DeepSeek", "encrypted"],
     ["xai", "xAI", "session"],
     ["openrouter", "OpenRouter", "encrypted"],
-    ["bedrock", "Amazon Bedrock", "not_required"],
   ]) {
     const input = fixture(provider, credential);
     const summary = summarize(input);
@@ -202,7 +197,7 @@ test("saved and expired verification states remain actionable without claiming l
 test("missing and locked credentials override stale ready metadata", () => {
   for (const [credential, title] of [
     ["missing", "ChatGPT · Not signed in"],
-    ["locked", "ChatGPT · Connection locked"],
+    ["locked", "ChatGPT · Saved credentials locked"],
   ]) {
     const input = fixture("chatgpt", credential);
     const summary = summarize(input);
@@ -259,7 +254,7 @@ test("stale account, provider, model, and consent states cannot inherit another 
       input.status.accounts[0].profile.allow_paid_inference = false;
     },
     (input) => {
-      input.status.accounts[0].profile.aws_region = "another-region";
+      input.status.accounts[0].profile.ollama_url = "http://localhost:11435";
     },
     (input) => {
       input.status.profile.model = "";
@@ -336,4 +331,22 @@ test("pending reads and errors suppress stale success and provide clear status l
     assert.ok(result.title.length > 0);
     assert.equal(typeof result.note, "string");
   }
+});
+
+test("Claude Code requires native sign-in and describes alias readiness without promising model entitlement", () => {
+  const ready = fixture("claude_code");
+  const result = summarize(ready);
+  assert.equal(result.title, "Claude Code · Signed in");
+  assert.equal(result.available, true);
+  assert.match(
+    result.note,
+    /Native sign-in detected; model alias configured\. Inference not tested/,
+  );
+  assert.doesNotMatch(result.note, /model verified|entitlement verified/);
+  const missing = fixture("claude_code", "missing");
+  const unavailable = summarize(missing);
+  assert.equal(unavailable.title, "Claude Code · Not signed in");
+  assert.equal(unavailable.available, false);
+  assert.match(unavailable.note, /Sign in to Claude Code in Connections/);
+  assert.doesNotMatch(unavailable.note, /API key|vault|unlock/);
 });

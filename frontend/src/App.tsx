@@ -220,7 +220,6 @@ export function WorkspaceServices() {
   const connection = useConnections();
   const setup = useSetup();
   const { status } = connection;
-  const profile = status?.profile;
   const model = modelConnectionSummary({
     status,
     readiness: setup.status,
@@ -234,11 +233,7 @@ export function WorkspaceServices() {
         icon="computer"
         title="Compute"
         value="Local research pipeline"
-        note={
-          profile?.provider === "bedrock"
-            ? "Selected model inference uses Amazon Bedrock"
-            : "Model inference follows the selected provider"
-        }
+        note="Model inference follows the selected provider"
         available
       />
       <RuntimeCard

@@ -27,7 +27,6 @@ def job(provider="openai"):
         "context": None,
         "chatgpt_tokens": None,
         "build_plan": {"owner": "labcat"},
-        "aws_credentials": None,
     }
 
 
@@ -130,24 +129,6 @@ def test_worker_does_not_expose_provider_error_body(monkeypatch):
     assert "private upstream" not in json.dumps(result)
     assert result["status"] == "failed"
     assert result["failure_code"] == "time_limit"
-
-
-def test_aws_worker_receives_only_resolved_selected_session():
-    value = job("bedrock")
-    value["aws_credentials"] = {
-        "AWS_ACCESS_KEY_ID": "test-access",
-        "AWS_SECRET_ACCESS_KEY": "test-secret",
-        "AWS_REGION": "us-west-2",
-        "AWS_DEFAULT_REGION": "us-west-2",
-        "AWS_EC2_METADATA_DISABLED": "true",
-        "BEDROCK_MAX_RETRIES": "0",
-    }
-    assert (
-        goose_worker._validate_job(value)["aws_credentials"] == value["aws_credentials"]
-    )
-    value["aws_credentials"]["AWS_CONFIG_FILE"] = "/home/.aws/config"
-    with pytest.raises(goose_worker.WorkerError):
-        goose_worker._validate_job(value)
 
 
 def test_channel_key_is_private_regular_file(monkeypatch, tmp_path):

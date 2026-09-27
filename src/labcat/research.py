@@ -8,7 +8,7 @@ from copy import deepcopy
 from urllib.parse import urlsplit
 
 from labcat.config import AppConfig
-from labcat.connections import ConnectionManager
+from labcat.connections import PROVIDERS, ConnectionManager
 from labcat.developer_settings import defaults as default_controls
 from labcat.developer_settings import effective_sources, validate_controls
 from labcat.extended_discovery import valid_wikipedia_url
@@ -967,6 +967,7 @@ def research(
         agent_run = None
         interrupted = False
         attempt = None
+        connection_generation = connections.setup._generation
         failure_code = None
         worker_rejections = None
         try:
@@ -989,11 +990,18 @@ def research(
             )
 
             candidate_attempt = getattr(error, "research_attempt", None)
-            if isinstance(candidate_attempt, dict) and candidate_attempt == {
-                "provider": provider,
-                "model": requested_profile["model"],
-            }:
+            if (
+                isinstance(candidate_attempt, dict)
+                and set(candidate_attempt) == {"provider", "model"}
+                and candidate_attempt["provider"] in PROVIDERS
+                and isinstance(candidate_attempt["model"], str)
+                and re.fullmatch(r"[A-Za-z0-9_.:/-]{1,200}", candidate_attempt["model"])
+            ):
+                # AgentConnections binds this to its captured server-side profile.
+                # Selection may have changed after the preliminary status read.
                 attempt = dict(candidate_attempt)
+                provider = attempt["provider"]
+                requested_profile = {**requested_profile, **attempt}
             code = getattr(error, "failure_code", None)
             if isinstance(code, str) and code in FAILURE_CODES:
                 failure_code = code
@@ -1004,7 +1012,10 @@ def research(
                 except ValueError:
                     pass  # Untrusted diagnostic content cannot enter the report.
             connections.setup.invalidate(
-                "The model request failed. Check the connection and available quota."
+                "The model request failed. Check the connection and available quota.",
+                generation=getattr(
+                    error, "connection_generation", connection_generation
+                ),
             )
             if not session.can_complete_without_model:
                 raise ModelError(
@@ -1043,7 +1054,7 @@ def research(
                 mode="goose",
                 warning=None,
                 agent=agent_run,
-                requested_model=requested_profile["model"],
+                requested_model=agent_run["model"],
             )
             if agent_run.get("status") == "stopped_after_report":
                 outcome["result"]["execution"].update(
@@ -1053,12 +1064,20 @@ def research(
         return render_research(outcome, config)
     requested_profile = connections.status()["profile"]
     provider = requested_profile["provider"]
+    selected = {}
+    connection_generation = connections.setup._generation
     try:
         report_progress("model")
-        plan = connections.plan(prompt, context=context).to_dict()
-    except ModelError:
+        plan = connections.plan(prompt, context=context, selected=selected).to_dict()
+        if selected:
+            requested_profile = {**requested_profile, **selected}
+            provider = selected["provider"]
+    except ModelBusy:
+        raise
+    except ModelError as error:
         connections.setup.invalidate(
-            "The model request failed. Check the connection and available quota."
+            "The model request failed. Check the connection and available quota.",
+            generation=getattr(error, "connection_generation", connection_generation),
         )
         raise ModelError(
             "The language-model request failed. No report was saved and no "

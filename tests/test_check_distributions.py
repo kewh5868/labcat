@@ -1,5 +1,6 @@
 """Distribution checks reject wrong, stale and unsafe archive pairs."""
 
+import hashlib
 import importlib.util
 import io
 import os
@@ -35,6 +36,7 @@ def write_source(path, *, metadata=METADATA, extra=None, omit_data=None):
     data = [
         (f"{ROOT}/{name}", b"[]\n")
         for name in (
+            "scripts/check_secrets.py",
             "scripts/materials_prompt_matrix.json",
             "scripts/holdout_prompts.json",
             "frontend/tests/reportLayoutChecks.js",
@@ -137,6 +139,7 @@ def test_rejects_missing_built_interface(pair):
 @pytest.mark.parametrize(
     "missing",
     [
+        "scripts/check_secrets.py",
         "scripts/materials_prompt_matrix.json",
         "scripts/holdout_prompts.json",
         "frontend/tests/reportLayoutChecks.js",
@@ -155,6 +158,7 @@ def test_rejects_missing_test_and_evaluation_support(pair, missing):
 @pytest.mark.parametrize(
     "missing",
     [
+        "scripts/check_secrets.py",
         "scripts/materials_prompt_matrix.json",
         "scripts/holdout_prompts.json",
         "frontend/tests/reportLayoutChecks.js",
@@ -194,6 +198,10 @@ def test_checks_freshness_of_both_archives(pair, which):
         "nested/.local/cache",
         "nested/.env.production",
         "nested/auth.json",
+        "nested/credentials.json",
+        "nested/secrets.yaml",
+        "nested/private.key",
+        "nested/.secrets/value",
         "nested/private.sqlite3-wal",
         "../escape",
         "/absolute",
@@ -277,3 +285,32 @@ def test_legacy_cli_checks_dist_and_rejects_extra_archives(pair, monkeypatch):
     (dist / "stale-0.0.1.tar.gz").touch()
     with pytest.raises(SystemExit, match="exactly one wheel"):
         checker.main([])
+
+
+@pytest.mark.parametrize("which", ["wheel", "source"])
+def test_rejects_credential_content_with_redacted_diagnostic(pair, which):
+    project, wheel, source = pair
+    token = "sk-" + hashlib.sha256(b"inert archive-check fixture").hexdigest()
+    member = "labcat/config.py" if which == "wheel" else f"{ROOT}/config.py"
+    content = ('api_key = "' + token + '"').encode()
+    if which == "wheel":
+        write_wheel(wheel, extra=[(member, content)])
+    else:
+        write_source(source, extra=[(member, content)])
+    with pytest.raises(SystemExit, match="Possible credential") as error:
+        checker.check_distributions([wheel, source], project)
+    assert member in str(error.value)
+    assert token not in str(error.value)
+
+
+@pytest.mark.parametrize("which", ["wheel", "source"])
+def test_archive_checks_retain_public_hashes(pair, which):
+    project, wheel, source = pair
+    value = hashlib.sha256(b"public scientific fixture").hexdigest()
+    member = "labcat/data/source.json" if which == "wheel" else f"{ROOT}/source.json"
+    content = ('{"sha256": "' + value + '"}').encode()
+    if which == "wheel":
+        write_wheel(wheel, extra=[(member, content)])
+    else:
+        write_source(source, extra=[(member, content)])
+    checker.check_distributions([wheel, source], project)

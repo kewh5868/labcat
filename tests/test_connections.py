@@ -345,40 +345,6 @@ def test_anthropic_verification_uses_the_same_catalog_page_as_model_selection(
     assert all("body" not in kwargs for _, kwargs in calls)
 
 
-def test_aws_check_returns_no_identity_and_does_not_prove_bedrock_access(
-    manager, monkeypatch
-):
-    monkeypatch.setattr(
-        "labcat.connections.check_connection",
-        lambda *a: {"Arn": "SECRET_PRINCIPAL"},
-    )
-    result = manager.test("aws")
-    assert result["status"] == "ok"
-    assert "not been tested" in result["message"]
-    assert "SECRET_PRINCIPAL" not in json.dumps(result)
-
-
-def test_bedrock_mantle_readiness_rejects_unsupported_route_before_network(
-    manager, monkeypatch
-):
-    configured(
-        manager,
-        profile={
-            **DEFAULT_PROFILE,
-            "provider": "bedrock",
-            "model": "openai.gpt-5.5-high",
-        },
-    )
-    monkeypatch.setattr(
-        "labcat.connections.check_connection",
-        lambda *a: pytest.fail("Unsupported route reached AWS"),
-    )
-    result = manager.test("model")
-    assert result["status"] == "error"
-    assert "Mantle bearer-token" in result["message"]
-    assert result["inference_tested"] is False
-
-
 def test_connection_routes_never_reflect_secret_input_in_validation_errors(manager):
     app = FastAPI()
     app.include_router(create_connections_router(manager))

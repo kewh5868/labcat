@@ -56,3 +56,20 @@ desktop-bin/
 
 # Generated working media; reviewed runtime assets live in frontend/public/.
 /output/
+
+# Credential stores and exported keys must stay outside the checkout.
+.secrets/
+.ssh/
+.aws/
+.codex/
+credentials.json
+secrets.json
+secrets.yaml
+secrets.yml
+*.credentials.json
+*.key
+*.pem
+*.p12
+*.pfx
+vault-key
+deployment-secret

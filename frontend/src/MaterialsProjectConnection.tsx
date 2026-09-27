@@ -16,6 +16,7 @@ export default function MaterialsProjectConnection({
   const connection = useConnections();
   const { status } = connection;
   const keyId = useId();
+  const keyInput = useRef<HTMLInputElement>(null);
   const [key, setKey] = useState("");
   const credentialState = status?.credentials.materials_project ?? "missing";
   const savedEncrypted =
@@ -39,7 +40,8 @@ export default function MaterialsProjectConnection({
   const working = Boolean(phase);
   const busy = working || disabled || connection.busy || connection.loading;
   const vaultReady = Boolean(status?.vault.available && !status.vault.locked);
-  const needsVault = (remember || credentialState === "locked") && !vaultReady;
+  const needsVault =
+    !vaultReady && (remember || (credentialState === "locked" && !key));
   const hasKey = Boolean(key) || credentialState !== "missing";
   useEffect(() => {
     onStateChange({ dirty, busy: working });
@@ -120,7 +122,7 @@ export default function MaterialsProjectConnection({
           {verified
             ? "Verified"
             : credentialState === "locked"
-              ? "Unlock to verify"
+              ? "Saved key locked"
               : credentialState === "missing" && !key
                 ? "Optional · API key required"
                 : "Verification required"}
@@ -150,6 +152,7 @@ export default function MaterialsProjectConnection({
         <label htmlFor={keyId}>API key</label>
         <input
           id={keyId}
+          ref={keyInput}
           type="password"
           autoComplete="off"
           spellCheck={false}
@@ -167,6 +170,14 @@ export default function MaterialsProjectConnection({
             setNotice("");
           }}
         />
+        {credentialState !== "missing" && (
+          <p className="source-storage-note">
+            {credentialState === "locked"
+              ? "A key is already saved. Leave this field blank to use it after unlocking."
+              : "A key is already available. Leave this field blank to keep using it."}{" "}
+            Saved key values are never sent back to your browser.
+          </p>
+        )}
         <label className="source-remember-key">
           <input
             type="checkbox"
@@ -181,13 +192,17 @@ export default function MaterialsProjectConnection({
         </label>
         <p className="source-storage-note">
           {remember
-            ? "Encrypted in your local vault. Unlock it after restarting."
-            : "This session only. Keys stay out of chat and session history."}
+            ? "Encrypted in your local vault. Unlock once after the Labcat server restarts; no need to enter the key again."
+            : status?.vault.locked
+              ? "This server session only. Paste the same or a different key; saved encrypted keys stay unchanged."
+              : savedEncrypted && vaultReady
+                ? "Saving this choice removes the saved encrypted copy. The key works for this server session; enter it again after restarting."
+                : "This session only. Keys stay out of chat and session history."}
         </p>
         {needsVault && (
           <p className="source-vault-prompt">
             {credentialState === "locked"
-              ? "Unlock the vault before using or replacing this saved key."
+              ? "Unlock to use the saved key, or enter a key for this server session."
               : "Create or unlock your local vault to remember this key."}{" "}
             <button
               className="text-action"
@@ -201,6 +216,19 @@ export default function MaterialsProjectConnection({
             </button>
           </p>
         )}
+        {status?.vault.locked && remember && (
+          <button
+            className="text-action"
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              setRemember(false);
+              keyInput.current?.focus();
+            }}
+          >
+            Use a key for this session
+          </button>
+        )}
         <div className="source-key-actions">
           <button
             className="quiet-button"
@@ -213,7 +241,7 @@ export default function MaterialsProjectConnection({
             <button
               className="text-action"
               type="button"
-              disabled={busy || credentialState === "locked"}
+              disabled={busy || Boolean(status?.vault.locked)}
               onClick={() => void forget()}
             >
               Forget key

@@ -249,8 +249,6 @@ test("server edition alone enables Developer Settings, below Connections, with n
     provider: "none",
     model: "",
     ollama_url: "http://localhost:11434",
-    aws_profile: "",
-    aws_region: "",
     allow_paid_inference: false,
   };
   window.localStorage.setItem("edition", "developer");
@@ -302,8 +300,6 @@ test("server edition alone enables Developer Settings, below Connections, with n
           checked_at: "2026-09-09T12:00:00Z",
         },
         optional: {
-          compute: "local",
-          aws_required: false,
           data_apis_required: false,
         },
       });
@@ -372,8 +368,6 @@ test("connection cards and workspace notice agree on verified login and account 
       provider: "none",
       model: "",
       ollama_url: "http://localhost:11434",
-      aws_profile: "",
-      aws_region: "",
       allow_paid_inference: false,
     },
     credentials: {
@@ -420,8 +414,6 @@ test("connection cards and workspace notice agree on verified login and account 
           checked_at: readiness === "ready" ? "2026-09-11T12:00:00Z" : null,
         },
         optional: {
-          compute: "local",
-          aws_required: false,
           data_apis_required: false,
         },
       });
@@ -492,7 +484,7 @@ test("connection cards and workspace notice agree on verified login and account 
     };
     readiness = "credentials_locked";
     await refresh();
-    expectStatus("ChatGPT · Connection locked");
+    expectStatus("ChatGPT · Saved credentials locked");
     assert.match(model().textContent, /fixture-small/);
     next.accounts[0].credential_state = "session";
     readiness = "verification_required";
@@ -516,22 +508,23 @@ test("connection cards and workspace notice agree on verified login and account 
       ...base,
       profile: {
         ...base.profile,
-        provider: "bedrock",
-        model: "fixture-bedrock",
+        provider: "anthropic",
+        model: "fixture-claude",
         allow_paid_inference: true,
       },
+      credentials: { ...base.credentials, anthropic: "session" },
     };
     readiness = "ready";
     await refresh();
-    expectStatus("Amazon Bedrock · Connected", true);
-    assert.match(model().textContent, /fixture-bedrock/);
+    expectStatus("Anthropic · Connected", true);
+    assert.match(model().textContent, /fixture-claude/);
     assert.match(
       document.querySelector(".runtime-card").textContent,
       /Local research pipeline/,
     );
     assert.match(
       document.querySelector(".runtime-card").textContent,
-      /Amazon Bedrock/,
+      /Model inference follows the selected provider/,
     );
     await act(async () => notice().querySelector("button").click());
     assert.equal(configured, 1);
