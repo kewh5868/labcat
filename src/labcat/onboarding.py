@@ -85,19 +85,25 @@ class SetupState:
                 "session_id"
             )
         expiration = None
+        credential_identity = secret
         if provider == "chatgpt" and secret:
             from labcat.agent_connections import _unpack
             from labcat.chatgpt_auth import goose_token_cache
 
             try:
+                document = _unpack(secret)
                 expiration = datetime.fromisoformat(
-                    goose_token_cache(_unpack(secret))["expires_at"]
+                    goose_token_cache(document)["expires_at"]
                 ).timestamp()
+                # Helper bookkeeping timestamps do not change the signed-in
+                # identity. Every token, account and storage change still does.
+                credential_identity = document["tokens"]
             except (ConnectionError, ValueError, TypeError):
                 expiration = 0
         fingerprint = hashlib.sha256(
             json.dumps(
-                [profile, identifier, credential_state, secret], sort_keys=True
+                [profile, identifier, credential_state, credential_identity],
+                sort_keys=True,
             ).encode()
         ).hexdigest()
         model = {

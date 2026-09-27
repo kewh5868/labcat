@@ -40,7 +40,13 @@ const selectedCategories = (
       .map((attribute) => attribute.category),
   ),
 ];
-export default function RankingProfilesPanel() {
+export default function RankingProfilesPanel({
+  initialSelectedProfileId = "",
+  onSelectedProfileChange,
+}: {
+  initialSelectedProfileId?: string;
+  onSelectedProfileChange?: (id: string) => void;
+} = {}) {
   const [data, setData] = useState<RankingProfiles | null>(null);
   const [selected, setSelected] = useState("");
   const [draft, setDraft] = useState<ProfileInput | null>(null);
@@ -78,10 +84,15 @@ export default function RankingProfilesPanel() {
       .then((next) => {
         if (!controller.signal.aborted) {
           setData(next);
-          setSelected(next.active_profile_id);
-          const activeProfile = next.profiles.find(
-            (profile) => profile.id === next.active_profile_id,
-          )!;
+          const activeProfile =
+            next.profiles.find(
+              (profile) =>
+                profile.id === (selected || initialSelectedProfileId),
+            ) ??
+            next.profiles.find(
+              (profile) => profile.id === next.active_profile_id,
+            )!;
+          setSelected(activeProfile.id);
           setDraft(copy(activeProfile));
           setTargetMode(activeProfile.target_band_gap_ev != null);
           setExpandedCategories(
@@ -151,6 +162,7 @@ export default function RankingProfilesPanel() {
     const profile = data?.profiles.find((item) => item.id === id);
     if (profile && data) {
       setSelected(id);
+      onSelectedProfileChange?.(id);
       setDraft(copy(profile));
       setTargetMode(profile.target_band_gap_ev != null);
       setExpandedCategories(
@@ -378,6 +390,7 @@ export default function RankingProfilesPanel() {
           ],
         });
         setSelected(profile.id);
+        onSelectedProfileChange?.(profile.id);
         setDraft(copy(profile));
         setNotice(
           profile.id === data.active_profile_id
@@ -416,7 +429,7 @@ export default function RankingProfilesPanel() {
         class, application and set of properties. Save named ranking profiles to
         reuse them later. Set each importance independently from 0 to 1;
         relative contributions are calculated for you. Chats can infer or select
-        a profile; the workspace default is used when inference has no clear
+        a profile; inference uses neutral priorities when there is no clear
         match.
       </p>
       {loading && <p role="status">Loading ranking profiles…</p>}

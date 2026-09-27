@@ -1169,6 +1169,18 @@ export function toggleReportOutput(
     (item) => item === view || outputs.includes(item),
   );
 }
+export function chatHistoryPdfUrl(chatId: string): string {
+  if (
+    typeof chatId !== "string" ||
+    !chatId.trim() ||
+    chatId.length > 200 ||
+    chatId === "." ||
+    chatId === ".."
+  )
+    throw invalid();
+  return `/api/chats/${encodeURIComponent(chatId)}/history.pdf`;
+}
+
 export function reportExportUrl(
   chatId: string,
   reportId: string,

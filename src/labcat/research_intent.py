@@ -277,16 +277,53 @@ def _positive_span(prompt, span):
     return bool(occurrences)
 
 
-def _bound_intent(intent, prompt):
+def _current_request_start(prompt, current_request):
+    """Bind the parent-supplied current turn; never infer it from prompt
+    text."""
+    if current_request is None:
+        return None
+    if (
+        not isinstance(prompt, str)
+        or not isinstance(current_request, str)
+        or not current_request
+        or not prompt.endswith(current_request)
+    ):
+        raise ValueError("Invalid current research request boundary.")
+    return len(prompt) - len(current_request) or None
+
+
+def _scope_shape(scope):
+    if not isinstance(scope, dict):
+        return False
+    if set(scope) == _SCOPE_FIELDS:
+        return True
+    return (
+        set(scope) == _SCOPE_FIELDS | {"current_request_start"}
+        and type(scope["current_request_start"]) is int
+        and 0 < scope["current_request_start"] < 20_000
+    )
+
+
+def _bound_intent(intent, prompt, current_request_start=None):
     if not isinstance(prompt, str) or not 1 <= len(prompt) <= 20_000:
         raise ValueError("Invalid semantic research request.")
+    if current_request_start is not None and (
+        type(current_request_start) is not int
+        or not 0 < current_request_start < len(prompt)
+    ):
+        raise ValueError("Invalid current research request boundary.")
+    current = prompt[current_request_start:] if current_request_start else prompt
+
+    def positive(span):
+        # Prefer an exact span in the complete current turn. Older hints still
+        # supply roles absent from that turn, but cannot veto its matching span.
+        return _positive_span(current if span in current else prompt, span)
+
     for field in _ROLE_FIELDS:
         for span in intent[field]:
             if span not in prompt:
                 raise ValueError("Semantic spans must match the original request.")
-            if field in {"target_spans", "application_spans"} and not _positive_span(
-                prompt, span
-            ):
+            if field in {"target_spans", "application_spans"} and not positive(span):
                 raise ValueError("Semantic subjects must be positive request context.")
     targets = intent["target_spans"]
     for field in ("application_spans", "environment_spans", "processing_spans"):
@@ -299,7 +336,7 @@ def _bound_intent(intent, prompt):
     if intent["application"] != "unknown" and not intent["application_spans"]:
         raise ValueError("An application preference needs literal request context.")
     for goal in intent["goals"]:
-        if not _positive_span(prompt, goal["request_span"]):
+        if not positive(goal["request_span"]):
             raise ValueError("A semantic goal must match a positive user request.")
     normalized = deepcopy(intent)
     for goal in normalized["goals"]:
@@ -309,6 +346,11 @@ def _bound_intent(intent, prompt):
         "version": INTENT_VERSION,
         "target_text": " ".join(targets),
         "is_evidence": False,
+        **(
+            {"current_request_start": current_request_start}
+            if current_request_start is not None
+            else {}
+        ),
     }
 
 
@@ -316,8 +358,7 @@ def validate_scope(scope, prompt) -> dict:
     """Revalidate exact request binding and derived fields at each
     boundary."""
     if (
-        not isinstance(scope, dict)
-        or set(scope) != _SCOPE_FIELDS
+        not _scope_shape(scope)
         or scope.get("version") != INTENT_VERSION
         or scope.get("is_evidence") is not False
     ):
@@ -327,7 +368,7 @@ def validate_scope(scope, prompt) -> dict:
         {"decision": "materials_research", "intent": intent}
     ):
         raise ValueError("Invalid semantic research scope.")
-    bound = _bound_intent(intent, prompt)
+    bound = _bound_intent(intent, prompt, scope.get("current_request_start"))
     if scope != bound:
         raise ValueError("Semantic scope does not match its original request.")
     return bound
@@ -363,8 +404,7 @@ def review_only_attributes(scope, profile) -> list[dict]:
     if scope is None:
         return []
     if (
-        not isinstance(scope, dict)
-        or set(scope) != _SCOPE_FIELDS
+        not _scope_shape(scope)
         or scope.get("version") != INTENT_VERSION
         or scope.get("is_evidence") is not False
         or not _valid_intent({field: scope[field] for field in _INTENT_FIELDS})
@@ -461,7 +501,9 @@ def review_only_attributes(scope, profile) -> list[dict]:
     return reviews
 
 
-def resolve_intent(prompt, arguments, profile, selection) -> dict:
+def resolve_intent(
+    prompt, arguments, profile, selection, *, current_request=None
+) -> dict:
     """Resolve a validated per-run preference snapshot; never mutate the
     inputs."""
     if not valid_assessment_arguments(arguments):
@@ -473,7 +515,9 @@ def resolve_intent(prompt, arguments, profile, selection) -> dict:
     }
     if "intent" not in arguments or arguments["decision"] != "materials_research":
         return result
-    scope = _bound_intent(arguments["intent"], prompt)
+    scope = _bound_intent(
+        arguments["intent"], prompt, _current_request_start(prompt, current_request)
+    )
     result["scope"] = scope
     if _preserve_profile(profile, selection):
         return result

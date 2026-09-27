@@ -24,6 +24,7 @@ def launcher(tmp_path):
     install = tmp_path / "installation with spaces"
     install.mkdir()
     shutil.copyfile(ROOT / "labcat.ps1", install / "labcat.ps1")
+    shutil.copyfile(ROOT / "labcat.cmd", install / "labcat.cmd")
     (install / "compose.yaml").write_text("services: {}\n", encoding="utf-8")
     commands = tmp_path / "docker-calls.jsonl"
     openings = tmp_path / "desktop-opens.jsonl"
@@ -34,11 +35,14 @@ def launcher(tmp_path):
                 [Parameter(Position = 0)] [string]$Action = 'start',
                 [switch]$NoOpen,
                 [switch]$Browser,
+                [switch]$Desktop,
+                [switch]$Choose,
                 [Parameter(ValueFromRemainingArguments = $true)]
                 [string[]]$CliArguments = @()
             )
             function global:Start-Process {
                 param([string]$FilePath, [string[]]$ArgumentList)
+                if ($env:LABCAT_TEST_OPEN_FAIL) { throw "launch failed fixture" }
                 @{path = $FilePath; arguments = @($ArgumentList)} |
                     ConvertTo-Json -Compress |
                     Add-Content -Encoding UTF8 -LiteralPath $env:LABCAT_TEST_OPENS
@@ -47,6 +51,8 @@ def launcher(tmp_path):
                 Action = $Action
                 NoOpen = $NoOpen
                 Browser = $Browser
+                Desktop = $Desktop
+                Choose = $Choose
                 CliArguments = $CliArguments
             }
             & $env:LABCAT_TEST_SCRIPT @launcherParameters
@@ -80,7 +86,9 @@ def launcher(tmp_path):
                 print("CLI status")
             elif args[:1] == ["compose"]:
                 command_index = 1
-                while args[command_index] in {"--project-name", "--file"}:
+                while args[command_index] in {
+                    "--project-name", "--file", "--project-directory"
+                }:
                     command_index += 2
                 command = args[command_index]
                 if command == "up":
@@ -141,15 +149,25 @@ def launcher(tmp_path):
         docker_environment=None,
         open_window=False,
         native=False,
+        auto_mode=True,
+        interactive_answer=None,
         **settings,
     ):
-        desktop_executable = install / "desktop-bin" / "Labcat.exe"
+        desktop_executable = tmp_path / "AppData" / "Programs" / "Labcat" / "Labcat.exe"
         if native:
-            desktop_executable.parent.mkdir(exist_ok=True)
+            desktop_executable.parent.mkdir(parents=True, exist_ok=True)
             desktop_executable.write_text("test placeholder", encoding="utf-8")
+            (desktop_executable.parent / ".labcat-install-source").write_text(
+                str(install) + "\n"
+            )
+            resources = desktop_executable.parent / "launcher"
+            resources.mkdir(exist_ok=True)
+            for name in ("labcat.ps1", "labcat.cmd", "compose.yaml"):
+                shutil.copyfile(install / name, resources / name)
         else:
             desktop_executable.unlink(missing_ok=True)
         env = os.environ.copy()
+        env["LOCALAPPDATA"] = str(tmp_path / "AppData")
         env["PATH"] = str(fake_bin) + os.pathsep + env.get("PATH", "")
         env["LABCAT_TEST_CALLS"] = str(commands)
         env["LABCAT_TEST_OPENS"] = str(openings)
@@ -159,24 +177,60 @@ def launcher(tmp_path):
         env.pop("LABCAT_OAUTH_CALLBACK_PORT", None)
         env.update(docker_environment or {})
         env.update({f"LABCAT_TEST_{key}": value for key, value in settings.items()})
-        result = subprocess.run(
-            [
-                POWERSHELL,
-                "-NoLogo",
-                "-NoProfile",
-                "-NonInteractive",
-                "-File",
-                str(harness),
-                *arguments,
-                *([] if open_window else ["-NoOpen"]),
-            ],
-            cwd=tmp_path,
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=30,
-            check=False,
-        )
+        command = [
+            POWERSHELL,
+            "-NoLogo",
+            "-NoProfile",
+            *(["-NonInteractive"] if interactive_answer is None else []),
+            "-File",
+            str(harness),
+            *arguments,
+            *(
+                ["-Browser"]
+                if open_window
+                and auto_mode
+                and not any(
+                    arg in {"-Browser", "-Desktop", "-Choose"} for arg in arguments
+                )
+                else []
+            ),
+            *([] if open_window else ["-NoOpen"]),
+        ]
+        if interactive_answer is None:
+            result = subprocess.run(
+                command,
+                cwd=tmp_path,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+        else:
+            import pty
+
+            master, slave = pty.openpty()
+            try:
+                process = subprocess.Popen(
+                    command,
+                    cwd=tmp_path,
+                    env=env,
+                    stdin=slave,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                os.close(slave)
+                slave = None
+                os.write(master, (interactive_answer + "\n").encode())
+                stdout, stderr = process.communicate(timeout=30)
+                result = subprocess.CompletedProcess(
+                    command, process.returncode, stdout, stderr
+                )
+            finally:
+                os.close(master)
+                if slave is not None:
+                    os.close(slave)
         calls = (
             [
                 json.loads(line)
@@ -348,8 +402,8 @@ def test_explicit_local_context_takes_precedence_over_remote_host(launcher):
     assert any(call[0] == "context" for call in calls)
 
 
-def test_default_start_prefers_standalone_executable(launcher):
-    result, _ = launcher(open_window=True, native=True)
+def test_explicit_desktop_opens_installed_executable(launcher):
+    result, _ = launcher("-Desktop", open_window=True, native=True)
     assert result.returncode == 0, result.stderr
     opened = launcher.openings()
     assert len(opened) == 1
@@ -366,7 +420,7 @@ def test_browser_flag_opens_default_browser_even_with_native_app(launcher, nativ
     assert opened[0]["path"] == "http://127.0.0.1:54321/"
 
 
-def test_missing_native_app_uses_default_browser(launcher):
+def test_explicit_browser_does_not_require_native_app(launcher):
     result, _ = launcher(open_window=True)
     assert result.returncode == 0, result.stderr
     assert launcher.openings()[0]["path"] == "http://127.0.0.1:54321/"
@@ -543,3 +597,168 @@ def test_headless_research_callback_fallback_preserves_stdout(launcher):
     assert "1455" not in result.stdout
     assert any("exec" in call for call in calls)
     assert launcher.openings() == []
+
+
+def test_unattended_first_start_requires_an_explicit_mode(launcher):
+    result, calls = launcher(open_window=True, auto_mode=False)
+    assert result.returncode != 0
+    assert "Choose a launch mode" in result.stderr
+    assert not any("up" in call for call in calls)
+    assert launcher.openings() == []
+
+
+def test_desktop_failure_does_not_silently_open_browser_or_save_choice(launcher):
+    result, calls = launcher("-Desktop", open_window=True)
+    assert result.returncode != 0
+    assert "desktop installer is missing" in result.stderr
+    assert not any("up" in call for call in calls)
+    assert launcher.openings() == []
+    assert not (launcher.install / ".labcat-launch-mode").exists()
+
+
+@pytest.mark.parametrize("mode", ["desktop", "browser"])
+def test_successful_choice_is_saved_and_reused(launcher, mode):
+    result, _ = launcher("-" + mode.title(), open_window=True, native=True)
+    assert result.returncode == 0, result.stderr
+    assert (launcher.install / ".labcat-launch-mode").read_text() == mode + "\n"
+    result, _ = launcher(open_window=True, native=True, auto_mode=False)
+    assert result.returncode == 0, result.stderr
+    assert len(launcher.openings()) == 2
+    path = launcher.openings()[-1]["path"]
+    assert (
+        path.endswith("Labcat.exe") if mode == "desktop" else path.startswith("http://")
+    )
+
+
+def test_browser_switch_replaces_saved_desktop_choice(launcher):
+    (launcher.install / ".labcat-launch-mode").write_text("desktop\n")
+    result, _ = launcher("-Browser", open_window=True)
+    assert result.returncode == 0, result.stderr
+    assert launcher.openings()[0]["path"].startswith("http://")
+    assert (launcher.install / ".labcat-launch-mode").read_text() == "browser\n"
+
+
+def test_choose_does_not_reuse_saved_mode_without_interactive_input(launcher):
+    (launcher.install / ".labcat-launch-mode").write_text("browser\n")
+    result, calls = launcher("-Choose", open_window=True)
+    assert result.returncode != 0
+    assert "Choose a launch mode" in result.stderr
+    assert not any("up" in call for call in calls)
+
+
+@pytest.mark.parametrize(
+    "mode", ["browser; Write-Output unsafe", "desktop\nbrowser", ""]
+)
+def test_invalid_saved_mode_does_not_execute_or_launch(launcher, mode):
+    (launcher.install / ".labcat-launch-mode").write_text(mode)
+    result, _ = launcher(open_window=True, auto_mode=False)
+    assert result.returncode != 0
+    assert "saved launch preference is invalid" in result.stderr
+    assert launcher.openings() == []
+
+
+def test_conflicting_mode_flags_are_rejected(launcher):
+    result, calls = launcher("-Desktop", "-Browser", open_window=True)
+    assert result.returncode != 0
+    assert "Choose only one" in result.stderr
+    assert calls == []
+
+
+@pytest.mark.parametrize("action", ["start", "status", "stop", "logs", "cli"])
+def test_headless_and_lifecycle_ignore_invalid_saved_mode(launcher, action):
+    (launcher.install / ".labcat-launch-mode").write_text("invalid\n")
+    result, _ = launcher(action)
+    assert result.returncode == 0, result.stderr
+    assert launcher.openings() == []
+
+
+def test_copied_override_preserves_original_project_directory(launcher, tmp_path):
+    original = tmp_path / "original source with spaces"
+    original.mkdir()
+    (launcher.install / ".labcat-project-directory").write_text(str(original) + "\n")
+    (launcher.install / "compose.local.yaml").write_text("services: {}\n")
+    result, calls = launcher()
+    assert result.returncode == 0, result.stderr
+    for call in calls:
+        if call[:2] == ["compose", "--project-name"]:
+            assert call[call.index("--project-directory") + 1] == str(original)
+
+
+@pytest.mark.parametrize("path", ["relative", "C:\\missing\\location", "first\nsecond"])
+def test_invalid_original_project_directory_stops_before_docker(launcher, path):
+    (launcher.install / ".labcat-project-directory").write_text(path)
+    result, calls = launcher()
+    assert result.returncode != 0
+    assert "original deployment folder" in result.stderr
+    assert calls == []
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX pseudo-terminal harness")
+@pytest.mark.parametrize(
+    ("answer", "expected"), [("", "desktop"), ("1", "desktop"), ("2", "browser")]
+)
+def test_first_interactive_choice_and_default_are_remembered(
+    launcher, answer, expected
+):
+    result, _ = launcher(
+        open_window=True, native=True, auto_mode=False, interactive_answer=answer
+    )
+    assert result.returncode == 0, result.stderr
+    assert "Install and open the desktop application (default)" in result.stdout
+    assert (launcher.install / ".labcat-launch-mode").read_text() == expected + "\n"
+    assert len(launcher.openings()) == 1
+    path = launcher.openings()[0]["path"]
+    assert (
+        path.endswith("Labcat.exe")
+        if expected == "desktop"
+        else path.startswith("http://")
+    )
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX pseudo-terminal harness")
+def test_invalid_interactive_choice_does_not_install_or_start(launcher):
+    result, calls = launcher(
+        open_window=True, auto_mode=False, interactive_answer="wrong"
+    )
+    assert result.returncode != 0
+    assert "No mode was selected" in result.stderr
+    assert not any("up" in call for call in calls)
+    assert launcher.openings() == []
+
+
+def test_first_desktop_choice_calls_installer_then_uses_fixed_executable(launcher):
+    installer = launcher.install / "scripts" / "install_desktop.ps1"
+    installer.parent.mkdir()
+    installer.write_text(
+        "param([string]$SourceRoot, [string]$Destination)\n"
+        "[IO.Directory]::CreateDirectory($Destination) | Out-Null\n"
+        "[IO.File]::WriteAllText((Join-Path $Destination 'Labcat.exe'), 'fixture')\n"
+    )
+    result, calls = launcher("-Desktop", open_window=True)
+    assert result.returncode == 0, result.stderr
+    assert len(launcher.openings()) == 1
+    assert launcher.openings()[0]["path"].endswith("Labcat.exe")
+    assert launcher.openings()[0]["arguments"] == ["--url", "http://127.0.0.1:54321/"]
+    assert any("up" in call for call in calls)
+    assert (launcher.install / ".labcat-launch-mode").read_text() == "desktop\n"
+
+
+def test_desktop_launch_error_does_not_fall_back_or_save_choice(launcher):
+    result, calls = launcher("-Desktop", open_window=True, native=True, OPEN_FAIL="1")
+    assert result.returncode != 0
+    assert "desktop application could not be opened" in result.stderr
+    assert any("up" in call for call in calls)
+    assert launcher.openings() == []
+    assert not (launcher.install / ".labcat-launch-mode").exists()
+
+
+def test_installer_failure_does_not_start_backend_or_save_choice(launcher):
+    installer = launcher.install / "scripts" / "install_desktop.ps1"
+    installer.parent.mkdir()
+    installer.write_text("throw 'installation failure fixture'\n")
+    result, calls = launcher("-Desktop", open_window=True)
+    assert result.returncode != 0
+    assert "installation failure fixture" in result.stderr
+    assert not any("up" in call for call in calls)
+    assert launcher.openings() == []
+    assert not (launcher.install / ".labcat-launch-mode").exists()

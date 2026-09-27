@@ -7,7 +7,13 @@ import json
 import pytest
 
 from labcat.config import load_config
-from labcat.ranking_profiles import PRESETS, RankingProfileStore, catalog
+from labcat.ranking_profiles import (
+    NEUTRAL_PROFILE_ID,
+    PRESETS,
+    RankingProfileStore,
+    catalog,
+    neutral_profile,
+)
 from labcat.science.ranking import rank_records
 from labcat.workspace import WorkspaceStore
 
@@ -114,7 +120,13 @@ def test_explicit_custom_weights_are_preserved_but_stability_scope_stays_visible
 
 
 def test_all_shipped_class_application_profiles_consider_each_stability_scope():
-    for _, profile in PRESETS:
+    for identifier, profile in PRESETS:
+        if identifier == NEUTRAL_PROFILE_ID:
+            assert profile["material_class"] == "custom"
+            assert profile["application"] == "property_exploration"
+            assert profile["importance"] == {"evidence_quality": 1.0}
+            assert profile["importance"] == neutral_profile()["importance"]
+            continue
         for criterion in (
             "stability",
             "ambient_phase_stability",

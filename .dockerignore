@@ -26,6 +26,9 @@ src/labcat/static/
 **/.env*
 **/site.local.toml
 **/compose.local.yaml
+**/.labcat-launch-mode
+**/.labcat-project-directory
+**/.labcat-install-source
 **/runs/
 **/data/cache/
 **/node_modules/

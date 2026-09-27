@@ -665,10 +665,98 @@ def test_connection_model_test_rejects_unverified_cached_catalog(
         "account_ready": readiness,
         "models": [{"id": "test-model", "label": "Cached test model"}],
     }
-    monkeypatch.setattr(manager.agent, "metadata", lambda _: metadata)
+    monkeypatch.setattr(manager.agent, "metadata", lambda _, **kwargs: metadata)
     with pytest.raises(ConnectionError, match="could not be verified"):
         manager.agent.models()
     assert manager.test("model")["status"] == "error"
     metadata["account_ready"] = True
     assert manager.agent.models()["models"][0]["id"] == "test-model"
     assert manager.test("model")["status"] == "ok"
+
+
+def test_model_catalog_does_not_wait_for_optional_usage(broker, factory, auth):
+    def slow_optional(session):
+        original = session.request
+
+        def request(method, params=None):
+            if method in {"account/rateLimits/read", "account/usage/read"}:
+                pytest.fail("Model discovery entered slow optional telemetry")
+            return original(method, params)
+
+        session.request = request
+
+    factory.callback = slow_optional
+    public, _ = broker.metadata(auth, include_usage=False)
+    assert public["account_ready"] is True
+    assert public["models"][0]["id"] == "test-model"
+    assert public["rate_limits"] is None and public["token_activity"] is None
+    assert [method for method, _ in factory.sessions[-1].requests] == [
+        "account/read",
+        "model/list",
+    ]
+
+
+def test_metadata_rpcs_share_one_deadline(monkeypatch):
+    import queue
+    import threading
+
+    clock = [0.0]
+    monkeypatch.setattr(module.time, "monotonic", lambda: clock[0])
+
+    class Replies:
+        def get(self, timeout):
+            if clock[0] == 0:
+                clock[0] = 12
+                return {"id": 1, "result": {"account": {"type": "chatgpt"}}}
+            clock[0] += 1
+            raise queue.Empty
+
+    session = object.__new__(module._CodexSession)
+    session._lock = threading.RLock()
+    session._sequence = 0
+    session._queue = Replies()
+    session._broken = threading.Event()
+    session._send = lambda _: None
+    with module._metadata_budget():
+        session.request("account/read")
+        with pytest.raises(ChatGPTAuthError):
+            session.request("model/list")
+    assert clock[0] == module.METADATA_TIMEOUT_SECONDS
+
+
+def test_metadata_deadline_covers_helper_initialization(broker, factory, auth):
+    seen = []
+    original = broker._session_factory
+
+    def factory_with_initialization(binary, root, document):
+        seen.append(module._metadata_remaining())
+        return original(binary, root, document)
+
+    broker._session_factory = factory_with_initialization
+    broker.metadata(auth, include_usage=False)
+    assert 0 < seen[0] <= module.METADATA_TIMEOUT_SECONDS
+    assert module._metadata_deadline.get() is None
+
+
+def test_legacy_full_metadata_path_can_add_two_optional_timeouts(broker, factory, auth):
+    waited = [0]
+
+    def delayed_usage(session):
+        original = session.request
+
+        def request(method, params=None):
+            if method in {"account/rateLimits/read", "account/usage/read"}:
+                waited[0] += module.RPC_TIMEOUT_SECONDS
+                raise ChatGPTAuthError("Synthetic optional RPC timeout")
+            return original(method, params)
+
+        session.request = request
+
+    factory.callback = delayed_usage
+    # The previous catalog path requested this full telemetry shape, adding up
+    # to fifty seconds even when account/model reads had already succeeded.
+    assert broker.metadata(auth)[0]["models"]
+    assert waited[0] == 2 * module.RPC_TIMEOUT_SECONDS
+    waited[0] = 0
+    assert broker.metadata(auth, include_usage=False)[0]["models"]
+    assert waited[0] == 0

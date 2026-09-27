@@ -89,64 +89,80 @@ def _sources(enabled=("nomad",)):
     }
 
 
-@pytest.mark.parametrize("requested", [None, "infer"])
-def test_saved_profile_survives_definition_and_active_profile_changes(
-    profiles, requested
-):
+def test_explicit_and_active_choices_win_over_saved_chat_preferences(profiles):
     _, store = profiles
     old = _custom(store, {"band_gap": 0.8, "stability": 0.2})
     context = _context(deepcopy(old))
-    store.update(
-        old["id"],
-        {
-            key: value
-            for key, value in {**old, "importance": {"density": 1}}.items()
-            if key in {"name", "material_class", "application", "importance"}
-        },
-    )
-    other = _custom(store, {"direct_gap": 1}, "Other profile")
+    other = _custom(store, {"density": 1}, "Other profile")
     store.activate(other["id"])
     before = deepcopy(context)
-    selected, selection = research_context.select_profile(
-        store, requested, "Compare their gaps again.", context
-    )
-    assert selected["id"] == old["id"]
-    assert selected["importance"] == old["importance"]
-    assert selected["normalized_weights"] == {"band_gap": 0.8, "stability": 0.2}
-    assert selection["mode"] == "continued"
-    assert selection["previous_report_id"] == "saved"
+    for requested, expected, mode in (
+        (None, other, "active"),
+        (old["id"], old, "explicit"),
+        (other["id"], other, "explicit"),
+    ):
+        selected, decision = research_context.select_profile(
+            store, requested, "Prefer a band gap around 1.5 eV.", context
+        )
+        assert selected == expected
+        assert decision["mode"] == mode
+        assert "target_band_gap_ev" not in selected
     assert context == before
-    explicit, selected_explicit = research_context.select_profile(
-        store, old["id"], "Compare their gaps again.", context
-    )
-    assert explicit["importance"] == {"density": 1}
-    assert selected_explicit["mode"] != "continued"
 
 
-def test_followup_keeps_target_preferences_and_can_explicitly_refine_them(profiles):
+def test_inference_reuses_user_request_not_saved_profile_weights(profiles):
     _, store = profiles
-    old = _custom(store, {"band_gap": 0.8, "stability": 0.2})
-    old.update(target_band_gap_ev=1.78, band_gap_tolerance_ev=0.15)
-    context = _context(deepcopy(old))
+    old = _custom(store, {"density": 1})
+    context = _context(old)
+    context["intake_messages"][0][
+        "content"
+    ] = "Find semiconductors for LEDs with a band gap around 1.78 eV, ± 0.15 eV."
     before = deepcopy(context)
     selected, decision = research_context.select_profile(
         store, "infer", "Compare their gaps again.", context
     )
     assert selected["target_band_gap_ev"] == 1.78
     assert selected["band_gap_tolerance_ev"] == 0.15
-    assert selected["importance"] == old["importance"]
-    assert decision["mode"] == "continued"
+    assert selected["material_class"] == "semiconductors"
+    assert selected["importance"] != old["importance"]
+    assert decision["mode"] == "inferred"
     revised, selection = research_context.select_profile(
         store, "infer", "Instead target a 1.6 eV band gap, ± 0.1 eV.", context
     )
-    assert revised["material_class"] == old["material_class"]
-    assert revised["application"] == old["application"]
-    assert revised["target_band_gap_ev"] == 1.6
-    assert revised["band_gap_tolerance_ev"] == 0.1
-    assert selection["mode"] == "continued"
-    assert selection["preference_adjustments"][0]["status"] == "applied_preference"
-    assert selection["inference_version"] == "catalog-goals-v3"
+    assert revised.get("target_band_gap_ev") is None
+    assert any(
+        item["status"] == "needs_clarification"
+        for item in selection["preference_adjustments"]
+    )
     assert context == before
+
+
+def test_infer_does_not_freeze_previous_oxide_report_on_new_question(profiles):
+    _, store = profiles
+    old, _ = store.select("preset-oxide-high-k", "")
+    context = _context(old)
+    selected, decision = research_context.select_profile(
+        store, "infer", "Find polymers for food packaging.", context
+    )
+    assert selected["material_class"] != "oxide_dielectrics"
+    assert selected["importance"].get("dielectric_total", 0) == 0
+    assert selected.get("minimum_band_gap_ev") is None
+    assert decision["mode"] in {"inferred", "fallback"}
+
+
+def test_saved_report_without_user_history_cannot_supply_inference_preferences(
+    profiles,
+):
+    _, store = profiles
+    old, _ = store.select("preset-oxide-high-k", "")
+    context = _context(old)
+    context["intake_messages"] = []
+    selected, decision = research_context.select_profile(
+        store, "infer", "Compare the candidates again.", context
+    )
+    assert selected["material_class"] == "custom"
+    assert selected["importance"].get("dielectric_total", 0) == 0
+    assert decision["mode"] == "fallback"
 
 
 @pytest.mark.parametrize(
@@ -369,11 +385,14 @@ def test_workflow_uses_active_chat_snapshot_and_history_off_drops_it(
     report = deepcopy(first["reports"][-1])
     profiles.activate(other["id"])
     second = workflow.respond(
-        chat["id"], "Compare those silicon candidates again.", load_config()
+        chat["id"],
+        "Compare those silicon candidates again.",
+        load_config(),
+        ranking_profile_id=profile["id"],
     )
     assert (
         second["reports"][-1]["result"]["execution"]["ranking_selection"]["mode"]
-        == "continued"
+        == "explicit"
     )
     assert second["reports"][-1]["result"]["ranking"]["weights"] == {"band_gap": 1}
     assert {

@@ -620,10 +620,30 @@ PRESETS = tuple(
     )
     for identifier, value in _PRE_OPTICAL_PRESETS
 )
-# The first-run Search Criterion uses the existing high-k preset. Persisted
-# selections (including custom and migrated preferences) remain authoritative.
-DEFAULT_PROFILE_ID = "preset-oxide-high-k"
-INFERENCE_VERSION = "catalog-goals-v3"
+# Ambiguous requests must not inherit an unrelated application's physical-property
+# weights. Field completeness supplies review priority, never material performance
+# or source credibility. Keep this canonical value separate from saved presets.
+NEUTRAL_PROFILE_ID = "preset-neutral-exploration"
+_NEUTRAL_PROFILE = {
+    "name": "Neutral · General materials research",
+    "material_class": "custom",
+    "application": "property_exploration",
+    "importance": {"evidence_quality": 1.0},
+}
+PRESETS += ((NEUTRAL_PROFILE_ID, deepcopy(_NEUTRAL_PROFILE)),)
+# Existing saved choices remain authoritative; only new workspaces use this default.
+DEFAULT_PROFILE_ID = NEUTRAL_PROFILE_ID
+INFERENCE_VERSION = "catalog-goals-v4"
+
+
+def neutral_profile() -> dict:
+    """Return independent, application-neutral preferences for one
+    research run."""
+    selected = deepcopy(_NEUTRAL_PROFILE)
+    selected.update(id=NEUTRAL_PROFILE_ID, preset=True)
+    selected["normalized_weights"] = normalize_importance(selected["importance"])
+    return selected
+
 
 # These aliases describe request preferences, never material identity or properties.
 # Inference selects validated saved preferences or composes catalog class and
@@ -813,6 +833,8 @@ def compose_catalog_profile(material_class: str, application: str) -> dict:
     applications = {item["id"]: item["label"] for item in definitions["applications"]}
     if material_class not in classes or application not in applications:
         raise ValueError("Choose semantic preferences from the catalog.")
+    if material_class == "custom" and application == "property_exploration":
+        return neutral_profile()
     profiles = [
         {**deepcopy(value), "id": identifier, "preset": True}
         for identifier, value in PRESETS
@@ -1106,13 +1128,13 @@ def _infer_profile(
         applications.discard("thin_film_insulation")
     if len(classes) != 1 or len(applications) > 1:
         return (
-            active,
+            neutral_profile(),
             "fallback",
             (
                 "The prompt does not identify one unambiguous material class and "
-                "application. Used the active ranking profile for weights only; "
-                "its material class does not restrict source queries. Choose a "
-                "profile to override."
+                "application. Used neutral priorities based on supported-field "
+                "completeness, without assumed physical-property preferences. "
+                "Explicitly requested goals can refine these priorities."
             ),
         )
     candidates = [p for p in profiles if p["material_class"] in classes]
@@ -1133,11 +1155,11 @@ def _infer_profile(
                 )
     if len({p["application"] for p in candidates}) > 1:
         return (
-            active,
+            neutral_profile(),
             "fallback",
-            "Several applications fit the material-class hint. Used the active "
-            "ranking profile for weights only, without restricting source queries "
-            "to its material class. Choose a profile or add an application preference.",
+            "Several applications fit the material-class hint. Used neutral "
+            "priorities based on supported-field completeness. Choose a profile "
+            "or add an application preference to refine the ranking.",
         )
     if any(p["id"] == active["id"] for p in candidates):
         return (
@@ -1162,12 +1184,12 @@ def _infer_profile(
             ),
         )
     return (
-        active,
+        neutral_profile(),
         "fallback",
         (
             "The prompt's hints do not resolve to a single available ranking profile. "
-            "Used the active ranking profile for weights only, without restricting "
-            "source queries to its material class; choose a profile to override."
+            "Used neutral priorities based on supported-field completeness. "
+            "Explicitly requested goals can refine these priorities."
         ),
     )
 
@@ -1731,8 +1753,7 @@ class RankingProfileStore:
                 p for p in saved["profiles"] if p["id"] == saved["active_profile_id"]
             )
             profile, mode, reason = _infer_profile(prompt, saved["profiles"], active)
-            if mode == "inferred":
-                profile, adjustments = prompt_preferences(profile, prompt)
+            profile, adjustments = prompt_preferences(profile, prompt)
         else:
             with self.workspace._connection() as connection:
                 row = connection.execute(

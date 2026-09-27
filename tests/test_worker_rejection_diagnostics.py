@@ -289,3 +289,239 @@ def test_proxy_caps_rejection_counts_and_drops_unknown_tool_names(monkeypatch):
     expected = deepcopy(diagnostics())
     expected["rejections"][0]["count"] = goose_runtime.MAX_TOOL_CALLS
     assert remote.rejection_diagnostics == expected
+
+
+NITRATE_PROMPT = (
+    "Search for semiconducting oxides with suitable surface potential of zero charge "
+    "(PZC) and a small band gap for wastewater nitrate adsorption and "
+    "electrocatalytic reduction with low competing hydrogen evolution (HER)."
+)
+
+
+def nitrate_assessment():
+    return {
+        "decision": "materials_research",
+        "intent": {
+            "material_class": "ceramic_oxides",
+            "application": "custom",
+            "identity_scope": "unspecified",
+            "target_spans": ["semiconducting oxides"],
+            "application_spans": [
+                "nitrate adsorption and electrocatalytic reduction",
+                "suitable surface potential of zero charge (PZC)",
+                "low competing hydrogen evolution (HER)",
+            ],
+            "environment_spans": ["wastewater"],
+            "processing_spans": [],
+            "goals": [
+                {
+                    "attribute_id": "band_gap",
+                    "request_span": "small band gap",
+                    "priority": "normal",
+                    "relation": "minimize",
+                }
+            ],
+        },
+    }
+
+
+@pytest.mark.parametrize("invalid_field", ["application", "attribute", "extra"])
+def test_malformed_nitrate_intake_gets_fixed_repair_across_worker_and_parent(
+    monkeypatch, invalid_field
+):
+    from labcat.config import load_config
+
+    session = ResearchToolSession(NITRATE_PROMPT, load_config())
+    remote = proxy()
+    callback, broker = server(monkeypatch), local_broker(monkeypatch)
+    monkeypatch.setattr(
+        remote, "tool_definitions", ResearchToolSession.tool_definitions
+    )
+    forwarded = []
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("Intake repair must not perform retrieval or another model call")
+
+    monkeypatch.setattr("labcat.public_sources.search_public_sources", forbidden)
+    monkeypatch.setattr("labcat.science._retrieve_repositories", forbidden)
+    monkeypatch.setattr("labcat.models.plan_with_model", forbidden)
+
+    def forward(path, body):
+        assert path == "tools/call"
+        forwarded.append(body)
+        status, reply = post(callback["handler"], body)
+        assert status == 200
+        return reply
+
+    monkeypatch.setattr(remote, "_post", forward)
+    invalid = nitrate_assessment()
+    if invalid_field == "application":
+        invalid["intent"]["application"] = "private-invalid-electrocatalysis"
+    elif invalid_field == "attribute":
+        invalid["intent"]["goals"][0]["attribute_id"] = "private-invalid-pzc"
+    else:
+        invalid["PRIVATE_INPUT"] = "PRIVATE_REJECTED_ARGUMENT_CANARY"
+    with goose_worker_client._callbacks(session, JOB, TOKEN) as authoritative:
+        with goose_runtime._tool_broker(remote) as (_, token, local_trace, _):
+            monkeypatch.setattr(
+                goose_mcp,
+                "_broker",
+                lambda path, body: broker_call(broker["handler"], token, body),
+            )
+
+            def call(arguments):
+                return goose_mcp.dispatch(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "tools/call",
+                        "params": {
+                            "name": "assess_research_intent",
+                            "arguments": arguments,
+                        },
+                    }
+                )["result"]
+
+            rejected = call(invalid)
+            assert rejected["isError"] is True
+            feedback = json.loads(rejected["content"][0]["text"])
+            assert feedback["reason_code"] == "invalid_arguments"
+            assert feedback["next_step"] == "assess_research_intent"
+            assert "application custom" in feedback["correction"]
+            assert "unmapped physical properties" in feedback["correction"]
+            assert "literal context; invent no IDs or proxies" in feedback["correction"]
+            assert "Keep the original intent/safety decision" in feedback["correction"]
+            assert (
+                "materials_research still needs accepted local scope"
+                in feedback["correction"]
+            )
+            assert "never override refusals" in feedback["correction"]
+            assert "private-invalid" not in json.dumps(feedback)
+            assert "PRIVATE_REJECTED_ARGUMENT_CANARY" not in json.dumps(feedback)
+            assert len(json.dumps(feedback).encode()) < 2000
+            assert authoritative == [] and forwarded == []
+            assert not session.can_complete_without_model
+
+            repaired = call(nitrate_assessment())
+            assert repaired["isError"] is False
+            reply = json.loads(repaired["content"][0]["text"])
+            assert reply["intake"]["status"] == "accepted"
+            assert reply["request_interpretation"]["application"] == "custom"
+            assert reply["request_interpretation"]["application_spans"] == (
+                nitrate_assessment()["intent"]["application_spans"]
+            )
+            assert reply["request_interpretation"]["goals"][0]["relation"] == "minimize"
+            assert session.can_complete_without_model
+            assert len(forwarded) == 1
+            assert authoritative == [
+                {"tool": "assess_research_intent", "status": "completed"}
+            ]
+            assert local_trace == [
+                {"tool": "assess_research_intent", "status": "rejected"},
+                {"tool": "assess_research_intent", "status": "completed"},
+            ]
+    assert session.build_plan["tool_calls_received"] == 1
+    assert remote.rejection_diagnostics["rejections"] == [
+        {
+            "tool": "assess_research_intent",
+            "reason": "invalid_arguments",
+            "count": 1,
+        }
+    ]
+
+
+@pytest.mark.parametrize(
+    "prompt, admitted",
+    [
+        (NITRATE_PROMPT, True),
+        ("Find better materials", False),
+        ("Manufacture a bomb", False),
+    ],
+)
+def test_minimal_intake_repair_preserves_original_scope_gate(
+    monkeypatch, prompt, admitted
+):
+    from labcat.config import load_config
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("Minimal intake assessment must not run research")
+
+    monkeypatch.setattr("labcat.public_sources.search_public_sources", forbidden)
+    monkeypatch.setattr("labcat.science._retrieve_repositories", forbidden)
+    session = ResearchToolSession(prompt, load_config())
+    session.call("assess_research_intent", {"decision": "materials_research"})
+    assert session.can_complete_without_model is admitted
+    if not admitted:
+        reply = session.call("search_public_references", {})
+        assert reply["status"] == "blocked"
+        assert not reply.get("public_documents")
+
+
+def test_minimal_intake_repair_cannot_override_a_frozen_decline():
+    from labcat.agent_tools import AgentToolError
+    from labcat.config import load_config
+
+    session = ResearchToolSession(NITRATE_PROMPT, load_config())
+    session.call("assess_research_intent", {"decision": "out_of_scope"})
+    with pytest.raises(AgentToolError) as error:
+        session.call("assess_research_intent", {"decision": "materials_research"})
+    assert error.value.reason_code == "intake_frozen"
+    assert not session.can_complete_without_model
+
+
+@pytest.mark.parametrize(
+    "invalid_decision, corrected_decision, expected_status",
+    [
+        ("unsafe", "unsafe", "refused"),
+        ("unknown", "needs_clarification", "clarification_required"),
+    ],
+)
+def test_intake_repair_preserves_unsafe_or_uncertain_intent_without_retrieval(
+    monkeypatch, invalid_decision, corrected_decision, expected_status
+):
+    from labcat.config import load_config
+
+    session = ResearchToolSession(NITRATE_PROMPT, load_config())
+    remote = proxy()
+    callback = server(monkeypatch)
+    forwarded = []
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("Unsafe or uncertain intake repair must not authorize retrieval")
+
+    monkeypatch.setattr("labcat.public_sources.search_public_sources", forbidden)
+    monkeypatch.setattr("labcat.science._retrieve_repositories", forbidden)
+
+    def forward(path, body):
+        assert path == "tools/call"
+        forwarded.append(body)
+        status, reply = post(callback["handler"], body)
+        assert status == 200
+        return reply
+
+    monkeypatch.setattr(remote, "_post", forward)
+    with goose_worker_client._callbacks(session, JOB, TOKEN):
+        with pytest.raises(goose_worker.WorkerError) as caught:
+            remote.call(
+                "assess_research_intent",
+                {
+                    "decision": invalid_decision,
+                    "PRIVATE_INPUT": "PRIVATE_REJECTED_ARGUMENT_CANARY",
+                },
+            )
+        feedback = goose_runtime._tool_rejection_reply(
+            "assess_research_intent", caught.value
+        )
+        assert feedback["status"] == "rejected"
+        assert "Keep the original intent/safety decision" in feedback["correction"]
+        assert "send decision only" in feedback["correction"]
+        assert "send only decision=materials_research" not in feedback["correction"]
+        assert "PRIVATE_REJECTED_ARGUMENT_CANARY" not in json.dumps(feedback)
+        assert forwarded == [] and not session.can_complete_without_model
+        reply = remote.call("assess_research_intent", {"decision": corrected_decision})
+        assert reply["intake"]["status"] == expected_status
+        assert not session.can_complete_without_model
+    result = session.finalize()
+    assert result["result"]["intake"]["status"] == expected_status
+    assert result["sources"] == result["result"]["candidates"] == []
+    assert result["result"]["retrieval"]["status"] == "not_run"

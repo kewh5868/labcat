@@ -18,18 +18,24 @@ class AgentToolError(ValueError):
         self.reason_code = reason_code
 
 
+INTAKE_REPAIR_GUIDANCE = (
+    "Keep the original intent/safety decision. Use catalog IDs and exact "
+    "role/goal spans; application custom for unmapped uses, unknown if unstated. "
+    "Preserve unmapped physical properties/selectivity/competing reactions as "
+    "literal context; invent no IDs or proxies. If intent cannot map, send "
+    "decision only. materials_research still needs accepted local scope; never "
+    "override refusals. Read intake before research; same call budget."
+)
+
+
 _CORRECTIONS = MappingProxyType(
     {
         "tool_call_limit": "The tool-call budget is exhausted. Stop requesting tools; "
         "the parent will retain available results without inventing evidence.",
         "unsupported_tool": "Use only the tools in the supplied tool catalog. "
         "No other action or destination is available.",
-        "intake_catalog_or_shape": "Use the supplied intake schema and catalog IDs. "
-        "Supply only supported fields and bounded values; no interpretation "
-        "was accepted by this call.",
-        "intake_binding_failed": "Recheck the intake catalog, exact original request "
-        "spans, separate target/context roles and goal preferences. The parent "
-        "could not validate this interpretation; no interpretation was accepted.",
+        "intake_catalog_or_shape": INTAKE_REPAIR_GUIDANCE,
+        "intake_binding_failed": INTAKE_REPAIR_GUIDANCE,
         "intake_frozen": "The accepted intake interpretation is already fixed. "
         "Continue with that interpretation instead of changing it.",
         "tool_order": "Follow the tool dependencies: accepted intake, public "

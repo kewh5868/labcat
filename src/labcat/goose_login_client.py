@@ -92,8 +92,10 @@ class WorkerChatGPTAuthBroker:
             raise ChatGPTAuthError("Completed sign-in credentials are unavailable.")
         return validate_auth_document(value["credentials"])
 
-    def metadata(self, document):
-        return self.metadata_reader.metadata(document)
+    def metadata(self, document, *, include_usage=True, deadline=None):
+        return self.metadata_reader.metadata(
+            document, include_usage=include_usage, deadline=deadline
+        )
 
     def close(self):
         if self.flow_id:

@@ -21,7 +21,7 @@ class UnchangedBroker(Broker):
     """Metadata does not rotate the explicitly synthetic login
     fixture."""
 
-    def metadata(self, auth):
+    def metadata(self, auth, **kwargs):
         public, _ = super().metadata(auth)
         return public, deepcopy(auth)
 
@@ -223,10 +223,12 @@ def test_late_verification_cannot_authorize_or_error_another_selected_account(
     connected_accounts, monkeypatch, metadata_fails
 ):
     manager, _, second = connected_accounts
+    # Exercise an outstanding provider check rather than fresh cached discovery.
+    manager.agent._model_metadata.clear()
     entered, release = Event(), Event()
     original_metadata = manager.agent._auth.metadata
 
-    def metadata(document):
+    def metadata(document, **kwargs):
         entered.set()
         assert release.wait(10), "The test did not release its metadata response"
         if metadata_fails:
@@ -258,7 +260,7 @@ def test_report_model_identity_comes_from_captured_run_after_last_moment_switch(
     manager, first, second = connected_accounts
     original_metadata = manager.agent._auth.metadata
 
-    def metadata(document):
+    def metadata(document, **kwargs):
         public, updated = original_metadata(document)
         public["models"].append({"id": "other-model", "label": "Other fixture model"})
         return public, updated

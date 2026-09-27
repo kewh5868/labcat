@@ -310,12 +310,14 @@ priority under stated rules, not a prediction that the material will work.
 ### Applying and checking changed weights
 
 Save the edited ranking profile, then select that named profile in the chat's
-ranking control for the next request. An explicitly selected profile retains
-its saved weights. **Infer from prompt** can choose a different class or
-application profile; the active workspace profile is not an unconditional
-override of automatic inference. Reports record which profile and weights were
-actually used. Changing preferences does not rewrite an existing report or a
-pinned snapshot; run a new analysis to apply them.
+ranking control for the next request. A named profile retains its saved
+criteria, weights and numeric preferences, and stays selected in that chat
+after a reload. Choose **Infer from prompt** to re-enable automatic selection
+from each question and available same-chat user context. Unresolved inference
+uses neutral exploration preferences; it does not inherit the active profile's
+oxide/high-k criteria. Reports record which profile and weights were actually
+used. Changing preferences does not rewrite an existing report or a pinned
+snapshot; run a new analysis to apply them.
 
 Increasing a criterion's relative weight increases its contribution when there
 is an accepted assessment for it. If every candidate is unassessed on all

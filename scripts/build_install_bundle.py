@@ -17,10 +17,14 @@ HOST_FILES = (
     "labcat.cmd",
     "labcat.ps1",
     "compose.yaml",
+    "scripts/install_desktop.sh",
+    "scripts/install_desktop.ps1",
     "README.md",
     "LICENSE.rst",
     "docs/architecture.md",
     "docs/deployment.md",
+    "docs/installation.md",
+    "docs/first-run.md",
     "docs/developer-mode.md",
     "docs/evaluation.md",
     "docs/evaluation-results.json",
@@ -46,8 +50,9 @@ HOST_FILES = (
     "docs/validation.md",
     "docs/ui-layouts.md",
     "desktop/README.md",
+    "desktop/icons/128x128.png",
 )
-EXECUTABLE_FILES = {"labcat.sh", "Start Labcat.command"}
+EXECUTABLE_FILES = {"labcat.sh", "Start Labcat.command", "scripts/install_desktop.sh"}
 DESKTOP_LAUNCHER_FILES = ("labcat.sh", "labcat.ps1", "compose.yaml")
 ARCHIVE_NAME = re.compile(
     r"labcat-(?P<version>[A-Za-z0-9][A-Za-z0-9.+_-]*)"
@@ -162,7 +167,12 @@ def desktop_entries(
 
     def collect(path: Path) -> None:
         require_no_symlink_path(path)
-        if path.name == "compose.local.yaml":
+        if path.name in {
+            "compose.local.yaml",
+            ".labcat-launch-mode",
+            ".labcat-project-directory",
+            ".labcat-install-source",
+        }:
             raise BundleError(
                 "Build a clean desktop app without private deployment overrides."
             )

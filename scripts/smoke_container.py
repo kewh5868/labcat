@@ -660,9 +660,32 @@ store.append_research(sys.argv[1], scope, prompt, result)
                             report,
                             presentation,
                         )
+            from pypdf import PdfReader
+
+            with urlopen(
+                base + f"/api/chats/{chat_id}/history.pdf", timeout=30
+            ) as response:
+                assert response.headers["Content-Type"] == "application/pdf"
+                assert response.headers["Content-Disposition"] == (
+                    f'attachment; filename="labcat-{chat_id}-history.pdf"'
+                )
+                assert response.headers["Cache-Control"] == "no-store"
+                history_body = response.read()
+            history = PdfReader(BytesIO(history_body))
+            text = " ".join(
+                " ".join(page.extract_text() for page in history.pages).split()
+            )
+            assert "Labcat | Complete chat history" in text
+            assert " ".join(before["chat"]["title"].split()) in text
+            for message in before["messages"]:
+                assert " ".join(message["content"].split()) in text
+                assert message["created_at"] in text
+            for revision in before["reports"]:
+                assert revision["id"] in text
+                assert revision["created_at"] in text
             assert api(base, f"/api/chats/{chat_id}") == before
             print(
-                "Saved TXT/JSON/PDF/Word attachments and view selection passed.",
+                "Saved report attachments and complete chat history PDF passed.",
                 flush=True,
             )
 
@@ -1174,6 +1197,13 @@ store.append_research(sys.argv[1], scope, prompt, result)
 
             ranking = api(base, "/api/ranking-profiles")
             preset_ids = {profile["id"] for profile in ranking["profiles"]}
+            assert ranking["active_profile_id"] == "preset-neutral-exploration"
+            neutral = next(
+                p
+                for p in ranking["profiles"]
+                if p["id"] == "preset-neutral-exploration"
+            )
+            assert neutral["importance"] == {"evidence_quality": 1.0}
             assert {
                 "preset-oxide-thin-film",
                 "preset-oxide-high-k",
@@ -1307,7 +1337,7 @@ store.append_research(sys.argv[1], scope, prompt, result)
                 assert selection["selected_profile_id"] == expected_profile["id"]
                 assert isinstance(selection["reason"], str) and selection["reason"]
                 assert selection["inference_version"] == (
-                    "catalog-goals-v3" if mode == "inferred" else None
+                    "catalog-goals-v4" if mode == "inferred" else None
                 )
                 assert (
                     api(base, "/api/ranking-profiles")["active_profile_id"]

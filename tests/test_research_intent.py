@@ -517,7 +517,7 @@ def test_semantic_profile_and_scope_survive_storage_and_chat_continuation(tmp_pa
     continued, selection = select_profile(
         profiles, "infer", "Keep the same priorities", context
     )
-    assert selection["mode"] == "continued"
+    assert selection["mode"] == "inferred"
     assert continued["id"] == profile["id"]
     assert continued["importance"] == profile["importance"]
     assert continued["material_class"] == "metals_metal_alloys"
@@ -532,10 +532,17 @@ def test_catalog_composition_is_generic_and_retains_stability(material_class):
         profile = compose_catalog_profile(material_class, application)
         assert profile["material_class"] == material_class
         assert profile["application"] == application
-        assert all(
-            profile["importance"][key] >= 0.3
-            for key in ("stability", "ambient_phase_stability", "operational_stability")
-        )
+        if material_class == "custom" and application == "property_exploration":
+            assert profile["importance"] == {"evidence_quality": 1.0}
+        else:
+            assert all(
+                profile["importance"][key] >= 0.3
+                for key in (
+                    "stability",
+                    "ambient_phase_stability",
+                    "operational_stability",
+                )
+            )
         assert profile["normalized_weights"] == normalize_importance(
             profile["importance"]
         )
@@ -706,3 +713,22 @@ def test_unselected_explicit_goal_has_no_scoring_override():
         "Find metallic alloys. Prefer high density.", args, profile, selection
     )["scope"]
     assert review_only_attributes(scope, profile) == []
+
+
+def test_decision_only_assessment_keeps_the_real_neutral_inference_fallback(tmp_path):
+    from labcat.ranking_profiles import RankingProfileStore
+    from labcat.workspace import WorkspaceStore
+
+    store = RankingProfileStore(WorkspaceStore(tmp_path / "neutral.sqlite3"))
+    store.initialize()
+    store.activate("preset-oxide-high-k")
+    prompt = "Compare candidate materials for my application."
+    profile, selection = store.select("infer", prompt)
+    result = resolve_intent(
+        prompt, {"decision": "materials_research"}, profile, selection
+    )
+    assert result["selection"]["mode"] == "fallback"
+    assert result["profile"]["importance"] == {"evidence_quality": 1.0}
+    assert result["profile"]["material_class"] == "custom"
+    assert result["profile"].get("minimum_band_gap_ev") is None
+    assert store.active()["id"] == "preset-oxide-high-k"

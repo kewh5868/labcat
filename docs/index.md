@@ -8,7 +8,7 @@ title: Get started
 
 # Research materials with Labcat
 
-**Curious. Clever. Companionable.**
+**Curious. Clever. Research Companion.**
 
 Labcat is a platform and API for intelligent materials research. Explore public
 materials science data, screen and rank cited candidates for your application,
@@ -30,8 +30,9 @@ Use the quick start below if you are already comfortable with Docker.
 **You need:** Git and a running local Docker installation. Use
 [Docker Desktop](https://docs.docker.com/desktop/) on Mac or Windows, or
 [Docker Engine and Compose](https://docs.docker.com/engine/install/) on Linux.
-On Windows, select Linux containers. Python, Node, and Rust are not required for
-this Docker installation.
+On Windows, select Linux containers. Desktop installation from source also needs
+**Node 24, Rust/Cargo and OS build tools**; see [desktop prerequisites](installation.md#desktop-prerequisites).
+Browser mode needs no host Python, Node or Rust.
 
 ### 1. Get the code and build once
 
@@ -54,17 +55,20 @@ for your computer's architecture, including Apple Silicon. Wait for it to finish
 === "Mac / Linux"
 
     ```sh
-    ./labcat.sh --browser
+    ./labcat.sh
     ```
 
 === "Windows PowerShell"
 
     ```powershell
-    .\labcat.cmd -Browser
+    .\labcat.cmd
     ```
 
-The launcher opens your browser at the local address it prints. Use that address
-if the browser does not open automatically. Keep Docker running while using Labcat.
+On first launch, press **Enter** for **Desktop**, or choose **2** for **Browser**.
+The launcher remembers the choice. Desktop installs a native app from supplied
+binaries or builds the source; Browser opens the local address it prints. Both
+use Docker. Run `./labcat.sh --choose` or `.\labcat.cmd -Choose` to choose again.
+Keep Docker running while using Labcat.
 
 ### 3. Connect a model
 

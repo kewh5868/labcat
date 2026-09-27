@@ -11,15 +11,20 @@ from fastapi.testclient import TestClient
 from labcat.config import load_config
 from labcat.ranking_profiles import (
     DEFAULT_PROFILE_ID,
+    NEUTRAL_PROFILE_ID,
     PRESETS,
     SUPPORTED_ATTRIBUTES,
     RankingProfileNotFound,
     RankingProfileStore,
     catalog,
+    compose_catalog_profile,
     create_ranking_profiles_router,
+    neutral_profile,
     normalize_importance,
 )
 from labcat.workspace import WorkspaceStore
+
+HIGH_K_PROFILE_ID = "preset-oxide-high-k"
 
 
 @pytest.fixture
@@ -72,18 +77,20 @@ def test_catalog_discloses_available_scoring_and_exploratory_scopes():
     assert catalog()["attributes"][0]["label"] != "mutated"
 
 
-def test_new_workspace_defaults_to_existing_high_k_preset(store):
+def test_new_workspace_defaults_to_neutral_priorities(store):
     data = store.list()
     assert len(data["profiles"]) == len(PRESETS)
-    assert data["active_profile_id"] == DEFAULT_PROFILE_ID == "preset-oxide-high-k"
+    assert data["active_profile_id"] == DEFAULT_PROFILE_ID == NEUTRAL_PROFILE_ID
     active = store.active()
-    expected = dict(PRESETS)["preset-oxide-high-k"]
-    assert active["name"] == "Oxide dielectrics · High-k screening"
-    assert active["material_class"] == "oxide_dielectrics"
-    assert active["application"] == "high_k_screening"
-    assert active["minimum_band_gap_ev"] == 2.0
-    assert active["importance"] == expected["importance"]
-    assert active["normalized_weights"] == normalize_importance(expected["importance"])
+    assert active["name"] == "Neutral · General materials research"
+    assert active["material_class"] == "custom"
+    assert active["application"] == "property_exploration"
+    assert active["importance"] == {"evidence_quality": 1.0}
+    assert active["normalized_weights"] == {"evidence_quality": 1.0}
+    assert (
+        not {"minimum_band_gap_ev", "target_band_gap_ev", "band_gap_tolerance_ev"}
+        & active.keys()
+    )
     assert all(profile["preset"] for profile in data["profiles"])
 
 
@@ -115,19 +122,19 @@ def test_old_high_k_migrates_once_preserving_selection_and_creation_date(store):
             (
                 json.dumps(earlier_high_k_default()),
                 "old-version-timestamp",
-                DEFAULT_PROFILE_ID,
+                HIGH_K_PROFILE_ID,
             ),
         )
     before = next(
         profile
         for profile in store.list()["profiles"]
-        if profile["id"] == DEFAULT_PROFILE_ID
+        if profile["id"] == HIGH_K_PROFILE_ID
     )
     store.initialize()
     after = next(
         profile
         for profile in store.list()["profiles"]
-        if profile["id"] == DEFAULT_PROFILE_ID
+        if profile["id"] == HIGH_K_PROFILE_ID
     )
     assert after["importance"] == {
         "stability": 0.5,
@@ -149,7 +156,7 @@ def test_old_high_k_migrates_once_preserving_selection_and_creation_date(store):
         next(
             profile
             for profile in store.list()["profiles"]
-            if profile["id"] == DEFAULT_PROFILE_ID
+            if profile["id"] == HIGH_K_PROFILE_ID
         )
         == after
     )
@@ -174,7 +181,7 @@ def test_high_k_upgrade_preserves_edits_and_custom_copies(store, change):
         created = store.create(previous)
         identifier = created["id"]
     else:
-        identifier = DEFAULT_PROFILE_ID
+        identifier = HIGH_K_PROFILE_ID
         with store.workspace._connection(write=True) as connection:
             connection.execute(
                 "UPDATE ranking_profiles SET value=? WHERE id=?",
@@ -222,7 +229,8 @@ def test_old_custom_profile_keeps_gap_preference_absent(store):
 def test_gap_upgrade_handles_intermediate_preset_and_preserves_explicit_changes(
     store, variant
 ):
-    value = dict(PRESETS)[DEFAULT_PROFILE_ID].copy()
+    store.activate(HIGH_K_PROFILE_ID)
+    value = dict(PRESETS)[HIGH_K_PROFILE_ID].copy()
     value["importance"] = value["importance"].copy()
     value.pop("minimum_band_gap_ev")
     if variant == "disabled":
@@ -234,7 +242,7 @@ def test_gap_upgrade_handles_intermediate_preset_and_preserves_explicit_changes(
     with store.workspace._connection(write=True) as connection:
         connection.execute(
             "UPDATE ranking_profiles SET value=? WHERE id=?",
-            (json.dumps(value), DEFAULT_PROFILE_ID),
+            (json.dumps(value), HIGH_K_PROFILE_ID),
         )
     store.initialize()
     if variant == "invalid_boolean":
@@ -242,7 +250,7 @@ def test_gap_upgrade_handles_intermediate_preset_and_preserves_explicit_changes(
             store.active()
         with store.workspace._connection() as connection:
             saved = connection.execute(
-                "SELECT value FROM ranking_profiles WHERE id=?", (DEFAULT_PROFILE_ID,)
+                "SELECT value FROM ranking_profiles WHERE id=?", (HIGH_K_PROFILE_ID,)
             ).fetchone()[0]
         assert json.loads(saved) == value
     elif variant == "intermediate":
@@ -252,11 +260,12 @@ def test_gap_upgrade_handles_intermediate_preset_and_preserves_explicit_changes(
 
 
 def test_profile_migration_preserves_saved_report_and_frozen_pin_preferences(store):
+    store.activate(HIGH_K_PROFILE_ID)
     previous = earlier_high_k_default()
     with store.workspace._connection(write=True) as connection:
         connection.execute(
             "UPDATE ranking_profiles SET value=? WHERE id=?",
-            (json.dumps(previous), DEFAULT_PROFILE_ID),
+            (json.dumps(previous), HIGH_K_PROFILE_ID),
         )
     project = store.workspace.create_project("Migration fixture project")
     chat = store.workspace.project_draft(project["id"])
@@ -272,9 +281,7 @@ def test_profile_migration_preserves_saved_report_and_frozen_pin_preferences(sto
             "sources": [],
             "result": {
                 "stage": "partial",
-                "execution": {
-                    "ranking_profile": {"id": DEFAULT_PROFILE_ID, **previous}
-                },
+                "execution": {"ranking_profile": {"id": HIGH_K_PROFILE_ID, **previous}},
                 "ranking": {"algorithm": "public-materials-utility-v4"},
             },
         },
@@ -293,14 +300,15 @@ def test_profile_migration_preserves_saved_report_and_frozen_pin_preferences(sto
 def test_unchanged_legacy_config_uses_new_first_run_default(tmp_path):
     profiles = RankingProfileStore(WorkspaceStore(tmp_path / "first-run.sqlite3"))
     profiles.initialize(legacy_importance=load_config().to_dict()["ranking"])
-    assert profiles.active()["id"] == "preset-oxide-high-k"
+    assert profiles.active()["id"] == NEUTRAL_PROFILE_ID
     assert "migrated-ranking-preferences" not in {
         item["id"] for item in profiles.list()["profiles"]
     }
 
 
 @pytest.mark.parametrize(
-    "selected", ["preset-oxide-thin-film", "preset-liquid-crystals-exploration"]
+    "selected",
+    [HIGH_K_PROFILE_ID, "preset-oxide-thin-film", "preset-liquid-crystals-exploration"],
 )
 def test_existing_preset_choice_survives_new_default_on_restart(store, selected):
     store.activate(selected)
@@ -438,6 +446,7 @@ def test_each_added_class_loads_editable_preferences_without_claiming_coverage(s
         profile["material_class"]: profile
         for profile in data["profiles"]
         if profile["application"] == "property_exploration"
+        and profile["material_class"] in classes
     }
     assert set(templates) == set(classes)
     for identifier, template in templates.items():
@@ -599,7 +608,7 @@ def test_prompt_hints_select_saved_profile_without_changing_active(
     assert selected["id"] == expected
     assert decision["mode"] == "inferred"
     assert decision["selected_profile_id"] == expected
-    assert decision["inference_version"] == "catalog-goals-v3"
+    assert decision["inference_version"] == "catalog-goals-v4"
     assert store.active() == before
     # No numbers or weights are interpreted from the prompt.
     assert store.select(
@@ -622,18 +631,19 @@ def test_prompt_hints_select_saved_profile_without_changing_active(
         "Read https://example.invalid/polymers/property-exploration.",
     ],
 )
-def test_ambiguous_or_unknown_hints_report_active_fallback(store, prompt):
+def test_ambiguous_or_unknown_hints_use_neutral_fallback(store, prompt):
+    store.activate(HIGH_K_PROFILE_ID)
     active = store.active()
     selected, decision = store.select("infer", prompt)
-    assert selected == active
+    assert selected == neutral_profile()
     assert decision["mode"] == "fallback"
-    assert "active ranking profile" in decision["reason"]
-    assert "weights only" in decision["reason"]
+    assert decision["selected_profile_id"] == NEUTRAL_PROFILE_ID
+    assert "neutral priorities" in decision["reason"]
+    assert "supported-field completeness" in decision["reason"]
     assert store.active() == active
 
 
 def test_saved_custom_context_can_be_inferred_but_duplicate_context_is_ambiguous(store):
-    active = store.active()
     profile = store.create(
         custom(material_class="My custom class", application="My goal")
     )
@@ -642,7 +652,7 @@ def test_saved_custom_context_can_be_inferred_but_duplicate_context_is_ambiguous
     assert decision["mode"] == "inferred"
     store.create(custom(material_class="My custom class", application="My goal"))
     selected, decision = store.select("infer", "Explore My custom class for My goal.")
-    assert selected == active
+    assert selected == neutral_profile()
     assert decision["mode"] == "fallback"
     # An active custom profile is retained when its saved context matches.
     store.activate(profile["id"])
@@ -670,7 +680,7 @@ def test_punctuation_and_numeric_custom_labels_cannot_match_every_prompt(store):
     for label in ("...", "123"):
         store.create(custom(material_class=label, application=label))
     selected, decision = store.select("infer", "123 ... Find promising materials.")
-    assert selected == store.active()
+    assert selected == neutral_profile()
     assert decision["mode"] == "fallback"
     selected, decision = store.select("infer", "polymers " * 2000)
     assert selected["id"] == "preset-polymers-exploration"
@@ -1035,3 +1045,72 @@ def test_invalid_requested_tolerance_does_not_silently_use_default(store):
     )
     assert selected == base
     assert adjustments[0]["status"] == "needs_clarification"
+
+
+def test_unknown_semantic_scope_has_no_physical_property_preferences():
+    selected = compose_catalog_profile("custom", "property_exploration")
+    assert selected == neutral_profile()
+    selected["importance"]["dielectric_total"] = 1.0
+    assert (
+        compose_catalog_profile("custom", "property_exploration") == neutral_profile()
+    )
+    assert dict(PRESETS)[NEUTRAL_PROFILE_ID]["importance"] == {"evidence_quality": 1.0}
+
+
+def test_neutral_fallback_is_independent_of_saved_preset_and_active_custom_edits(store):
+    # Older/corrupted-but-valid persisted defaults cannot impose application bias.
+    with store.workspace._connection(write=True) as connection:
+        connection.execute(
+            "UPDATE ranking_profiles SET value=? WHERE id=?",
+            (json.dumps(earlier_high_k_default()), NEUTRAL_PROFILE_ID),
+        )
+    explicit = store.create(custom(name="Custom high-k priorities"))
+    store.activate(explicit["id"])
+    saved = store.list()
+    selected, decision = store.select("infer", "Find promising materials.")
+    assert selected == neutral_profile()
+    assert decision["mode"] == "fallback"
+    assert store.list() == saved
+    assert store.select(None, "Find promising materials.")[0] == explicit
+
+
+def test_neutral_fallback_applies_explicit_goals_without_inventing_class(store):
+    store.activate(HIGH_K_PROFILE_ID)
+    saved = store.list()
+    selected, decision = store.select(
+        "infer", "Find promising materials. Target a 1.6 eV band gap."
+    )
+    assert selected["id"] == NEUTRAL_PROFILE_ID
+    assert selected["material_class"] == "custom"
+    assert selected["target_band_gap_ev"] == 1.6
+    assert selected["minimum_band_gap_ev"] is None
+    assert selected["importance"]["band_gap"] > 0
+    assert selected["importance"]["evidence_quality"] == 1.0
+    assert (
+        not {"dielectric_total", "element_screen", "stability"}
+        & selected["importance"].keys()
+    )
+    assert decision["mode"] == "fallback"
+    assert decision["preference_adjustments"]
+    assert store.list() == saved
+
+
+def test_explicit_profile_ignores_conflicting_prompt_class_and_goals(store):
+    profile = store.create(custom(minimum_band_gap_ev=3.0))
+    selected, decision = store.select(
+        profile["id"],
+        "Find quantum dots for photodetectors. Target a 1.6 eV band gap. "
+        "Prefer low density.",
+    )
+    assert selected == profile
+    assert decision["mode"] == "explicit"
+    assert "preference_adjustments" not in decision
+
+
+def test_recognized_scope_overrides_unrelated_active_high_k_profile(store):
+    store.activate(HIGH_K_PROFILE_ID)
+    selected, decision = store.select("infer", "Find quantum dots for photodetectors.")
+    assert selected["material_class"] == "semiconductor_nanocrystals"
+    assert selected["application"] == "optoelectronics"
+    assert decision["mode"] == "inferred"
+    assert store.active()["id"] == HIGH_K_PROFILE_ID

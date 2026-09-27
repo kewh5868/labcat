@@ -37,6 +37,8 @@ def write_source(path, *, metadata=METADATA, extra=None, omit_data=None):
         (f"{ROOT}/{name}", b"[]\n")
         for name in (
             "scripts/check_secrets.py",
+            "scripts/install_desktop.sh",
+            "scripts/install_desktop.ps1",
             "scripts/materials_prompt_matrix.json",
             "scripts/holdout_prompts.json",
             "frontend/tests/reportLayoutChecks.js",
@@ -140,6 +142,8 @@ def test_rejects_missing_built_interface(pair):
     "missing",
     [
         "scripts/check_secrets.py",
+        "scripts/install_desktop.sh",
+        "scripts/install_desktop.ps1",
         "scripts/materials_prompt_matrix.json",
         "scripts/holdout_prompts.json",
         "frontend/tests/reportLayoutChecks.js",
@@ -159,6 +163,8 @@ def test_rejects_missing_test_and_evaluation_support(pair, missing):
     "missing",
     [
         "scripts/check_secrets.py",
+        "scripts/install_desktop.sh",
+        "scripts/install_desktop.ps1",
         "scripts/materials_prompt_matrix.json",
         "scripts/holdout_prompts.json",
         "frontend/tests/reportLayoutChecks.js",
@@ -194,6 +200,9 @@ def test_checks_freshness_of_both_archives(pair, which):
     "member",
     [
         "nested/LOCAL_BRIEF.md",
+        "nested/.labcat-launch-mode",
+        "nested/.labcat-project-directory",
+        "nested/.labcat-install-source",
         "nested/.DS_Store",
         "nested/.local/cache",
         "nested/.env.production",

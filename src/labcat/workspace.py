@@ -1695,6 +1695,15 @@ class WorkspaceStore:
                     }
                 )
             context["intake_messages"] = intake_messages[-4:]
+            last_message = detail["messages"][-1] if detail["messages"] else {}
+            # Only persisted server intake creates this continuation marker.
+            # Both a genuine clarification and a failed model assessment leave
+            # an unfinished request; assistant prose never supplies preferences.
+            context["pending_clarification"] = (
+                last_message.get("role") == "assistant"
+                and last_message.get("intake", {}).get("status")
+                == "clarification_required"
+            )
             return scope, context
 
     @staticmethod

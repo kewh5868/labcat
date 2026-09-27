@@ -69,6 +69,12 @@ def test_chunk_boundary_does_not_hide_token():
         "nested/.local/archived-code.tar",
         "nested/WORKSPACE.CREDENTIALS.ENC.JSON",
         "nested/keys.p12",
+        ".labcat-launch-mode",
+        ".labcat-project-directory",
+        ".labcat-install-source",
+        "nested/deployment/.LABCAT-LAUNCH-MODE",
+        "nested/deployment/.LABCAT-PROJECT-DIRECTORY",
+        "nested/deployment/.LABCAT-INSTALL-SOURCE",
     ],
 )
 def test_private_paths_are_rejected_at_any_depth(name):

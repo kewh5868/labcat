@@ -451,3 +451,132 @@ def test_interrupted_v2_describes_incomplete_model_work_without_guessing_failure
             assert "Model-led research stopped before completion" in text
             assert "model connection stopped" not in text
             assert "incomplete assessments or search coverage" in text
+
+
+def long_rationale_report():
+    """Admitted synthetic prose, including distinct reasons beyond old
+    cutoffs."""
+    report = preliminary_report()
+    report["sources"] = report["sources"][:1]
+    source = report["sources"][0]
+    quote = (
+        "TEST ONLY: Fixture-A application and demonstrated use are discussed with "
+        "thermodynamic stability, room-temperature phase stability and operational "
+        "stability. This synthetic passage establishes no material properties."
+    )
+    source["metadata"]["abstract"] = quote
+    result = report["result"]
+    profile = result["execution"]["ranking_profile"]
+    documents = discovery_documents(report["sources"])
+    result["candidate_leads"] = validate_candidate_leads(
+        [
+            {
+                "document_id": documents[0]["document_id"],
+                "name": "Fixture-A",
+                "quote": quote,
+            }
+        ],
+        documents,
+        report["sources"],
+        profile["importance"],
+    )
+    lead = result["candidate_leads"][0]
+    interpretations = {
+        key: (
+            "TEST ONLY interpretation of this candidate and the cited discussion; "
+            "the complete explanation is retained for careful source review, "
+            "including the final " + suffix + "."
+        )
+        for key, suffix in (
+            ("application_fit", "application limitation"),
+            ("demonstrated_use", "demonstrated use limitation"),
+            ("stability", "thermodynamic limitation"),
+            ("ambient_phase_stability", "room temperature limitation"),
+            ("operational_stability", "operational limitation"),
+        )
+    }
+    extra = "TEST ONLY additional supporting interpretation retained in the full audit."
+    proposals = [
+        {
+            "lead_id": lead["id"],
+            "criterion_id": key,
+            "document_id": documents[0]["document_id"],
+            "quote": quote,
+            "judgment": "supports" if key == "demonstrated_use" else "concern",
+            "interpretation": interpretation,
+        }
+        for key, interpretation in interpretations.items()
+    ]
+    proposals.append({**proposals[0], "judgment": "supports", "interpretation": extra})
+    evaluated = evaluate_candidates(
+        {"evaluations": proposals},
+        result["candidate_leads"],
+        report["sources"],
+        profile,
+    )
+    assert len(evaluated["accepted_proposals"]) == len(proposals)
+    result["literature_evaluation"] = evaluated["evaluation"]
+    # Simulate an existing report whose original presentation contained excerpts.
+    report["pi_summary"] = "Summary: Saved clipped explanation…"
+    report["technical_audit"] = "Technical Overview: Saved clipped explanation…"
+    return report, interpretations, extra
+
+
+def test_saved_screening_report_restores_full_rationale_and_each_concern():
+    report, interpretations, extra = long_rationale_report()
+    original = deepcopy(report)
+    prepared = prepare_presentation(report, format_source="saved")
+    assert report == original
+    assert prepared["archive"]["pi_summary"] == original["pi_summary"]
+    assert (
+        prepared["result"]["literature_evaluation"]
+        == original["result"]["literature_evaluation"]
+    )
+    for field in ("pi_summary", "technical_audit"):
+        table = next(
+            data
+            for kind, data, _ in _blocks(prepared[field])
+            if kind == "table" and data[0][3] == "Why considered"
+        )
+        row = table[1]
+        assert interpretations["application_fit"] in row[3]
+        assert interpretations["demonstrated_use"] in row[3]
+        for key in (
+            "application_fit",
+            "stability",
+            "ambient_phase_stability",
+            "operational_stability",
+        ):
+            assert interpretations[key] in row[5]
+        assert "[S1]" in row[3] and "[S1]" in row[5]
+        assert "…" not in row[3] + row[5]
+        assert all(len(cell) < 4000 for cell in row)
+        assert extra not in row[3] + row[5]
+    assert extra in prepared["technical_audit"]
+
+
+@pytest.mark.parametrize("format", ["text", "json", "pdf", "docx"])
+def test_shortlist_only_download_keeps_full_rationale_and_caveats(format):
+    report, interpretations, _ = long_rationale_report()
+    prepared = prepare_presentation(report)
+    # Isolate the shortlist so an unabridged audit elsewhere cannot mask clipping.
+    prepared["pi_summary"] = "\n".join(
+        line for line in prepared["pi_summary"].splitlines() if line.startswith("|")
+    )
+    body = render_download(prepared, format, views="pi")[0]
+    if format == "pdf":
+        text = " ".join(
+            page.extract_text() for page in PdfReader(io.BytesIO(body)).pages
+        )
+    elif format == "docx":
+        with ZipFile(io.BytesIO(body)) as document:
+            text = " ".join(
+                ElementTree.fromstring(document.read("word/document.xml")).itertext()
+            )
+    elif format == "json":
+        text = " ".join(json.loads(body)["views"].values())
+    else:
+        text = body.decode()
+    text = " ".join(text.split())
+    for interpretation in interpretations.values():
+        assert interpretation in text

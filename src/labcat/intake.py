@@ -201,7 +201,12 @@ def decision(status, reason_code):
     return {
         "status": status,
         "reason_code": reason_code,
-        "questions": list(QUESTIONS) if status == "clarification_required" else [],
+        "questions": (
+            list(QUESTIONS)
+            if status == "clarification_required"
+            and reason_code != "assessment_missing"
+            else []
+        ),
     }
 
 
@@ -211,9 +216,18 @@ def validate_intake(value):
         or set(value) != {"status", "reason_code", "questions"}
         or value["status"] not in {"accepted", "clarification_required", "refused"}
         or value["reason_code"] not in REASONS
-        or value["questions"]
-        != (list(QUESTIONS) if value["status"] == "clarification_required" else [])
     ):
+        raise ValueError("Invalid server intake outcome.")
+    expected = decision(value["status"], value["reason_code"])["questions"]
+    # Older saved assessment failures used the generic clarification questions.
+    # Read them unchanged; new outcomes distinguish a failed model assessment
+    # from missing user details without migrating the stored conversation.
+    legacy_assessment = (
+        value["status"] == "clarification_required"
+        and value["reason_code"] == "assessment_missing"
+        and value["questions"] == list(QUESTIONS)
+    )
+    if value["questions"] != expected and not legacy_assessment:
         raise ValueError("Invalid server intake outcome.")
     return {**value, "questions": list(value["questions"])}
 
@@ -288,15 +302,22 @@ def assess(prompt, *, context=None):
             for key in ("formula", "chemsys", "elements", "is_metal")
         )
     )
-    # A concrete standalone question need not inherit an unrelated old topic.
+    # A persisted unfinished assessment can receive a class-only answer that
+    # already passes the local keyword gate. Keep its same-chat preferences in
+    # the request against which exact semantic spans will be validated. The
+    # marker carries no policy authority; refusals and explicit resets above
+    # still apply. Ordinary standalone questions retain their existing behavior.
+    pending = isinstance(context, dict) and context.get("pending_clarification") is True
     query = prompt
-    if (current["status"] != "accepted" or generic_refinement) and previous:
-        # Trim only optional history; the whole current request must reach the
-        # model's intent assessment, including a potentially unsafe final clause.
-        remaining = max(0, 20_000 - len(prompt) - 1)
+    if (current["status"] != "accepted" or generic_refinement or pending) and previous:
+        prefix = "Earlier user preferences (not evidence):\n" if pending else ""
+        separator = "\nLatest user request:\n" if pending else "\n"
+        # Trim only optional history, starting with its oldest text; the whole
+        # current request, including its final clause, must reach assessment.
+        remaining = max(0, 20_000 - len(prompt) - len(prefix) - len(separator))
         history = "\n".join(previous)[-remaining:] if remaining else ""
         if history:
-            query = history + "\n" + prompt
+            query = prefix + history + separator + prompt
     return _scope(query), query
 
 
@@ -367,6 +388,14 @@ def outcome(intake):
                 "private or paywalled data, perform wetlab actions, "
                 "or fabricate evidence."
             )
+        )
+    elif intake["reason_code"] == "assessment_missing":
+        reason = (
+            "The model could not finish the request assessment. Your saved "
+            "question remains valid. Check the provider account's access and "
+            "usage limits. Retry the request or choose another model in "
+            "Connections. You do not need to repeat the material, application "
+            "or constraints."
         )
     else:
         reason = (

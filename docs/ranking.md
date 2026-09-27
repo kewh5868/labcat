@@ -52,7 +52,7 @@ target. For an inferred profile, a goal that the existing utility cannot score
 as requested remains selected but contributes zero; its source values and
 citations stay visible as unscored evidence. This differs from missing data.
 For example, the current lower-density utility cannot implement a request for
-higher density. An explicitly selected or continued profile retains its utility,
+higher density. A manually selected profile retains its utility,
 and the report explains the conflict with the request. No opposite utility or
 new normalization anchors are invented. If no record has any scorable selected
 criterion, up to twelve retrieved records may appear as unranked review evidence.
@@ -167,9 +167,10 @@ bounds limit presentation, not experimental precedence.
 
 ## Stability across material classes
 
-Every shipped class and application profile includes at least 0.3 raw importance
+The class-specific catalog profiles include at least 0.3 raw importance
 for thermodynamic stability, room-temperature phase stability and operational
-stability. These are editable ranking preferences, not physical thresholds.
+stability. The neutral exploration profile supplies no stability preference.
+These are editable ranking preferences, not physical thresholds.
 The same baseline applies to perovskites, organic electronic materials, quantum
 dots, metals, and the other catalog classes; it does not expand source coverage.
 An explicit custom profile retains its chosen values, including zero weights.
@@ -206,10 +207,16 @@ assessment can alter the review tier and selected-attribute interpretation.
 That change is explicitly labeled; it neither fills a missing measured value
 nor establishes room-temperature or operational stability as a verified fact.
 
-## Default high-k profile and saved preferences
+## Neutral default, high-k preset and saved preferences
 
-The first-run profile is **Oxide dielectrics · High-k screening**. Its raw
-importance values are stability 0.5, band gap 0.6, total dielectric response 1.0,
+New workspaces start with **Neutral · General materials research**. Its only
+criterion is supported-field completeness, with importance 1.0. This measures
+available property fields, not scientific confidence, source credibility or
+material performance. It imposes no material class, band-gap target or minimum.
+Existing workspaces keep their selected active profile when upgraded.
+
+The selectable **Oxide dielectrics · High-k screening** preset has raw
+importance values of stability 0.5, band gap 0.6, total dielectric response 1.0,
 element screening 0.3 and simplicity 0.2. Electronic dielectric response and
 supported-field completeness start at zero. Room-temperature phase stability
 and operational stability each start at 0.3 and currently remain unavailable.
@@ -271,8 +278,10 @@ a saved profile. If the exact pair is absent, it combines the requested class
 with the catalog's application priorities for that run. For example, a recognized
 optical application uses optical priorities even when its material class has only
 an exploration preset. This creates no saved profile, candidate or evidence and
-does not change the workspace's active profile. Ambiguous class/application hints
-retain an explicitly disclosed fallback; selecting a profile overrides inference.
+does not change the workspace's active profile. Unresolved class/application
+hints use neutral property-exploration preferences, without an inherited oxide
+class, high-k priorities or minimum band-gap threshold. Selecting a named profile
+keeps its saved ranking criteria authoritative.
 
 Narrowly phrased property goals can refine the run's inferred preferences. A
 request for a band gap “around” a value creates a target; “at least” creates a
@@ -284,11 +293,17 @@ importance; processability is currently unscored and must remain visible as a
 source-review gap. Hull energy does not establish processing or operating
 stability.
 
-An explicit profile choice keeps that profile's preferences. Otherwise, a
-continuing chat preserves its previous report's profile and target settings;
-an explicit new property goal can refine that run without rewriting earlier
-reports, pins or saved profiles. Every applied goal and default tolerance is
-recorded in the report's ranking-selection metadata.
+A named profile keeps its saved criteria, weights and numeric preferences for
+each request while it remains selected. The chat remembers this choice after
+a reload. Choose **Infer from prompt** to return to automatic selection.
+
+Automatic selection reassesses each request using the current question and
+bounded earlier user messages from the same chat when history is enabled. A
+short follow-up can retain previously stated class and property goals; it does
+not freeze the previous report's inferred weights. Ambiguous numeric goals remain
+unresolved instead of silently choosing a target. Every applied goal and default
+tolerance is recorded in the report's ranking-selection metadata. Earlier
+reports, pins and saved profile definitions are unchanged.
 
 ## Exclusions, ties, and scope
 
@@ -330,9 +345,9 @@ source record identities are rejected rather than scored twice.
 
 The candidate pool is bounded by enabled sources, source filters, query budgets,
 and adapter coverage. No fixed shortlist is substituted when retrieval fails.
-Follow-up prompts retain the chat's saved ranking preferences unless another
-profile is explicitly selected or a new topic is established. Earlier source
-identities are re-fetched through the currently selected public adapters and
+Follow-up prompts use the selected named profile or re-infer preferences from
+the available user-message context. Earlier source identities are re-fetched
+through the currently selected public adapters and
 checked against current composition filters. Up to six identities can be
 refreshed within the shared 30-second repository budget; stale report values
 are never substituted on failure. These freshly validated rows join the new

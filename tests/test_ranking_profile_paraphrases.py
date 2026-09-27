@@ -9,7 +9,9 @@ import pytest
 from labcat.ranking_profiles import (
     PRESETS,
     RankingProfileStore,
+    neutral_profile,
     normalize_importance,
+    prompt_preferences,
 )
 from labcat.workspace import WorkspaceStore
 
@@ -201,8 +203,13 @@ def test_excluded_class_hints_do_not_override_requested_scope(
     ],
 )
 def test_cross_family_comparisons_keep_the_explicit_ambiguity(profiles, prompt):
+    profiles.activate("preset-oxide-high-k")
     selected, decision = profiles.select("infer", prompt)
-    assert selected == profiles.active()
+    expected, adjustments = prompt_preferences(neutral_profile(), prompt)
+    assert selected == expected
+    if adjustments:
+        assert decision["preference_adjustments"] == adjustments
+    assert profiles.active()["id"] == "preset-oxide-high-k"
     assert decision["mode"] == "fallback"
 
 

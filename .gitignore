@@ -9,6 +9,9 @@ LOCAL_BRIEF.md
 !.env.example
 config/site.local.toml
 compose.local.yaml
+.labcat-launch-mode
+.labcat-project-directory
+.labcat-install-source
 
 # Python and build artifacts.
 .venv/

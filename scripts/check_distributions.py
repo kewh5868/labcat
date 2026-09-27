@@ -25,6 +25,8 @@ SECRET_CHECK_SPEC.loader.exec_module(secret_check)
 METADATA_LIMIT = 1024 * 1024
 REQUIRED_SOURCE_SUPPORT = (
     "scripts/check_secrets.py",
+    "scripts/install_desktop.sh",
+    "scripts/install_desktop.ps1",
     "scripts/materials_prompt_matrix.json",
     "scripts/holdout_prompts.json",
     "frontend/tests/reportLayoutChecks.js",
@@ -46,6 +48,9 @@ def check_names(names: list[str]) -> None:
         "runs",
         "site.local.toml",
         "compose.local.yaml",
+        ".labcat-launch-mode",
+        ".labcat-project-directory",
+        ".labcat-install-source",
     }
     seen = set()
     for name in names:

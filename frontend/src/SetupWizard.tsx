@@ -8,7 +8,7 @@ import {
 } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { LabcatMark } from "./Brand";
+import { brandTagline, LabcatMark } from "./Brand";
 import { ConnectionsPanel, useConnections } from "./Connections";
 import type { ConnectionFormState } from "./Connections";
 import type { ConnectionStatus, ConnectionTest } from "./connectionsApi";
@@ -400,7 +400,7 @@ export default function SetupWizard({
             <LabcatMark />
             <span className="setup-brand-copy">
               <strong>LABCAT</strong>
-              <small>Curious. Clever. Companionable.</small>
+              <small>{brandTagline}</small>
             </span>
           </span>
           <button type="button" className="text-action" onClick={onClose}>

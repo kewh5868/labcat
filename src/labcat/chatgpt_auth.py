@@ -24,6 +24,8 @@ import sys
 import tempfile
 import threading
 import time
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
@@ -39,6 +41,30 @@ AUTH_DOCUMENT_LIMIT = 24_000
 MAX_PROTOCOL_LINE = 256_000
 FLOW_TTL_SECONDS = 600
 RPC_TIMEOUT_SECONDS = 25
+METADATA_TIMEOUT_SECONDS = 20
+_metadata_deadline = ContextVar("chatgpt_metadata_deadline", default=None)
+
+
+def _metadata_remaining():
+    deadline = _metadata_deadline.get()
+    remaining = RPC_TIMEOUT_SECONDS if deadline is None else deadline - time.monotonic()
+    if remaining <= 0:
+        _fail()
+    return remaining
+
+
+@contextmanager
+def _metadata_budget(deadline=None):
+    end = time.monotonic() + METADATA_TIMEOUT_SECONDS
+    if deadline is not None:
+        end = min(end, deadline)
+    token = _metadata_deadline.set(end)
+    try:
+        yield
+    finally:
+        _metadata_deadline.reset(token)
+
+
 VERIFICATION_URL = "https://auth.openai.com/codex/device"
 _SAFE_ERROR = "ChatGPT connection could not be completed. Start sign-in again."
 _ALLOWED_REQUESTS = frozenset(
@@ -304,7 +330,7 @@ class _CodexSession:
                 env=environment,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
-                timeout=5,
+                timeout=min(5, _metadata_remaining()),
                 check=False,
             )
             if (
@@ -390,8 +416,10 @@ class _CodexSession:
         with self._lock:
             self._sequence += 1
             request_id = self._sequence
+            deadline = time.monotonic() + min(
+                RPC_TIMEOUT_SECONDS, _metadata_remaining()
+            )
             self._send({"id": request_id, "method": method, "params": params or {}})
-            deadline = time.monotonic() + RPC_TIMEOUT_SECONDS
             while time.monotonic() < deadline:
                 try:
                     message = self._queue.get(timeout=0.1)
@@ -703,7 +731,13 @@ class ChatGPTAuthBroker:
                 self._timer = None
             return validate_auth_document(credentials)
 
-    def metadata(self, auth_document: object) -> tuple[dict, dict]:
+    def metadata(
+        self, auth_document: object, *, include_usage=True, deadline=None
+    ) -> tuple[dict, dict]:
+        with _metadata_budget(deadline):
+            return self._metadata(auth_document, include_usage=include_usage)
+
+    def _metadata(self, auth_document, *, include_usage):
         auth = validate_auth_document(auth_document)
         public = {
             "models": [],
@@ -715,7 +749,9 @@ class ChatGPTAuthBroker:
         }
         # Serialize refreshes for this broker; callers must also serialize
         # applying returned credentials to the associated account vault slot.
-        with self._lock:
+        if not self._lock.acquire(timeout=_metadata_remaining()):
+            _fail()
+        try:
             session = None
             try:
                 session = self._session_factory(self.binary, self.temporary_root, auth)
@@ -789,25 +825,26 @@ class ChatGPTAuthBroker:
                     public["models"] = models
                 except ChatGPTAuthError:
                     public["notices"].append("The account model list is unavailable.")
-                try:
-                    public["rate_limits"] = _rate_limits(
-                        session.request("account/rateLimits/read"),
-                        auth["tokens"]["account_id"],
-                    )
-                except ChatGPTAuthError:
-                    public["notices"].append(
-                        "Account usage limits are unavailable; "
-                        "no remaining-token balance is inferred."
-                    )
-                try:
-                    public["token_activity"] = _token_activity(
-                        session.request("account/usage/read")
-                    )
-                except ChatGPTAuthError:
-                    public["notices"].append(
-                        "Account token activity is unavailable "
-                        "for this connection helper."
-                    )
+                if include_usage:
+                    try:
+                        public["rate_limits"] = _rate_limits(
+                            session.request("account/rateLimits/read"),
+                            auth["tokens"]["account_id"],
+                        )
+                    except ChatGPTAuthError:
+                        public["notices"].append(
+                            "Account usage limits are unavailable; "
+                            "no remaining-token balance is inferred."
+                        )
+                    try:
+                        public["token_activity"] = _token_activity(
+                            session.request("account/usage/read")
+                        )
+                    except ChatGPTAuthError:
+                        public["notices"].append(
+                            "Account token activity is unavailable "
+                            "for this connection helper."
+                        )
                 # Read even when metadata is partially unavailable: refresh
                 # token rotation may already have succeeded inside Codex.
                 refreshed = session.credentials()
@@ -822,6 +859,9 @@ class ChatGPTAuthBroker:
                         session.close()
                     except Exception:
                         raise ChatGPTAuthError(_SAFE_ERROR) from None
+
+        finally:
+            self._lock.release()
 
     def close(self):
         with self._lock:

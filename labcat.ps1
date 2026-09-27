@@ -6,6 +6,8 @@ param(
     [string]$Action = 'start',
     [switch]$NoOpen,
     [switch]$Browser,
+    [switch]$Desktop,
+    [switch]$Choose,
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$CliArguments = @()
 )
@@ -13,9 +15,22 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $ComposeFile = Join-Path $PSScriptRoot 'compose.yaml'
+$ProjectDirectoryFile = Join-Path $PSScriptRoot '.labcat-project-directory'
+$ProjectDirectoryArguments = @()
+if (Test-Path -LiteralPath $ProjectDirectoryFile) {
+    $marker = Get-Item -Force -LiteralPath $ProjectDirectoryFile
+    if ($marker.PSIsContainer -or ($marker.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw 'The saved deployment location must be a regular file. Reinstall the desktop application.'
+    }
+    $projectDirectory = [IO.File]::ReadAllText($ProjectDirectoryFile).TrimEnd([char]13, [char]10)
+    if ($projectDirectory -match '[\r\n]' -or -not [IO.Path]::IsPathRooted($projectDirectory) -or -not (Test-Path -LiteralPath $projectDirectory -PathType Container)) {
+        throw 'The original deployment folder is unavailable. Restore it or reinstall from its new location.'
+    }
+    $ProjectDirectoryArguments = @('--project-directory', $projectDirectory)
+}
 $ComposeArguments = @(
     'compose', '--project-name', 'labcat', '--file', $ComposeFile
-)
+) + $ProjectDirectoryArguments
 # Preserve local deployment volumes and credential mounts on every lifecycle
 # command, including when the bundled desktop app reopens this launcher.
 $LocalComposeFile = Join-Path $PSScriptRoot 'compose.local.yaml'
@@ -99,34 +114,126 @@ function Get-LabcatUrl {
     return "http://127.0.0.1:$portNumber/"
 }
 
-function Open-LabcatWindow {
-    param([string]$Url)
+function Get-LabcatLaunchMode {
+    $modeFile = Join-Path $PSScriptRoot '.labcat-launch-mode'
+    if ($Desktop) { return 'desktop' }
+    if ($Browser) { return 'browser' }
+    if (-not $Choose -and (Test-Path -LiteralPath $modeFile -PathType Leaf)) {
+        $item = Get-Item -Force -LiteralPath $modeFile
+        if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+            throw 'The launch preference must be a regular file. Remove it and choose again.'
+        }
+        $saved = [IO.File]::ReadAllText($modeFile).Trim()
+        if ($saved -ceq 'desktop' -or $saved -ceq 'browser') { return $saved }
+        throw 'The saved launch preference is invalid. Run labcat.cmd start -Choose.'
+    }
+    if ([Console]::IsInputRedirected -or [Environment]::GetCommandLineArgs() -contains '-NonInteractive') {
+        throw 'Choose a launch mode: labcat.cmd start -Desktop or labcat.cmd start -Browser. Use -NoOpen for a headless start.'
+    }
+    Write-Host 'How would you like to use Labcat?'
+    Write-Host '  1. Install and open the desktop application (default)'
+    Write-Host '  2. Open in your browser'
+    Write-Host 'Desktop uses Docker and, when building from source, needs the documented native build tools.'
+    $choice = Read-Host 'Choose 1 or 2 [1]'
+    switch ($choice.Trim()) {
+        '' { return 'desktop' }
+        '1' { return 'desktop' }
+        '2' { return 'browser' }
+        default { throw 'No mode was selected. Run labcat.cmd start -Choose and enter 1 or 2.' }
+    }
+}
 
-    $desktopExecutable = Join-Path $PSScriptRoot 'desktop-bin\Labcat.exe'
-    if (-not $Browser -and (Test-Path -LiteralPath $desktopExecutable -PathType Leaf)) {
+function Test-LabcatInstalledShell {
+    param([string]$Destination)
+    $sourceMarker = Join-Path $Destination '.labcat-install-source'
+    if (-not (Test-Path -LiteralPath $sourceMarker -PathType Leaf)) { return $false }
+    $marker = Get-Item -Force -LiteralPath $sourceMarker
+    if ($marker.Attributes -band [IO.FileAttributes]::ReparsePoint) { return $false }
+    if ([IO.File]::ReadAllText($sourceMarker).TrimEnd([char]13, [char]10) -cne [IO.Path]::GetFullPath($PSScriptRoot)) { return $false }
+    foreach ($name in @('labcat.ps1', 'labcat.cmd', 'compose.yaml', 'compose.local.yaml')) {
+        $source = Join-Path $PSScriptRoot $name
+        $copy = Join-Path $Destination ('launcher\' + $name)
+        $sourceExists = Test-Path -LiteralPath $source -PathType Leaf
+        if ($sourceExists -ne (Test-Path -LiteralPath $copy -PathType Leaf)) { return $false }
+        if ($sourceExists) {
+            if ((Get-Item -Force -LiteralPath $copy).Attributes -band [IO.FileAttributes]::ReparsePoint) { return $false }
+            if ((Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash -cne (Get-FileHash -LiteralPath $copy -Algorithm SHA256).Hash) { return $false }
+        }
+    }
+    $savedProject = Join-Path $Destination 'launcher\.labcat-project-directory'
+    if ((Test-Path -LiteralPath $LocalComposeFile -PathType Leaf) -or (Test-Path -LiteralPath $ProjectDirectoryFile -PathType Leaf)) {
+        if (-not (Test-Path -LiteralPath $savedProject -PathType Leaf)) { return $false }
+        $expectedProject = [IO.Path]::GetFullPath($PSScriptRoot)
+        if (Test-Path -LiteralPath $ProjectDirectoryFile -PathType Leaf) {
+            $expectedProject = [IO.File]::ReadAllText($ProjectDirectoryFile).TrimEnd([char]13, [char]10)
+        }
+        if ([IO.File]::ReadAllText($savedProject).TrimEnd([char]13, [char]10) -cne $expectedProject) { return $false }
+    }
+    elseif (Test-Path -LiteralPath $savedProject) { return $false }
+    return $true
+}
+
+function Get-LabcatDesktopExecutable {
+    if ([string]::IsNullOrEmpty($env:LOCALAPPDATA) -or -not [IO.Path]::IsPathRooted($env:LOCALAPPDATA)) {
+        throw 'The per-user application directory is unavailable. Check LOCALAPPDATA or choose -Browser.'
+    }
+    $destination = Join-Path $env:LOCALAPPDATA 'Programs\Labcat'
+    $executable = Join-Path $destination 'Labcat.exe'
+    if ((Test-Path -LiteralPath $executable -PathType Leaf) -and (Test-LabcatInstalledShell $destination)) { return $executable }
+    $installer = Join-Path $PSScriptRoot 'scripts\install_desktop.ps1'
+    if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) {
+        throw 'The desktop installer is missing. Extract the complete download or use a complete source checkout; choose -Browser for browser use.'
+    }
+    & $installer -SourceRoot $PSScriptRoot -Destination $destination | Out-Host
+    if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
+        throw 'Desktop installation did not produce Labcat.exe. Check the installer error or choose -Browser.'
+    }
+    return $executable
+}
+
+function Open-LabcatWindow {
+    param([string]$Url, [string]$Mode, [string]$DesktopExecutable)
+
+    if ($Mode -ceq 'desktop') {
         try {
-            Start-Process -FilePath $desktopExecutable -ArgumentList @('--url', $Url) | Out-Null
+            Start-Process -FilePath $DesktopExecutable -ArgumentList @('--url', $Url) | Out-Null
             return
         }
         catch {
-            Write-Warning 'The desktop application could not be opened. Opening your default browser instead.'
+            throw 'The desktop application could not be opened. Check its installation and WebView2 runtime, or explicitly choose -Browser.'
         }
     }
     try {
         Start-Process -FilePath $Url | Out-Null
     }
     catch {
-        Write-Warning "The app is running, but a browser could not be opened. Open $Url manually."
+        throw "The app is running, but a browser could not be opened. Open $Url manually."
     }
+}
+
+function Save-LabcatLaunchMode {
+    param([string]$Mode)
+    $modeFile = Join-Path $PSScriptRoot '.labcat-launch-mode'
+    if (Test-Path -LiteralPath $modeFile) {
+        $item = Get-Item -Force -LiteralPath $modeFile
+        if ($item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            throw 'Cannot save the launch preference over a directory or link.'
+        }
+    }
+    [IO.File]::WriteAllText($modeFile, "$Mode`n", [Text.UTF8Encoding]::new($false))
 }
 
 try {
     if ($Action -eq 'help') {
-        Write-Host 'Usage: labcat.cmd [start|stop|status|logs] [-Browser|-NoOpen]'
+        Write-Host 'Usage: labcat.cmd [start|stop|status|logs] [-Desktop|-Browser|-Choose|-NoOpen]'
+        Write-Host 'First start offers desktop installation or browser use; the successful choice is remembered.'
         Write-Host '       labcat.cmd cli [--offline] [application arguments, e.g. status --format json]'
         Write-Host 'CLI research uses the running application account. Complete model setup first.'
         Write-Host '--offline disables container networking; authenticated research requires network access.'
         exit 0
+    }
+    if (([int]$Desktop.IsPresent + [int]$Browser.IsPresent + [int]$Choose.IsPresent) -gt 1) {
+        throw 'Choose only one of -Desktop, -Browser or -Choose.'
     }
     if ($Action -ne 'cli' -and $CliArguments.Count -gt 0) {
         throw 'Extra arguments are supported only after cli. Use start, stop, status, logs, or cli followed by command-line arguments.'
@@ -216,12 +323,19 @@ try {
             }
         }
         'start' {
+            $launchMode = $null
+            $desktopExecutable = $null
+            if (-not $NoOpen) {
+                $launchMode = Get-LabcatLaunchMode
+                if ($launchMode -ceq 'desktop') { $desktopExecutable = Get-LabcatDesktopExecutable }
+            }
             Start-LabcatService
             $appUrl = Get-LabcatUrl
             Write-Host "Labcat is running at $appUrl"
             Write-Host 'Run this launcher again to reopen it. Use labcat.cmd stop to stop it.'
             if (-not $NoOpen) {
-                Open-LabcatWindow $appUrl
+                Open-LabcatWindow $appUrl $launchMode $desktopExecutable
+                Save-LabcatLaunchMode $launchMode
             }
         }
         'stop' {

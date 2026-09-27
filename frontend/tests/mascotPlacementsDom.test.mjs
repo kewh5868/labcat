@@ -157,6 +157,9 @@ async function harness(t) {
     onOpenSettings: noOp,
     onOpenConnections: noOp,
     onRequireSetup: noOp,
+    rankingProfileId: "infer",
+    onRankingProfileChange: noOp,
+    onRestoreRankingProfile: noOp,
   };
   const chatProps = {
     ...common,
@@ -167,7 +170,6 @@ async function harness(t) {
     initialResearchError: "",
     initialCompletionKey: "",
     onCompletionConsumed: noOp,
-    initialRankingProfileId: "infer",
     onChanged: noOp,
     onMoveRequested: noOp,
     sidebarMoving: false,
@@ -417,4 +419,45 @@ test("navigation consumes a first-chat completion token once without modifying s
   });
   assert.equal(consumed, 1);
   assert.deepEqual(requests, ["GET"]);
+});
+
+test("leaving a draft during chat creation still transfers its explicit ranking choice", async (t) => {
+  const h = await harness(t);
+  let finishCreation;
+  const created = [],
+    opens = [],
+    requests = [];
+  t.mock.method(globalThis, "fetch", async (path, options) => {
+    if (path === "/api/research-runs") return Response.json({ runs: [] });
+    if (path === "/api/chats") {
+      await new Promise((resolve) => {
+        finishCreation = resolve;
+      });
+      return Response.json(chat);
+    }
+    if (path.endsWith("/messages")) {
+      requests.push(JSON.parse(options.body));
+      return Response.json(empty());
+    }
+    throw new Error(`Unexpected request ${path}`);
+  });
+  await h.render(h.DraftChat, {
+    ...h.draftProps,
+    rankingProfileId: "profile-manual",
+    onCreated: (...args) => created.push(args),
+    onOpen: (...args) => opens.push(args),
+  });
+  await h.submit();
+  await h.render(() => null, {});
+  await h.act(async () => finishCreation());
+  assert.deepEqual(
+    created.map(([saved, choice]) => [saved.id, choice]),
+    [[chat.id, "profile-manual"]],
+  );
+  assert.equal(requests[0].ranking_profile_id, "profile-manual");
+  assert.equal(
+    opens.length,
+    0,
+    "background creation preserves the user's new page",
+  );
 });

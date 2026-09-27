@@ -7,10 +7,12 @@ vault.
 """
 
 import base64
+import hashlib
 import json
 import math
 import os
 import threading
+import time
 from copy import deepcopy
 from datetime import UTC, datetime
 from pathlib import Path
@@ -103,6 +105,7 @@ class AgentConnections:
         self._claude_sessions = {}
         self._claude_revisions = {}
         self._claude_locks = {}
+        self._model_metadata = {}
 
     @property
     def uses_goose(self):
@@ -245,6 +248,7 @@ class AgentConnections:
         # Called while the manager lock is held; avoid an inverted lock order.
         # Broker cancellation removes temporary credentials even if a poll raced.
         self._auth_epoch += 1
+        self._model_metadata.clear()
         if self._auth:
             for identifier in tuple(self._flows):
                 self._auth.cancel(identifier)
@@ -322,14 +326,59 @@ class AgentConnections:
                 )
             self.manager.vault.update({slot: _pack(document)}, [], storage)
 
-    def metadata(self, identifier):
-        with self._auth_lock:
-            self.require_account_available(identifier)
-            document, old, storage = self._credential_snapshot(identifier)
-            revision = self._credential_revision(identifier)
-            public, refreshed = self._broker().metadata(document)
-            self._save_refreshed(identifier, old, refreshed, storage, revision=revision)
+    def metadata(self, identifier, *, include_usage=True):
+        from labcat.chatgpt_auth import METADATA_TIMEOUT_SECONDS, goose_token_cache
+
+        deadline = time.monotonic() + METADATA_TIMEOUT_SECONDS
+        if not self._auth_lock.acquire(timeout=METADATA_TIMEOUT_SECONDS):
+            raise ConnectionBusy("A model connection operation is already in progress.")
+        try:
+            with self.manager._lock:
+                self.require_account_available(identifier)
+                document, old, storage = self._credential_snapshot(identifier)
+                revision = self._credential_revision(identifier)
+                fingerprint = hashlib.sha256(old.encode()).digest()
+                cached = self._model_metadata.get(identifier)
+                if (
+                    not include_usage
+                    and cached is not None
+                    and cached["revision"] == revision
+                    and cached["storage"] == storage
+                    and cached["fingerprint"] == fingerprint
+                    and time.monotonic() < cached["expires"]
+                    and time.time() < cached["token_expiration"]
+                ):
+                    return deepcopy(cached["public"])
+                # A new provider check supersedes older cached discovery even
+                # if its response is unavailable or the account was revoked.
+                self._model_metadata.pop(identifier, None)
+            public, refreshed = self._broker().metadata(
+                document, include_usage=include_usage, deadline=deadline
+            )
+            with self.manager._lock:
+                self._save_refreshed(
+                    identifier, old, refreshed, storage, revision=revision
+                )
+                if (
+                    not include_usage
+                    and public.get("account_ready") is True
+                    and public.get("models")
+                ):
+                    self._model_metadata[identifier] = {
+                        "revision": revision,
+                        "storage": storage,
+                        "fingerprint": hashlib.sha256(
+                            _pack(refreshed).encode()
+                        ).digest(),
+                        "expires": time.monotonic() + 30,
+                        "token_expiration": datetime.fromisoformat(
+                            goose_token_cache(refreshed)["expires_at"]
+                        ).timestamp(),
+                        "public": deepcopy(public),
+                    }
             return public
+        finally:
+            self._auth_lock.release()
 
     def claude_status(self, identifier, *, logout=False):
         """Only native sign-in readiness crosses the worker boundary."""
@@ -423,7 +472,7 @@ class AgentConnections:
     def models(self, identifier=None):
         if identifier is None:
             identifier = self.manager.status()["active_account_id"]
-        data = self.metadata(identifier)
+        data = self.metadata(identifier, include_usage=False)
         if data.get("account_ready") is not True:
             raise ConnectionError(
                 "ChatGPT sign-in could not be verified. Reconnect this account."

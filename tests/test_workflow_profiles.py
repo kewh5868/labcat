@@ -183,7 +183,7 @@ def test_per_message_profile_selection_is_snapshotted_without_global_activation(
     with TestClient(create_app(workspace_path=path), base_url="http://localhost") as c:
         initial = c.get("/api/ranking-profiles").json()
         active_id = initial["active_profile_id"]
-        assert active_id == "preset-oxide-high-k"
+        assert active_id == "preset-neutral-exploration"
         profile = c.post(
             "/api/ranking-profiles",
             json={
@@ -215,10 +215,13 @@ def test_per_message_profile_selection_is_snapshotted_without_global_activation(
         )
         assert inferred.status_code == 201, inferred.text
         second = inferred.json()["reports"][-1]
-        assert second["result"]["execution"]["ranking_selection"]["mode"] == "continued"
-        # Infer/default continues this chat's saved preference snapshot without
-        # changing the workspace default. Explicit selection starts a new scheme.
-        assert second["result"]["execution"]["ranking_profile"]["id"] == profile["id"]
+        assert second["result"]["execution"]["ranking_selection"]["mode"] == "inferred"
+        # Switching back to Infer re-evaluates this question; it does not freeze
+        # the previously selected manual profile or change the workspace default.
+        assert (
+            second["result"]["execution"]["ranking_profile"]["id"]
+            == "preset-oxide-thin-film"
+        )
         assert c.get("/api/ranking-profiles").json()["active_profile_id"] == active_id
         edited = {
             key: profile[key] for key in ("name", "material_class", "application")

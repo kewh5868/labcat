@@ -110,6 +110,10 @@ def test_bundle_does_not_collect_private_or_unlisted_files(bundle_inputs):
     secret = b"PRIVATE_VALUE_MUST_NOT_BE_BUNDLED"
     for name in (
         ".env",
+        ".labcat-launch-mode",
+        ".labcat-project-directory",
+        ".labcat-install-source",
+        "desktop/target/.labcat-project-directory",
         "LOCAL_BRIEF.md",
         ".aws/credentials",
         "config/site.local.toml",
@@ -125,10 +129,14 @@ def test_bundle_does_not_collect_private_or_unlisted_files(bundle_inputs):
             assert secret not in bundle.read(name)
 
 
-def test_missing_required_launcher_is_not_silently_omitted(bundle_inputs):
+@pytest.mark.parametrize(
+    "missing",
+    ["labcat.cmd", "scripts/install_desktop.sh", "scripts/install_desktop.ps1"],
+)
+def test_missing_required_launcher_is_not_silently_omitted(bundle_inputs, missing):
     root, archive = bundle_inputs
-    (root / "labcat.cmd").unlink()
-    with pytest.raises(bundle_builder.BundleError, match="labcat.cmd"):
+    (root / missing).unlink()
+    with pytest.raises(bundle_builder.BundleError, match=missing):
         bundle_builder.build_install_bundle(archive, project_root=root)
 
 
@@ -328,10 +336,19 @@ def test_native_bundle_still_verifies_image_checksum(bundle_inputs):
     assert not list(archive.parent.glob("*.zip"))
 
 
-def test_installed_private_deployment_is_not_published(bundle_inputs):
+@pytest.mark.parametrize(
+    "private_name",
+    [
+        "compose.local.yaml",
+        ".labcat-launch-mode",
+        ".labcat-project-directory",
+        ".labcat-install-source",
+    ],
+)
+def test_installed_private_deployment_is_not_published(bundle_inputs, private_name):
     root, archive = bundle_inputs
     desktop_app, _ = make_desktop_app(root, "macos")
-    override = desktop_app / "Contents/Resources/launcher/compose.local.yaml"
+    override = desktop_app / "Contents/Resources/launcher" / private_name
     override.parent.mkdir()
     override.write_text("PRIVATE_DEPLOYMENT_ONLY", encoding="utf-8")
     with pytest.raises(bundle_builder.BundleError, match="private deployment"):

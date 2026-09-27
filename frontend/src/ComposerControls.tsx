@@ -508,9 +508,9 @@ export default function ComposerControls({
             {picker === "ranking" ? (
               <>
                 <p className="composer-picker-help">
-                  Match the question to saved profiles; use the workspace
-                  default when there is no clear match. Or choose a profile
-                  below.
+                  Infer a profile and priorities from your question, or choose a
+                  saved profile. A selected profile stays in use for this chat
+                  until you change it.
                 </p>
                 <button
                   type="button"
@@ -521,7 +521,7 @@ export default function ComposerControls({
                 >
                   <span>
                     <strong>Infer from prompt</strong>
-                    <small>Automatic · default</small>
+                    <small>Automatic</small>
                   </span>
                   <span aria-hidden="true">
                     {rankingProfileId === "infer" ? "✓" : ""}

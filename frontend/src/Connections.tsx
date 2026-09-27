@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import {
+  ChatGPTSetupError,
   connectionError,
   connectionsApi,
   connectableProviders,
@@ -97,7 +98,10 @@ export function ConnectionsProvider({ children }: { children: ReactNode }) {
       if (mounted.current) setStatus(next);
       return next;
     } catch (error) {
-      if (mounted.current) setError(connectionError(error));
+      // A provider-specific preflight error belongs in its sign-in card. It
+      // must not prevent choosing another provider with unchanged saved state.
+      if (mounted.current && !(error instanceof ChatGPTSetupError))
+        setError(connectionError(error));
       throw error;
     } finally {
       lock.current = false;
@@ -1260,8 +1264,8 @@ function ConnectionForm({
                   </p>
                   {catalogError && (
                     <p className="connection-error-text" role="alert">
-                      The model list could not be loaded. Check the connection
-                      and use Refresh models to try again.
+                      {catalogError} Your saved model is unchanged. Use Refresh
+                      models to try again.
                     </p>
                   )}
                   {profile.provider !== "claude_code" && (

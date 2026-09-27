@@ -30,6 +30,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from labcat.agent_rejections import (
+    INTAKE_REPAIR_GUIDANCE,
     AgentToolError,
     WorkerRejectionError,
     parent_rejection_reply,
@@ -121,7 +122,12 @@ def worker_rejection_reply(name, reason):
     ):
         return {"status": "rejected"}
     reply = {"status": "rejected", "reason_code": reason}
-    if name == "evaluate_candidate_fit":
+    if name == "assess_research_intent":
+        reply.update(
+            next_step="assess_research_intent",
+            correction=INTAKE_REPAIR_GUIDANCE,
+        )
+    elif name == "evaluate_candidate_fit":
         reply.update(
             next_step="evaluate_candidate_fit",
             correction=(
@@ -163,7 +169,19 @@ SYSTEM = (
     "optional screening details from a reasonable broad search. "
     "Harmful or illicit materials uses, including manufacturing "
     "or improving weapons, are unsafe. "
-    "For materials_research, include intent. Identify the material the user is "
+    "For materials_research, include intent when it can be expressed through the "
+    "catalog. Use application custom for a stated use outside that catalog, and "
+    "unknown when the use is unstated. Unmapped physical properties, "
+    "application-specific selectivity and competing-reaction constraints remain "
+    "literal request/role context; never invent "
+    "catalog IDs or substitute proxy attributes. On argument repair, preserve "
+    "the original intent/safety decision, including unsafe or uncertain intent. "
+    "If a full interpretation cannot be expressed, send only the corresponding "
+    "supported decision without intent; do not change the decision to obtain "
+    "research access. A materials_research decision can proceed only when the "
+    "parent's original local scope check accepted the request; it cannot override "
+    "a refusal or unresolved scope. Read the returned intake before research. "
+    "Identify the material the user is "
     "seeking using the catalog class and identity scope. Quote exact target_spans "
     "from this request; keep application, environment and processing spans in "
     "their separate fields. A service environment is not the material's chemical "

@@ -21,6 +21,7 @@ include docs/evaluation-results.json
 recursive-include config *.toml
 recursive-include requirements *.txt *.lock
 recursive-include scripts *.py
+include scripts/install_desktop.sh scripts/install_desktop.ps1
 include scripts/materials_prompt_matrix.json scripts/holdout_prompts.json
 include requirements/build.in
 include Dockerfile compose.yaml .dockerignore
@@ -51,3 +52,5 @@ prune .secrets
 prune .ssh
 prune .aws
 prune .codex
+
+global-exclude .labcat-launch-mode .labcat-project-directory .labcat-install-source

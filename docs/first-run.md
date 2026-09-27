@@ -1,8 +1,10 @@
 # First run: from installation to your first report
 
 Follow this walkthrough on the computer where you want to run Labcat. It uses
-Docker and your web browser; you do not need Python, Node, Rust, or a separate
-Labcat desktop build. The same in-app steps apply to the native desktop window.
+Docker with either a native desktop window or your browser. The first launch
+asks which you prefer; **Enter selects Desktop**. Desktop builds from source
+require Node 24, Rust/Cargo and OS build tools. Browser mode needs none of those
+host tools. The same in-app steps apply to both interfaces.
 
 **Have ready:** an internet connection and a supported ChatGPT account, an
 eligible Claude Code account, or an API key from a supported model provider.
@@ -35,6 +37,10 @@ docker compose version
 `docker info` should include information about a running Docker server. If a
 command is not found, finish installing that tool and reopen your terminal. If
 Docker cannot connect to its engine, start Docker and try again.
+
+**For Desktop:** install the [desktop prerequisites](installation.md#desktop-prerequisites)
+before continuing. Docker builds the backend only; it does not provide the host's
+native compiler or webview. You can choose Browser without installing native tools.
 
 **Where to type:**
 Terminal commands go in Terminal or PowerShell. Research questions go in
@@ -69,18 +75,28 @@ From the same `labcat` folder, run the command for your operating system:
 === "Mac / Linux"
 
     ```sh
-    ./labcat.sh --browser
+    ./labcat.sh
     ```
 
 === "Windows PowerShell"
 
     ```powershell
-    .\labcat.cmd -Browser
+    .\labcat.cmd
     ```
 
-The launcher starts Labcat and opens a browser. If it does not open a window,
-copy the local URL printed by the launcher into your browser's address bar.
-Use the printed port; it can differ between installations.
+Choose **1 — Desktop**, or press **Enter**, to install and open the native app.
+Choose **2 — Browser** to open your default browser. Desktop uses a supplied native
+app when present, otherwise compiles this checkout with the prerequisites above.
+The launcher remembers your choice. Both interfaces use the same Docker workspace.
+
+To choose again later, run `./labcat.sh --choose` or `.\labcat.cmd -Choose`.
+To select Browser directly, use `./labcat.sh --browser` or `.\labcat.cmd -Browser`;
+for Desktop, use `--desktop` or `-Desktop`. If Browser mode does not open a window,
+copy the launcher's local URL into your browser. Use its printed port.
+
+After installation, Labcat is available in your user Applications folder on Mac,
+the Start menu on Windows, or the application menu on Linux. Start Docker before
+opening it. A desktop build failure does not silently change your selected mode.
 
 **You should see:** the Labcat workspace and a setup dialog headed
 **Connect your research model.**, with **Model**, **Public sources** and **Ready**
@@ -277,15 +293,20 @@ project form. You can move an existing chat using its three-dot menu and
 2. Open the format dropdown at the right of that row. Choose **PDF** for a
    shareable document, **Word (.docx)** for an editable document, **Plain text**
    for text, or **JSON** for structured data.
-3. Click **Download**. Open the downloaded file from your browser's downloads.
+3. Click **Download**. Open the file from your browser's downloads or the OS
+   Downloads folder when using the desktop app.
    Structure CIF files are downloaded separately from their structure panels.
 
 The checkboxes control the download, not which report tabs you can view. Changing
 **Report Format** in the sidebar changes presentation, not evidence or rankings.
 
+To save the whole conversation instead, use **Chat PDF** near the top of the
+chat. It includes all saved questions, replies and report revisions with their
+sources, including earlier questions that are collapsed on screen.
+
 ## 10. Stop and come back later
 
-Closing the browser leaves Labcat running. To stop it, return to a terminal in
+Closing the window leaves Labcat running. To stop it, return to a terminal in
 your `labcat` folder and run:
 
 === "Mac / Linux"

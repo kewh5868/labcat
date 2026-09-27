@@ -576,11 +576,45 @@
 }
 .conversation-header {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 15px;
   align-items: center;
   padding: 22px 26px 19px;
   border-bottom: 1px solid #e9eee2;
+}
+.conversation-header .mascot-conversation-meta {
+  flex-shrink: 0;
+  min-width: 0;
+  max-width: 100%;
+}
+.conversation-history-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px 12px;
+  min-width: 0;
+}
+.chat-history-download {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0;
+  color: #446c53;
+  font-size: 12px;
+  line-height: 1.4;
+  text-decoration: none;
+  text-underline-offset: 3px;
+  white-space: nowrap;
+}
+.chat-history-download:hover {
+  text-decoration: underline;
+}
+.chat-history-download:focus-visible {
+  outline: 2px solid #446c53;
+  outline-offset: 3px;
+  border-radius: 2px;
 }
 .conversation-header .small-label {
   font-size: 8px;

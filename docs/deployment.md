@@ -59,25 +59,35 @@ docker load --input labcat-0.1.0.dev0-linux-amd64.tar
 Substitute the arm64 archive on an ARM host. When using the source checkout,
 prefix the archive path with `dist/`. Then start the UI:
 
-| Host    | Launch                                                      | Stop               | Find the running UI address |
-| ------- | ----------------------------------------------------------- | ------------------ | --------------------------- |
-| Mac     | Open `Labcat.app`, `Start Labcat.command`, or `./labcat.sh` | `./labcat.sh stop` | `./labcat.sh status`        |
-| Windows | Open `Labcat.exe`, or double-click `labcat.cmd`             | `labcat.cmd stop`  | `labcat.cmd status`         |
-| Linux   | `./labcat.sh`                                               | `./labcat.sh stop` | `./labcat.sh status`        |
+| Host               | First launch                            | Stop                | Find the running UI address |
+| ------------------ | --------------------------------------- | ------------------- | --------------------------- |
+| Mac                | `./labcat.sh` or `Start Labcat.command` | `./labcat.sh stop`  | `./labcat.sh status`        |
+| Windows PowerShell | `.\labcat.cmd`                          | `.\labcat.cmd stop` | `.\labcat.cmd status`       |
+| Linux              | `./labcat.sh`                           | `./labcat.sh stop`  | `./labcat.sh status`        |
 
-**No installed Chrome browser is required.** A native install bundle contains
-the standalone application under `desktop-bin/`. It uses the operating system's
-webview: WKWebView on macOS, WebView2 Runtime on Windows, and WebKitGTK on Linux.
-The webview is an OS/runtime component, not a requirement to install the Edge or
-Chrome browser. See [Tauri's webview requirements](https://v2.tauri.app/reference/webview-versions/).
-Linux requires WebKitGTK 4.1; Windows may need a WebView2 Runtime installation.
-These desktop prerequisites do not apply to command-line or browser mode.
+First interactive launch offers **Desktop (1, default Enter)** or **Browser (2)**.
+The installation remembers the choice. `--choose` on Mac/Linux or `-Choose` on
+Windows prompts again; `--desktop` / `-Desktop` and `--browser` / `-Browser` select
+and remember a mode directly. A first noninteractive launch requires an explicit
+mode unless a choice was already saved. Lifecycle, CLI and no-window commands
+remain noninteractive.
 
-Opening the native application directly starts/reuses the backend and displays
-startup progress or an error in its own window. The small script launchers prefer
-that native shell when bundled. Portable image-only bundles fall back to the
-default browser. The Mac `.command` entry point shows progress in Terminal.
-No Python, Node, Git or compiler is required to run a prebuilt install bundle.
+Desktop setup installs a supplied matching native app from `desktop-bin/`, or
+builds from a source checkout using Node 24, Rust/Cargo and OS build tools.
+Image-only bundles contain no native source or executable: choose Browser or
+obtain source/a matching native bundle. The repository does not provide a public
+prebuilt desktop download. Native install destinations and build prerequisites
+are listed in the [installation guide](installation.md#desktop-prerequisites).
+Desktop build failures remain errors until you fix them or explicitly choose Browser.
+
+**No installed Chrome browser is required for Desktop.** The native app uses
+WKWebView on macOS, WebView2 Runtime on Windows, or WebKitGTK 4.1 on Linux.
+See [Tauri's webview requirements](https://v2.tauri.app/reference/webview-versions/).
+A supplied native build avoids host Python, Node, Git and compiler dependencies;
+Docker and the OS webview remain required. No platform signing or notarization
+is implied by a local development bundle. Opening the installed native app
+starts/reuses the backend and shows startup progress or errors in its window.
+The Mac `.command` entry point shows launcher progress in Terminal.
 
 The launcher checks Docker, waits for the container's health check, discovers
 its local address, and opens the window. It uses one stable Compose project
@@ -87,7 +97,14 @@ change after a stop/restart or recreation, so use the launcher instead of an old
 bookmark. Only the Compose-managed application services are stopped by the stop command.
 Other containers, including old manually launched copies, are left alone.
 
-The launchers also load an optional private `compose.local.yaml` beside them to retain installation-specific volumes, credential mounts and other deployment settings.
+The launchers also load an optional private `compose.local.yaml` beside them to
+retain installation-specific volumes, credential mounts and other settings.
+Desktop installation copies that override locally and records its original
+project directory so relative paths retain their meaning. Keep that directory
+and any referenced files in place. The installed override and
+`.labcat-project-directory` and `.labcat-install-source` location markers are
+private deployment files; do not distribute an installed app containing them. The local `.labcat-launch-mode` preference is also
+excluded from Git, images, source distributions and public install bundles.
 
 Closing a UI window does not stop the service. For no window, use
 `./labcat.sh start --no-open` or `labcat.cmd start -NoOpen`.
@@ -297,8 +314,9 @@ and database compatibility before rollback.
 - **Windows script policy:** the `.cmd` wrapper uses Windows PowerShell without
   bypassing execution policy. If your site blocks local scripts, ask site IT to
   approve/sign the launcher. The direct Compose route below remains available.
-- **Native app prerequisites:** use the default-browser or headless mode when
-  the host's webview is unavailable. Native release builds need per-OS testing
+- **Native app prerequisites:** install the required host tools before a source
+  build, or explicitly select Browser with `--browser` / `-Browser`. A missing
+  webview also requires Browser or headless mode. Native release builds need per-OS testing
   and normal code-signing/notarization before broad distribution; local
   development builds do not establish that release gate.
 - **Remote Docker context:** switch to your local Docker context. These desktop

@@ -907,6 +907,7 @@ def research(
     }
     if not controls["include_history"]:
         context = None
+    current_request = prompt
     intake, effective_prompt = assess(prompt, context=context)
     _require_research_setup(connections, controls, intake)
     if intake["status"] == "refused":
@@ -961,6 +962,7 @@ def research(
             ),
             source_observer=connections.observe_source_result,
             prior_material_ids=prior_material_ids,
+            current_request=current_request,
         )
         requested_profile = connections.status()["profile"]
         provider = requested_profile["provider"]

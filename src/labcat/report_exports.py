@@ -533,7 +533,7 @@ def _column_weights(header: list[str]) -> list[float]:
         and header[4] in {"Attribute evidence", "Relevant properties"}
         and header[5] == "Stability / key caveat"
     ):
-        return [0.06, 0.13, 0.14, 0.27, 0.17, 0.23]
+        return [0.09, 0.13, 0.14, 0.24, 0.17, 0.23]
     if header in (
         [
             "Provisional rank",
@@ -740,13 +740,13 @@ def _pdf_fonts():
                 pdfmetrics.registerFont(TTFont(name, str(path)))
 
 
-def _pdf(
+def _pdf_story(
     metadata: dict,
     selected: dict,
     links: set[str],
     layout: ReportLayout,
     report: dict | None = None,
-) -> bytes:
+) -> list:
     try:
         from reportlab.lib import colors
         from reportlab.lib.pagesizes import A4, letter
@@ -756,7 +756,6 @@ def _pdf(
             CondPageBreak,
             PageBreak,
             Paragraph,
-            SimpleDocTemplate,
             Spacer,
             Table,
             TableStyle,
@@ -767,7 +766,6 @@ def _pdf(
         ) from None
 
     _pdf_fonts()
-    stream = io.BytesIO()
     accent, tint, stripe = ACCENTS[layout.accent]
     teal = colors.HexColor(accent)
     paper = letter if layout.page_size == "letter" else A4
@@ -1095,33 +1093,61 @@ def _pdf(
                 )
             story.append(paragraph(text, style))
 
+    return story
+
+
+def _pdf_document(
+    story,
+    layout,
+    *,
+    title="Labcat saved research report",
+    footer_text="Saved report | citations and caveats retained",
+    max_pages=None,
+):
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, letter
+    from reportlab.lib.units import inch
+    from reportlab.platypus import SimpleDocTemplate
+
+    stream = io.BytesIO()
+    paper = letter if layout.page_size == "letter" else A4
+    regular = "LabcatSerif" if layout.font_family == "serif" else "LabcatSans"
+    teal = colors.HexColor(ACCENTS[layout.accent][0])
+
+    class BoundedDocument(SimpleDocTemplate):
+        def afterPage(self):
+            if max_pages is not None and self.page > max_pages:
+                raise ExportError("The complete chat exceeds the PDF page limit.")
+
     def footer(canvas, document):
         canvas.saveState()
         canvas.setStrokeColor(colors.HexColor("#CAD9D2"))
         canvas.line(0.75 * inch, 0.58 * inch, paper[0] - 0.75 * inch, 0.58 * inch)
         canvas.setFont(regular, 8)
         canvas.setFillColor(teal)
-        canvas.drawString(
-            0.75 * inch, 0.4 * inch, "Saved report | citations and caveats retained"
-        )
+        canvas.drawString(0.75 * inch, 0.4 * inch, footer_text)
         if layout.page_numbers:
             canvas.drawRightString(
                 paper[0] - 0.75 * inch, 0.4 * inch, str(document.page)
             )
         canvas.restoreState()
 
-    document = SimpleDocTemplate(
+    document = BoundedDocument(
         stream,
         pagesize=paper,
         rightMargin=0.75 * inch,
         leftMargin=0.75 * inch,
         topMargin=0.65 * inch,
         bottomMargin=0.8 * inch,
-        title="Labcat saved research report",
+        title=title,
         author="Labcat",
     )
     document.build(story, onFirstPage=footer, onLaterPages=footer)
     return stream.getvalue()
+
+
+def _pdf(metadata, selected, links, layout, report=None) -> bytes:
+    return _pdf_document(_pdf_story(metadata, selected, links, layout, report), layout)
 
 
 def _docx(
@@ -1724,6 +1750,31 @@ def create_exports_router(store, config_reader=None, name_source_reader=None):
             raise HTTPException(503, "Saved reports are unavailable.") from None
         except ExportError as error:
             raise HTTPException(422, str(error)) from None
+
+    @router.get("/{chat_id}/history.pdf")
+    def history(chat_id: str):
+        from labcat.chat_exports import render_chat_history
+
+        try:
+            # One scoped SQLite read transaction contains the entire saved history.
+            detail = store.get_global_chat(chat_id)
+            body, media_type, filename = render_chat_history(detail)
+        except WorkspaceNotFound:
+            raise HTTPException(404, "Chat not found.") from None
+        except sqlite3.Error:
+            raise HTTPException(503, "Saved chat history is unavailable.") from None
+        except ExportUnavailable as error:
+            raise HTTPException(503, str(error)) from None
+        except ExportError as error:
+            raise HTTPException(422, str(error)) from None
+        return Response(
+            body,
+            media_type=media_type,
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Cache-Control": "no-store",
+            },
+        )
 
     @router.get("/{chat_id}/reports/{report_id}/presentation")
     def presentation(

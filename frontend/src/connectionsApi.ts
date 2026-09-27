@@ -530,6 +530,10 @@ function parseStatus(value: unknown): ConnectionStatus {
   return item as unknown as ConnectionStatus;
 }
 
+// These reviewed sign-in preflight failures do not change saved account or
+// credential settings. Other failures still require refreshing uncertain state.
+export class ChatGPTSetupError extends Error {}
+
 async function fetchJson(
   path: string,
   options: RequestInit,
@@ -571,16 +575,21 @@ async function fetchJson(
           detail && typeof detail === "object" && "code" in detail
             ? detail.code
             : null;
+        const setupError = (message: string) =>
+          options.method === "POST" &&
+          /^\/api\/connections\/accounts\/[^/]+\/login$/.test(path)
+            ? new ChatGPTSetupError(message)
+            : new Error(message);
         if (code === "chatgpt_storage_unavailable")
-          throw new Error(
+          throw setupError(
             "Connection setup needs attention. This backend is missing the protected temporary storage required for ChatGPT sign-in. Start Labcat with the supplied Docker launcher, or ask your site administrator to repair the deployment.",
           );
         if (code === "chatgpt_helper_unavailable")
-          throw new Error(
+          throw setupError(
             "Connection setup needs attention. The ChatGPT sign-in helper is unavailable in this backend. Update or rebuild the Labcat Docker image, then restart the application. Your site administrator can check the installation.",
           );
         if (code === "chatgpt_callback_unavailable")
-          throw new Error(
+          throw setupError(
             "Connection setup needs attention. ChatGPT browser sign-in requires local port 1455. Free that port, then restart the supplied launcher with LABCAT_OAUTH_CALLBACK_PORT=1455, or ask your site administrator to do this. Other providers remain usable.",
           );
       }

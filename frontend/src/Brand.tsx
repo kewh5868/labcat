@@ -1,5 +1,5 @@
 export const brandName = "Labcat";
-export const brandTagline = "Curious. Clever. Companionable.";
+export const brandTagline = "Curious. Clever. Research Companion.";
 
 /** Decorative mark; each placement provides its own visible brand text. */
 export function LabcatMark({ className = "" }: { className?: string }) {

@@ -4,7 +4,7 @@
 
 # Labcat
 
-**Curious. Clever. Companionable.**
+**Curious. Clever. Research Companion.**
 
 Labcat is a platform and API for intelligent materials research. Explore public
 materials science data, screen and rank cited candidates for your application,
@@ -19,7 +19,7 @@ structures.
 
 [![Package checks](https://github.com/kewh5868/labcat/actions/workflows/ci.yml/badge.svg)](https://github.com/kewh5868/labcat/actions/workflows/ci.yml)
 
-## Run with Docker
+## Choose desktop or browser
 
 Install and start [Docker Desktop](https://docs.docker.com/desktop/) on Mac or
 Windows, or [Docker Engine with Compose](https://docs.docker.com/engine/install/)
@@ -36,15 +36,24 @@ folder. Include the space before it.
 
 Then open the app:
 
-| Mac / Linux             | Windows PowerShell      |
-| ----------------------- | ----------------------- |
-| `./labcat.sh --browser` | `.\labcat.cmd -Browser` |
+| Mac / Linux   | Windows PowerShell |
+| ------------- | ------------------ |
+| `./labcat.sh` | `.\labcat.cmd`     |
+
+On first launch, press **Enter** for **Desktop**, or choose **2** for **Browser**.
+The launcher remembers your choice. Desktop installs a native app for your user;
+from source it needs **Node 24, Rust/Cargo and OS build prerequisites**.
+[Prepare desktop prerequisites](https://kewh5868.github.io/labcat/installation/#desktop-prerequisites).
+Browser mode needs no host Python, Node or Rust. Both modes use Docker.
+Use `--choose` on Mac/Linux or `-Choose` on Windows to choose again.
 
 Connect a model provider in first-time setup, select a model, and save and test
 the connection. Start a **New chat** and ask your materials question.
-The Docker route does not require Python, Node, or Rust on your computer.
-Local workspace processing uses your selected AI provider; research may consume
-its allowance or incur charges.
+**Model access:** Hosted research requires a provider account with access to a
+model that supports agent tasks and tool calls. For ChatGPT sign-in, your account
+needs Codex access and remaining usage allowance or credits. API access has
+separate billing and limits. See OpenAI's [sign-in options](https://learn.chatgpt.com/docs/auth)
+and [Codex usage limits](https://learn.chatgpt.com/docs/pricing).
 
 For exact commands and in-app clicks, follow the
 [first-run walkthrough](https://kewh5868.github.io/labcat/first-run/).

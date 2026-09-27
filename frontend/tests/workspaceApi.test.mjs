@@ -21,6 +21,7 @@ const {
   publicLink,
   defaultSettings,
   reportExportUrl,
+  chatHistoryPdfUrl,
   toggleReportOutput,
 } = await import(
   `data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`
@@ -285,6 +286,16 @@ test("intake responses retain conversation questions without inventing report me
   const response = await workspaceApi.message("chat-a", "Help me research");
   assert.deepEqual(response.messages[0].intake, intake);
   assert.deepEqual(response.reports, []);
+  const missingAssessment = {
+    ...intake,
+    reason_code: "assessment_missing",
+    questions: [],
+  };
+  value.messages[0].intake = missingAssessment;
+  assert.deepEqual(
+    (await workspaceApi.chat("chat-a")).messages[0].intake,
+    missingAssessment,
+  );
   value.messages[0].intake = { ...intake, status: "model_says_verified" };
   await assert.rejects(workspaceApi.chat("chat-a"), /unsupported response/);
 });
@@ -1248,5 +1259,24 @@ test("general chat conflicts preserve known actionable reasons without retrying 
       "one token request and one removal; no blind retry",
     );
     fetch.mock.restore();
+  }
+});
+
+test("complete chat PDF links use only the exact local persisted-chat route", () => {
+  assert.equal(chatHistoryPdfUrl("chat-a"), "/api/chats/chat-a/history.pdf");
+  assert.equal(chatHistoryPdfUrl("chat/a"), "/api/chats/chat%2Fa/history.pdf");
+  const arbitrary = new URL(
+    chatHistoryPdfUrl("https://unexpected.example/chat?views=latest#report"),
+    "http://localhost",
+  );
+  assert.equal(arbitrary.origin, "http://localhost");
+  assert.equal(arbitrary.search, "");
+  assert.equal(arbitrary.hash, "");
+  assert.match(
+    arbitrary.pathname,
+    /^\/api\/chats\/https%3A%2F%2Funexpected\.example%2Fchat%3Fviews%3Dlatest%23report\/history\.pdf$/,
+  );
+  for (const invalid of ["", " ", ".", "..", "x".repeat(201), null]) {
+    assert.throws(() => chatHistoryPdfUrl(invalid), /unsupported response/);
   }
 });

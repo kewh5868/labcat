@@ -3466,3 +3466,138 @@ test("compound shortlist rows show independently sourced component names with pa
     }
   });
 });
+
+for (const view of ["pi", "technical"]) {
+  for (const legacy of [false, true]) {
+    test(`${view} ${legacy ? "legacy literature" : "screening"} explanations expand independently with intact safe citations`, async () => {
+      const fixture = await leadFixture();
+      const reference = fixture.references[0];
+      const citation = `[${reference.id}]`;
+      const prefix = `${citation} Synthetic explanation for a renderer test. `;
+      // Place a second complete citation across the excerpt cutoff.
+      const beforeBoundary =
+        prefix + "word ".repeat(Math.floor((177 - prefix.length) / 5));
+      const explanation = `${beforeBoundary.padEnd(178, " ")}${citation} Complete evidence interpretation remains available after expansion, including <img src=x onerror=alert(1)> as literal report text. FINAL EXPLANATION.`;
+      const caveat = `Synthetic caution: ${"conditions need source review; ".repeat(8)}${citation} FINAL CAVEAT.`;
+      const headers = legacy
+        ? "Provisional rank | Material | Literature fit | Selected criterion assessments | Assessment coverage | Stability & uncertainty"
+        : "Rank | Material | Screening priority | Why considered | Attribute evidence | Stability / key caveat";
+      const content = `Candidate shortlist:\n\n| ${headers} |\n| --- | --- | --- | --- | --- | --- |\n| 1 | Fixture-A ${citation} | 78% · Assessed review priority | ${explanation} | Unknown | ${caveat} |\n| 2 | Fixture-B ${citation} | 60% · Assessed review priority | ${explanation} | Unknown | Short caveat ${citation} |`;
+      await withReportDom(async ({ document, render, click }) => {
+        await render(content, view, { references: [reference] });
+        const cells = [...document.querySelectorAll(".report-explanation")];
+        assert.equal(
+          cells.length,
+          3,
+          "short caveats need no expansion control",
+        );
+        const textOnly = (element) => {
+          const copy = element.cloneNode(true);
+          copy.querySelectorAll(".sr-only").forEach((node) => node.remove());
+          return copy.textContent;
+        };
+        const toggles = cells.map((cell) => cell.querySelector("button"));
+        const previews = cells.map((cell) =>
+          cell.querySelector(".report-explanation-preview"),
+        );
+        const full = cells.map((cell) =>
+          cell.querySelector(".report-explanation-full"),
+        );
+        assert.equal(new Set(full.map((element) => element.id)).size, 3);
+        for (let index = 0; index < cells.length; index++) {
+          assert.equal(toggles[index].textContent, "Read more");
+          assert.equal(toggles[index].getAttribute("aria-expanded"), "false");
+          assert.equal(
+            toggles[index].getAttribute("aria-controls"),
+            full[index].id,
+          );
+          assert.equal(full[index].hidden, true);
+          assert.equal(previews[index].hidden, false);
+          assert.doesNotMatch(textOnly(previews[index]), /FINAL|\[[RS][^\]]*$/);
+          assert.ok(textOnly(previews[index]).endsWith("…"));
+        }
+        assert.match(toggles[0].getAttribute("aria-label"), /Fixture-A/);
+        assert.match(toggles[2].getAttribute("aria-label"), /Fixture-B/);
+        toggles[0].focus();
+        await click(toggles[0]);
+        assert.equal(
+          document.activeElement,
+          toggles[0],
+          "the disclosure keeps keyboard focus",
+        );
+        assert.equal(toggles[0].getAttribute("aria-expanded"), "true");
+        assert.equal(toggles[0].textContent, "Show less");
+        assert.equal(full[0].hidden, false);
+        assert.equal(previews[0].hidden, true);
+        assert.equal(textOnly(full[0]), explanation);
+        assert.equal(full[1].hidden, true, "same-row caveat remains collapsed");
+        assert.equal(
+          full[2].hidden,
+          true,
+          "another candidate remains collapsed",
+        );
+        const sourceLink = full[0].querySelector("a");
+        sourceLink.focus();
+        assert.equal(document.activeElement, sourceLink);
+        assert.equal(sourceLink.href, reference.url);
+        assert.equal(sourceLink.rel, "noopener noreferrer");
+        assert.equal(sourceLink.target, "_blank");
+        assert.equal(
+          document.querySelectorAll("img, script").length,
+          0,
+          "expanded prose remains escaped text",
+        );
+        await click(toggles[1]);
+        assert.equal(textOnly(full[1]), caveat);
+        assert.equal(full[1].hidden, false);
+        toggles[0].focus();
+        await click(toggles[0]);
+        assert.equal(document.activeElement, toggles[0]);
+        assert.equal(full[0].hidden, true);
+        assert.equal(previews[0].hidden, false);
+        assert.equal(toggles[0].textContent, "Read more");
+        assert.equal(
+          full[1].hidden,
+          false,
+          "collapsing one cell does not reset another",
+        );
+        assert.ok(
+          full[0].querySelector("a").closest("[hidden]"),
+          "collapsed full citations are outside the tab order",
+        );
+        await render(
+          content.replaceAll("FINAL CAVEAT.", "REVISED CAVEAT."),
+          view,
+          { references: [reference] },
+        );
+        assert.equal(
+          document.querySelectorAll(".report-explanation-full")[1].hidden,
+          true,
+          "a changed report explanation starts collapsed instead of inheriting old state",
+        );
+      });
+    });
+  }
+}
+
+test("long unbroken explanation tokens stay complete and printing exposes full explanations", async () => {
+  const longToken = "FixtureToken".repeat(25);
+  const content = `Candidate shortlist:\n\n| Rank | Material | Screening priority | Why considered | Attribute evidence | Stability / key caveat |\n| --- | --- | --- | --- | --- | --- |\n| 1 | Fixture-A | 22% · Unassessed review prior | ${longToken} | Unknown | Short caveat |`;
+  await withReportDom(async ({ document, render }) => {
+    await render(content);
+    assert.equal(document.querySelector(".report-explanation-toggle"), null);
+    assert.ok(document.body.textContent.includes(longToken));
+  });
+  const css = await readFile(
+    new URL("../src/reportContent.css", import.meta.url),
+    "utf8",
+  );
+  assert.match(
+    css,
+    /@media print\s*\{\s*\.report-explanation-preview,\s*\.report-explanation-toggle\s*\{\s*display: none !important;/,
+  );
+  assert.match(
+    css,
+    /\.report-explanation-full\[hidden\],\s*\.report-explanation-full\s*\{\s*display: inline !important;/,
+  );
+});

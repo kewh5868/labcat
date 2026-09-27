@@ -17,7 +17,13 @@ from copy import deepcopy
 from labcat.config import DEFAULT_TARGET_BAND_GAP_TOLERANCE_EV
 from labcat.property_research import ATTRIBUTE_TERMS
 from labcat.ranking_profiles import ATTRIBUTE_IDS, catalog
-from labcat.research_intent import INTENT_VERSION, RELATIONS, _valid_intent
+from labcat.research_intent import (
+    _INTENT_FIELDS,
+    INTENT_VERSION,
+    RELATIONS,
+    _scope_shape,
+    _valid_intent,
+)
 
 from .candidate_leads import (
     MAX_DOCUMENTS,
@@ -324,16 +330,10 @@ def evaluation_goals(scope, selection):
     if selection.get("mode") != "semantic_inferred":
         return application_goals
     if (
-        not isinstance(scope, dict)
+        not _scope_shape(scope)
         or scope.get("version") != INTENT_VERSION
         or scope.get("is_evidence") is not False
-        or not _valid_intent(
-            {
-                key: value
-                for key, value in scope.items()
-                if key not in {"version", "target_text", "is_evidence"}
-            }
-        )
+        or not _valid_intent({key: scope[key] for key in _INTENT_FIELDS})
     ):
         raise ValueError("Invalid provisional criterion goal context.")
     explicit_goals = [

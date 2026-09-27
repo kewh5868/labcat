@@ -1,9 +1,9 @@
 # Install and run Labcat
 
-The recommended path is to build the Docker image from this repository and open
-Labcat in your browser. Docker runs the application locally; new research still
-requires a connected model provider and access to public sources. The image does
-not include a local AI model.
+Build the Docker image from this repository, then choose a desktop application
+or your browser on first launch. **Desktop is the default when you press Enter.**
+Both use the same local Docker workspace; new research requires a connected
+model provider and public sources. The image does not include a local AI model.
 
 **First time?** Follow the [first-run walkthrough](first-run.md) for exact terminal
 commands and a guided tour of setup, your first question and report downloads.
@@ -27,9 +27,28 @@ docker compose version
 ```
 
 Compose must support `up --wait --wait-timeout`. You also need Git for the clone
-commands below and a browser. The Docker build provides Python, Node and the
-agent runtime; you do not need to install them separately. Internet access is
-needed for the initial build, provider sign-in and live research.
+commands below. Browser mode needs a browser, with no host Python, Node or Rust.
+Desktop mode also needs the prerequisites below when building from source.
+Internet access is needed for the initial builds, provider sign-in and live research.
+
+### Desktop prerequisites
+
+The repository does not include a prebuilt native app. To choose Desktop from a
+source checkout, install **Node 24 with npm**, **Rust with Cargo**, and your OS
+build tools before launching:
+
+- **macOS:** Xcode Command Line Tools; the system supplies WebKit.
+- **Windows:** Visual Studio C++ Build Tools with a Windows SDK, plus the
+  WebView2 Runtime.
+- **Linux:** a C/C++ compiler, `pkg-config`, and the development packages for
+  WebKitGTK 4.1, GTK 3, libsoup 3 and librsvg, plus their runtime libraries.
+
+Follow [Tauri's OS-specific prerequisites](https://v2.tauri.app/start/prerequisites/)
+and select Node 24 for Labcat. The installer checks required tools; it does not
+install system dependencies or request administrator access. Native compilation
+can take several minutes. Choose Browser if you do not want to build a native app.
+A supplied bundle containing the matching `desktop-bin/` native app avoids the
+Node/Rust/compiler requirement, but still needs Docker and the OS webview.
 
 ## 2. Get the source and build
 
@@ -68,36 +87,49 @@ Keep using the source folder from step 2.
 ### Mac or Linux
 
 ```sh
-./labcat.sh --browser
+./labcat.sh
 ```
 
-If the launcher reports permission denied, run `chmod +x labcat.sh` once and
-retry.
+If the launcher reports permission denied, run `chmod +x labcat.sh` once and retry.
 
 ### Windows PowerShell
 
 ```powershell
-.\labcat.cmd -Browser
+.\labcat.cmd
 ```
 
 If your organization's PowerShell policy blocks the launcher, follow its
 script-signing policy or use [direct Compose startup](#start-directly-with-compose).
 
-The launcher starts the services, waits for readiness, prints the local URL and
-opens your browser. Use the actual address it prints, such as
-`http://127.0.0.1:PORT/`; the port is chosen automatically. If no window opens,
-paste that URL into a browser on the same computer.
+On first interactive launch, choose **1 — Desktop** (or press **Enter**) or
+**2 — Browser**. The choice is remembered for this installation. Desktop installs
+and opens the native application; it uses a supplied matching native binary when
+available, otherwise builds the source with the prerequisites above. Browser opens
+your default browser. Both start the same Docker services and preserve the same
+workspace. A failed desktop build reports an error; choose Browser explicitly if
+that is how you want to continue.
 
-### Optional native window
+| Action         | Mac / Linux             | Windows PowerShell      |
+| -------------- | ----------------------- | ----------------------- |
+| Choose again   | `./labcat.sh --choose`  | `.\labcat.cmd -Choose`  |
+| Select desktop | `./labcat.sh --desktop` | `.\labcat.cmd -Desktop` |
+| Select browser | `./labcat.sh --browser` | `.\labcat.cmd -Browser` |
 
-The native desktop shell is a separate build or supplied bundle. Building the
-Docker image does not install it. When a native shell is present in the
-installation's `desktop-bin/` folder, `./labcat.sh` or `.\labcat.cmd` without the
-browser flag opens it. Otherwise, those commands fall back to the browser.
-Both interfaces use the same Docker workspace.
+Explicit Desktop or Browser flags also save that choice. With redirected input
+and no remembered choice, supply a mode explicitly; headless startup uses
+`start --no-open` or `start -NoOpen`.
 
-See the [native desktop guide](https://github.com/kewh5868/labcat/blob/main/desktop/README.md) for build instructions and
-OS webview requirements. Docker remains required for the native application.
+The desktop app is installed for your user at `~/Applications/Labcat.app` on
+macOS, `%LOCALAPPDATA%\Programs\Labcat\Labcat.exe` with a Start menu shortcut on
+Windows, or `${XDG_DATA_HOME:-$HOME/.local/share}/labcat/desktop` with an application
+menu entry on Linux. You can open that installed app after starting Docker.
+Keep your source/bundle folder for updates and launcher commands.
+
+The launcher prints a local address such as `http://127.0.0.1:PORT/`; the port is
+chosen automatically. In Browser mode, paste that URL into a browser on the same
+computer if no window opens. Native startup errors remain visible in the app.
+See the [native desktop guide](https://github.com/kewh5868/labcat/blob/main/desktop/README.md)
+for manual builds and webview details.
 
 ## 4. Complete first-time setup
 
@@ -126,14 +158,16 @@ and the [workspace guide](projects.md).
 
 Start Docker first, then run the launcher from your installation folder.
 
-| Action                                     | Mac / Linux                   | Windows PowerShell           |
-| ------------------------------------------ | ----------------------------- | ---------------------------- |
-| Open in a browser                          | `./labcat.sh --browser`       | `.\labcat.cmd -Browser`      |
-| Open the available native shell or browser | `./labcat.sh`                 | `.\labcat.cmd`               |
-| Start without opening a window             | `./labcat.sh start --no-open` | `.\labcat.cmd start -NoOpen` |
-| Show status and current URL                | `./labcat.sh status`          | `.\labcat.cmd status`        |
-| Stop, keeping saved work                   | `./labcat.sh stop`            | `.\labcat.cmd stop`          |
-| Read recent logs                           | `./labcat.sh logs`            | `.\labcat.cmd logs`          |
+| Action                         | Mac / Linux                   | Windows PowerShell           |
+| ------------------------------ | ----------------------------- | ---------------------------- |
+| Open in a browser              | `./labcat.sh --browser`       | `.\labcat.cmd -Browser`      |
+| Open the remembered interface  | `./labcat.sh`                 | `.\labcat.cmd`               |
+| Select desktop                 | `./labcat.sh --desktop`       | `.\labcat.cmd -Desktop`      |
+| Choose the interface again     | `./labcat.sh --choose`        | `.\labcat.cmd -Choose`       |
+| Start without opening a window | `./labcat.sh start --no-open` | `.\labcat.cmd start -NoOpen` |
+| Show status and current URL    | `./labcat.sh status`          | `.\labcat.cmd status`        |
+| Stop, keeping saved work       | `./labcat.sh stop`            | `.\labcat.cmd stop`          |
+| Read recent logs               | `./labcat.sh logs`            | `.\labcat.cmd logs`          |
 
 Closing a window leaves the services running. To restart, stop and then launch
 again; there is no `restart` launcher action. After a computer restart, start
@@ -156,6 +190,17 @@ Stop Labcat, then update an unmodified source checkout and rebuild:
 git pull --ff-only
 docker build -t labcat:0.1.0.dev0 .
 ```
+
+If you use Desktop, update its separate native shell from the same folder after
+updating the source or replacing a supplied bundle:
+
+| Mac / Linux                     | Windows PowerShell              |
+| ------------------------------- | ------------------------------- |
+| `sh scripts/install_desktop.sh` | `.\scripts\install_desktop.ps1` |
+
+This also refreshes the installed launcher's deployment configuration. Ordinary
+launches reuse the installed native app; rebuilding the Docker image alone does
+not update that app. Source reinstalls need the desktop build prerequisites again.
 
 Launch again using the commands above. Keep any installation-specific
 `compose.local.yaml` beside the launchers; they load it automatically. Container

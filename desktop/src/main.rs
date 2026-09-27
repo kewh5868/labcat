@@ -157,6 +157,22 @@ fn report_download(url: &Url, expected: &Url) -> bool {
         })
 }
 
+fn chat_history_download(url: &Url, expected: &Url) -> bool {
+    let parts: Vec<_> = url.path().split('/').collect();
+    same_origin(url, expected)
+        && url.query().is_none()
+        && url.fragment().is_none()
+        && parts.len() == 5
+        && parts[1] == "api"
+        && parts[2] == "chats"
+        && parts[4] == "history.pdf"
+        && !parts[3].is_empty()
+        && parts[3].len() <= 64
+        && parts[3]
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'-' | b'_'))
+}
+
 fn preview_download(url: &Url, expected: &Url) -> bool {
     let parts: Vec<_> = url.path().split('/').collect();
     same_origin(url, expected)
@@ -223,7 +239,8 @@ fn structure_download(url: &Url, expected: &Url) -> bool {
 /// Ignore remote filenames and choose a fresh file only in the OS Downloads folder.
 fn download_destination(url: &Url, expected: &Url, downloads: &Path) -> Option<PathBuf> {
     let structure = structure_download(url, expected);
-    if !(report_download(url, expected) || preview_download(url, expected) || structure)
+    let history = chat_history_download(url, expected);
+    if !(report_download(url, expected) || preview_download(url, expected) || structure || history)
         || !downloads.is_dir()
     {
         return None;
@@ -246,6 +263,8 @@ fn download_destination(url: &Url, expected: &Url, downloads: &Path) -> Option<P
         .collect();
     let extension = if structure {
         "cif"
+    } else if history {
+        "pdf"
     } else {
         match formats.as_slice() {
             [value] if value == "text" => "txt",
@@ -253,10 +272,12 @@ fn download_destination(url: &Url, expected: &Url, downloads: &Path) -> Option<P
             _ => return None,
         }
     };
-    let report_id = if preview_download(url, expected) {
-        "preview"
+    let report_id = if history {
+        format!("chat-{}-history", url.path().split('/').nth(3)?)
+    } else if preview_download(url, expected) {
+        "preview".to_owned()
     } else {
-        url.path().split('/').nth(5)?
+        url.path().split('/').nth(5)?.to_owned()
     };
     let nonce = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -846,6 +867,50 @@ mod tests {
             &Url::parse("http://127.0.0.1:9999/api/chats/a/reports/b/export").unwrap(),
             &expected
         ));
+    }
+
+    #[test]
+    fn chat_history_downloads_require_an_exact_local_pdf_path() {
+        let expected = validate_url("http://127.0.0.1:8123/").unwrap();
+        let folder = std::env::temp_dir();
+        let url = expected.join("api/chats/chat_123/history.pdf").unwrap();
+        assert!(chat_history_download(&url, &expected));
+        let destination = download_destination(&url, &expected, &folder).unwrap();
+        assert_eq!(destination.parent(), Some(folder.as_path()));
+        assert_eq!(destination.extension().unwrap(), "pdf");
+        assert!(destination
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .starts_with("labcat-chat-chat_123-history-"));
+        for path in [
+            "api/chats//history.pdf",
+            "api/chats/a/history.pdf/extra",
+            "api/chats/a/history.txt",
+            "api/chats/a/history.pdf?format=exe",
+            "api/chats/a/history.pdf?filename=other.pdf",
+            "api/chats/a/history.pdf#fragment",
+            "api/chats/a%2Fb/history.pdf",
+            "api/chats/a%20b/history.pdf",
+            "api/projects/a/history.pdf",
+        ] {
+            let invalid = expected.join(path).unwrap();
+            assert!(!chat_history_download(&invalid, &expected), "{path}");
+            assert!(download_destination(&invalid, &expected, &folder).is_none());
+        }
+        for base in [
+            "http://127.0.0.1:9999/",
+            "http://localhost:8123/",
+            "https://example.invalid/",
+            "http://user@127.0.0.1:8123/",
+        ] {
+            let invalid = Url::parse(base)
+                .unwrap()
+                .join("api/chats/a/history.pdf")
+                .unwrap();
+            assert!(!chat_history_download(&invalid, &expected));
+            assert!(download_destination(&invalid, &expected, &folder).is_none());
+        }
     }
 
     #[test]

@@ -263,6 +263,27 @@ Back up the SQLite database using its backup API, or copy it while the service
 is stopped. Protect backups like conversation history. Do not include credential
 vaults, external keys or private workspace data in source or install artifacts.
 
+## Complete chat PDF
+
+Choose the small **Chat PDF** link beside the history controls in an open chat.
+It saves the entire recorded conversation in chronological order: questions and
+replies with timestamps, every saved report's Summary and Technical View,
+candidate shortlists and source lists. Earlier collapsed questions are included,
+as are saved clarification and declined responses. General and project chats
+use the same action.
+
+The PDF is a snapshot of saved history when the download starts. An unsent draft
+or a research reply that has not yet been saved is not part of that snapshot.
+Exporting does not call a model, retrieve sources or update the saved reports.
+In the desktop application, the PDF is saved to the OS Downloads folder; in a
+browser, the browser's usual download behavior applies. An empty chat has no
+history download link. Structure CIF files remain separate downloads.
+
+The read-only API is `GET /api/chats/{chat_id}/history.pdf`. It returns a PDF
+attachment from one consistent saved snapshot, with caching disabled. Removed
+chats are unavailable, and oversized histories return an error instead of a
+truncated document.
+
 ## Report downloads
 
 Select Summary, Technical View or both with checkboxes. Verbosity remains

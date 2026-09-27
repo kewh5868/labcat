@@ -12,10 +12,14 @@ const compiled = ts.transpileModule(source, {
     module: ts.ModuleKind.ES2022,
   },
 }).outputText;
-const { connectionsApi, claudeCodeLoginCommand, isApiKeyProvider } =
-  await import(
-    `data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`
-  );
+const {
+  connectionsApi,
+  claudeCodeLoginCommand,
+  isApiKeyProvider,
+  ChatGPTSetupError,
+} = await import(
+  `data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`
+);
 globalThis.window = { setTimeout, clearTimeout };
 afterEach(() => mock.restoreAll());
 const status = {
@@ -312,6 +316,7 @@ test("reviewed ChatGPT setup failures show fixed deployment guidance without ref
     await assert.rejects(
       connectionsApi.startLogin("account", "session"),
       (error) => {
+        assert.ok(error instanceof ChatGPTSetupError);
         assert.match(error.message, /^Connection setup needs attention\./);
         assert.match(error.message, guidance);
         assert.doesNotMatch(
@@ -348,6 +353,7 @@ test("unreviewed or malformed setup diagnostics stay generic and never expose se
           error.message,
           /Connection request was not completed \(503\)/,
         );
+        assert.equal(error instanceof ChatGPTSetupError, false);
         assert.doesNotMatch(
           error.message,
           /TEST_PRIVATE|setup needs attention/,
@@ -847,4 +853,31 @@ test("Claude Code failures hide provider diagnostics and never retry a native lo
     },
   );
   assert.equal(fetch.mock.calls.length, 2);
+});
+
+test("reviewed setup codes on other operations do not bypass uncertain-state recovery", async () => {
+  const fetch = safeServer();
+  fetch.mock.mockImplementation(async (path) =>
+    path === "/api/session"
+      ? Response.json({ csrf_token: token })
+      : Response.json(
+          { detail: { code: "chatgpt_callback_unavailable" } },
+          { status: 503 },
+        ),
+  );
+  for (const operation of [
+    () => connectionsApi.status(),
+    () => connectionsApi.pollLogin("account", "flow"),
+    () =>
+      connectionsApi.saveAccount({
+        label: "test",
+        profile: status.profile,
+        secret_storage: "session",
+      }),
+  ]) {
+    await assert.rejects(operation(), (error) => {
+      assert.equal(error instanceof ChatGPTSetupError, false);
+      return true;
+    });
+  }
 });

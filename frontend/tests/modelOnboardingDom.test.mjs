@@ -748,3 +748,274 @@ test("Connections groups the Materials Project card with research databases befo
     await env.close();
   }
 });
+
+for (const code of [
+  "chatgpt_storage_unavailable",
+  "chatgpt_helper_unavailable",
+  "chatgpt_callback_unavailable",
+]) {
+  test(`ChatGPT preflight ${code} leaves provider switching and fresh session keys usable`, async (t) => {
+    const env = await environment();
+    const account = {
+      id: "test-chatgpt",
+      label: "ChatGPT",
+      profile: { ...baseProfile, provider: "chatgpt" },
+      credential_state: "missing",
+    };
+    let status = {
+      ...baseStatus(),
+      configured: true,
+      using_local_defaults: false,
+      profile: account.profile,
+      accounts: [account],
+      active_account_id: account.id,
+      vault: {
+        available: false,
+        locked: true,
+        exists: true,
+        can_create: false,
+        key_source: "passphrase",
+      },
+    };
+    const calls = [];
+    t.mock.method(globalThis, "fetch", async (path, options = {}) => {
+      calls.push(path);
+      if (path === "/api/session")
+        return Response.json({ csrf_token: "SYNTHETIC-CSRF-AT-LEAST-20" });
+      if (path === "/api/connections") return Response.json(status);
+      if (path.endsWith("/login"))
+        return Response.json(
+          { detail: { code, message: "TEST_PRIVATE" } },
+          { status: 503 },
+        );
+      if (path === "/api/connections/accounts") {
+        const body = JSON.parse(options.body);
+        assert.equal(body.profile.provider, "anthropic");
+        assert.equal(body.secret_storage, "session");
+        assert.equal(body.api_key, "SYNTHETIC_ANTHROPIC_KEY");
+        const fresh = {
+          id: "fresh-anthropic",
+          label: body.label,
+          profile: body.profile,
+          credential_state: "session",
+        };
+        status = {
+          ...status,
+          profile: fresh.profile,
+          accounts: [...status.accounts, fresh],
+          active_account_id: fresh.id,
+          credentials: { ...status.credentials, anthropic: "session" },
+        };
+        return Response.json(status);
+      }
+      if (path === "/api/connections/models")
+        return Response.json({
+          provider: "anthropic",
+          models: [{ id: "test-model", label: "Test model" }],
+          message: "Synthetic test catalog.",
+          inference_tested: false,
+        });
+      assert.fail(`Unexpected request ${path}`);
+    });
+    try {
+      await env.render();
+      await env.click(env.button("Sign in with ChatGPT"));
+      assert.match(
+        document.querySelector('.agent-sign-in [role="alert"]').textContent,
+        /Connection setup needs attention/,
+      );
+      assert.equal(document.querySelector("#model-provider").disabled, false);
+      assert.equal(document.querySelector("#provider-account").disabled, false);
+      assert.equal(document.querySelector(".agent-device-code"), null);
+      await env.change(document.querySelector("#model-provider"), "anthropic");
+      await env.change(
+        document.querySelector("#provider-key"),
+        "SYNTHETIC_ANTHROPIC_KEY",
+      );
+      await env.click(env.button("Connect Anthropic"));
+      assert.equal(status.profile.provider, "anthropic");
+      assert.equal(status.vault.locked, true);
+      assert.equal(
+        status.accounts[0],
+        account,
+        "original account stays available",
+      );
+      assert.equal(document.querySelector("#model-provider").disabled, false);
+      assert.equal(document.querySelector("#provider-account").disabled, false);
+      assert.equal(document.querySelector("#provider-key").value, "");
+      assert.equal(
+        calls.filter((path) => path.endsWith("/login")).length,
+        1,
+        "failed provider sign-in is not automatically retried",
+      );
+      assert.equal(
+        calls.filter((path) => path === "/api/connections").length,
+        1,
+        "known preflight failure needs no full reload to change provider",
+      );
+      assert.doesNotMatch(document.body.textContent, /TEST_PRIVATE/);
+    } finally {
+      await env.close();
+    }
+  });
+}
+
+for (const failure of ["unknown-server", "transport"]) {
+  test(`uncertain ${failure} sign-in failures still require reloading saved connection state`, async (t) => {
+    const env = await environment();
+    const account = {
+      id: "test-chatgpt",
+      label: "ChatGPT",
+      profile: { ...baseProfile, provider: "chatgpt" },
+      credential_state: "missing",
+    };
+    const status = {
+      ...baseStatus(),
+      configured: true,
+      using_local_defaults: false,
+      profile: account.profile,
+      accounts: [account],
+      active_account_id: account.id,
+    };
+    let attempts = 0;
+    t.mock.method(globalThis, "fetch", async (path) => {
+      if (path === "/api/session")
+        return Response.json({ csrf_token: "SYNTHETIC-CSRF-AT-LEAST-20" });
+      if (path === "/api/connections") return Response.json(status);
+      if (path.endsWith("/login")) {
+        attempts++;
+        if (failure === "transport")
+          throw new Error("TEST_PRIVATE_NETWORK_DETAIL");
+        return Response.json(
+          { detail: { code: "unknown_setup_code", message: "TEST_PRIVATE" } },
+          { status: 503 },
+        );
+      }
+      assert.fail(`Unexpected request ${path}`);
+    });
+    try {
+      await env.render();
+      await env.click(env.button("Sign in with ChatGPT"));
+      assert.equal(document.querySelector("#model-provider").disabled, true);
+      assert.equal(document.querySelector("#provider-account").disabled, true);
+      assert.equal(attempts, 1);
+      assert.doesNotMatch(document.body.textContent, /TEST_PRIVATE/);
+    } finally {
+      await env.close();
+    }
+  });
+}
+
+for (const failure of ["busy", "timeout"]) {
+  test(`catalog ${failure} keeps safe recovery guidance and retries only on Refresh models`, async (t) => {
+    const env = await environment();
+    const account = {
+      id: "ready-chatgpt",
+      label: "ChatGPT",
+      profile: { ...baseProfile, provider: "chatgpt", model: "saved-model" },
+      credential_state: "session",
+    };
+    const status = {
+      ...baseStatus(),
+      configured: true,
+      using_local_defaults: false,
+      profile: account.profile,
+      accounts: [account],
+      active_account_id: account.id,
+    };
+    let modelRequests = 0;
+    const calls = [];
+    if (failure === "timeout") {
+      const timeout = env.dom.window.setTimeout.bind(env.dom.window);
+      t.mock.method(env.dom.window, "setTimeout", (callback, delay) =>
+        timeout(callback, delay === 30000 ? 0 : delay),
+      );
+    }
+    t.mock.method(globalThis, "fetch", async (path, options = {}) => {
+      calls.push(path);
+      if (path === "/api/session")
+        return Response.json({ csrf_token: "SYNTHETIC-CSRF-AT-LEAST-20" });
+      if (path === "/api/connections") return Response.json(status);
+      if (path === "/api/connections/models") {
+        modelRequests++;
+        if (modelRequests === 1) {
+          if (failure === "busy")
+            return Response.json(
+              { detail: "TEST_PRIVATE_BUSY_DETAIL" },
+              { status: 409 },
+            );
+          return new Promise((_resolve, reject) => {
+            const abort = () =>
+              reject(new Error("TEST_PRIVATE_TIMEOUT_DETAIL"));
+            if (options.signal.aborted) abort();
+            else
+              options.signal.addEventListener("abort", abort, { once: true });
+          });
+        }
+        return Response.json({
+          provider: "chatgpt",
+          models: [
+            { id: "saved-model", label: "Saved model" },
+            { id: "another-model", label: "Another model" },
+          ],
+          message: "Synthetic catalog; no inference.",
+          inference_tested: false,
+        });
+      }
+      assert.fail(`Unexpected request ${path}`);
+    });
+    try {
+      await env.render();
+      await env.flush();
+      const alert = document.querySelector(
+        '.connection-model-choice [role="alert"]',
+      );
+      assert.ok(alert);
+      assert.match(
+        alert.textContent,
+        failure === "busy"
+          ? /Connection is busy.*Wait for it to finish/
+          : /Connection settings could not be reached/,
+      );
+      assert.match(alert.textContent, /Refresh models/);
+      assert.doesNotMatch(document.body.textContent, /TEST_PRIVATE/);
+      assert.equal(
+        document.querySelector("#model-choice").value,
+        "saved-model",
+      );
+      assert.equal(document.querySelector("#model-provider").disabled, false);
+      assert.equal(modelRequests, 1);
+      await env.flush();
+      assert.equal(
+        modelRequests,
+        1,
+        "an unavailable catalog is not automatically retried",
+      );
+      await env.click(env.button("Refresh models"));
+      assert.equal(modelRequests, 2);
+      assert.equal(
+        document.querySelector('.connection-model-choice [role="alert"]'),
+        null,
+      );
+      assert.deepEqual(
+        [...document.querySelector("#model-choice").options].map(
+          (item) => item.value,
+        ),
+        ["", "saved-model", "another-model"],
+      );
+      assert.equal(status.profile.model, "saved-model");
+      assert.ok(
+        calls.every((path) =>
+          [
+            "/api/session",
+            "/api/connections",
+            "/api/connections/models",
+          ].includes(path),
+        ),
+        "refresh never saves settings, signs in again, or starts inference",
+      );
+    } finally {
+      await env.close();
+    }
+  });
+}

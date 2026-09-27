@@ -64,6 +64,7 @@ def launcher(tmp_path):
         "import json, os, sys\n"
         "with open(os.environ['OPEN_LOG'], 'a') as f:\n"
         "    f.write(json.dumps(sys.argv[1:]) + '\\n')\n"
+        "sys.exit(int(os.environ.get('TEST_OPEN_EXIT', '0')))\n"
     )
     (bin_dir / "open").chmod(0o755)
     env = {
@@ -71,19 +72,30 @@ def launcher(tmp_path):
         "PATH": str(bin_dir) + os.pathsep + os.environ["PATH"],
         "CALL_LOG": str(log),
         "OPEN_LOG": str(tmp_path / "open.jsonl"),
+        "LABCAT_DESKTOP_INSTALL_DIR": str(tmp_path / "native apps"),
     }
     for key in ("DOCKER_CONTEXT", "DOCKER_HOST", "LABCAT_OAUTH_CALLBACK_PORT"):
         env.pop(key, None)
 
-    def run(*args, **overrides):
+    def run(*args, input_choice=None, **overrides):
+        master = slave = None
+        if input_choice is not None:
+            import pty
+
+            master, slave = pty.openpty()
+            os.write(master, (input_choice + "\n").encode())
         result = subprocess.run(
             ["sh", str(install / "labcat.sh"), *args],
             cwd=tmp_path,
             env={**env, **overrides},
+            stdin=slave,
             capture_output=True,
             text=True,
             timeout=10,
         )
+        if master is not None:
+            os.close(master)
+            os.close(slave)
         calls = (
             [json.loads(line) for line in log.read_text().splitlines()]
             if log.exists()
@@ -91,7 +103,24 @@ def launcher(tmp_path):
         )
         return result, calls
 
+    def installed():
+        app = Path(env["LABCAT_DESKTOP_INSTALL_DIR"]) / "Labcat.app"
+        binary = app / "Contents/MacOS/labcat-desktop"
+        binary.parent.mkdir(parents=True, exist_ok=True)
+        binary.write_text("#!/bin/sh\nexit 0\n")
+        binary.chmod(0o755)
+        resources = app / "Contents/Resources/launcher"
+        resources.mkdir(parents=True, exist_ok=True)
+        for name in ("labcat.sh", "compose.yaml"):
+            shutil.copy(install / name, resources)
+        (app / "Contents/Resources/.labcat-install-source").write_text(
+            str(install) + "\n"
+        )
+        return app
+
+    run.installed = installed
     run.callbacks = lambda: Path(str(log) + ".callbacks").read_text().splitlines()
+    run.native_dir = Path(env["LABCAT_DESKTOP_INSTALL_DIR"])
     return run, install, Path(env["OPEN_LOG"])
 
 
@@ -153,18 +182,18 @@ def test_local_deployment_override_survives_callback_retry(launcher):
     assert starts[0][5:7] == ["--file", str(local)]
 
 
-def test_default_opens_only_discovered_local_url(launcher):
+def test_browser_opens_only_discovered_local_url(launcher):
     run, _, opened = launcher
-    result, _ = run(TEST_BINDING="127.0.0.1:53210")
+    result, _ = run("--browser", TEST_BINDING="127.0.0.1:53210")
     assert result.returncode == 0, result.stderr
     calls = [json.loads(line) for line in opened.read_text().splitlines()]
     assert calls[-1] == ["http://127.0.0.1:53210/"]
 
 
-def test_native_window_preferred_when_bundled(launcher):
+def test_remembered_desktop_opens_installed_native_window(launcher):
     run, install, opened = launcher
-    app = install / "desktop-bin" / "Labcat.app"
-    app.mkdir(parents=True)
+    app = run.installed()
+    (install / ".labcat-launch-mode").write_text("desktop\n")
     result, _ = run()
     assert result.returncode == 0, result.stderr
     args = json.loads(opened.read_text().splitlines()[-1])
@@ -287,7 +316,7 @@ def test_failed_headless_research_start_does_not_execute_or_open(launcher):
 )
 def test_bad_binding_cannot_open_browser(launcher, binding):
     run, _, opened = launcher
-    result, _ = run(TEST_BINDING=binding)
+    result, _ = run("--browser", TEST_BINDING=binding)
     assert result.returncode != 0
     assert not opened.exists()
 
@@ -303,7 +332,7 @@ def test_bad_binding_cannot_open_browser(launcher, binding):
 )
 def test_failed_start_does_not_claim_ready_or_open(launcher, failure):
     run, _, opened = launcher
-    result, _ = run(**failure)
+    result, _ = run("--browser", **failure)
     assert result.returncode != 0
     assert "Labcat UI:" not in result.stdout
     assert not opened.exists()
@@ -343,7 +372,9 @@ def test_stopped_status_does_not_lookup_stale_port(launcher):
 )
 def test_callback_collision_retries_once_without_stopping_its_owner(launcher, message):
     run, _, opened = launcher
-    result, calls = run(TEST_CALLBACK_COLLISION="1", TEST_COLLISION_MESSAGE=message)
+    result, calls = run(
+        "--browser", TEST_CALLBACK_COLLISION="1", TEST_COLLISION_MESSAGE=message
+    )
     assert result.returncode == 0, result.stderr
     assert run.callbacks() == ["1455", "0"]
     assert "ChatGPT browser sign-in needs local port 1455" in result.stderr
@@ -383,7 +414,7 @@ def test_explicit_callback_setting_overrides_a_previous_dynamic_binding(launcher
 )
 def test_unrelated_start_failure_does_not_retry_or_open(launcher, error):
     run, _, opened = launcher
-    result, _ = run(TEST_UP_EXIT="1", TEST_UP_ERROR=error)
+    result, _ = run("--browser", TEST_UP_EXIT="1", TEST_UP_ERROR=error)
     assert result.returncode != 0
     assert run.callbacks() == ["1455"]
     assert not opened.exists()
@@ -391,7 +422,7 @@ def test_unrelated_start_failure_does_not_retry_or_open(launcher, error):
 
 def test_callback_fallback_failure_stops_after_one_retry(launcher):
     run, _, opened = launcher
-    result, _ = run(TEST_CALLBACK_COLLISION="1", TEST_UP_EXIT="1")
+    result, _ = run("--browser", TEST_CALLBACK_COLLISION="1", TEST_UP_EXIT="1")
     assert result.returncode != 0
     assert run.callbacks() == ["1455", "0"]
     assert "Labcat UI:" not in result.stdout
@@ -407,4 +438,182 @@ def test_headless_research_uses_callback_fallback_without_polluting_stdout(launc
     assert run.callbacks() == ["1455", "0"]
     assert "1455" not in result.stdout
     assert any("exec" in call for call in calls)
+    assert not opened.exists()
+
+
+def test_noninteractive_first_launch_requires_explicit_choice(launcher):
+    run, install, opened = launcher
+    result, calls = run()
+    assert result.returncode != 0
+    assert "--desktop" in result.stderr and "--browser" in result.stderr
+    assert not any("up" in call for call in calls)
+    assert not opened.exists()
+    assert not (install / ".labcat-launch-mode").exists()
+
+
+def test_interactive_browser_choice_is_remembered_and_can_be_changed(launcher):
+    run, install, opened = launcher
+    result, _ = run(input_choice="2")
+    assert result.returncode == 0, result.stderr
+    assert (install / ".labcat-launch-mode").read_text() == "browser\n"
+    result, _ = run()
+    assert result.returncode == 0
+    assert len(opened.read_text().splitlines()) == 2
+    result, _ = run("--choose", input_choice="wrong")
+    assert result.returncode != 0
+    assert (install / ".labcat-launch-mode").read_text() == "browser\n"
+
+
+def test_interactive_default_installs_desktop_and_never_opens_browser(launcher):
+    run, install, opened = launcher
+    scripts = install / "scripts"
+    scripts.mkdir()
+    (scripts / "install_desktop.sh").write_text(
+        "#!/bin/sh\n"
+        'mkdir -p "$LABCAT_DESKTOP_INSTALL_DIR/Labcat.app/Contents/MacOS"\n'
+        'printf "#!/bin/sh\\nexit 0\\n" > '
+        '"$LABCAT_DESKTOP_INSTALL_DIR/Labcat.app/Contents/MacOS/labcat-desktop"\n'
+        'chmod +x "$LABCAT_DESKTOP_INSTALL_DIR/Labcat.app/Contents/MacOS/'
+        'labcat-desktop"\n'
+    )
+    result, _ = run(input_choice="")
+    assert result.returncode == 0, result.stderr
+    assert (install / ".labcat-launch-mode").read_text() == "desktop\n"
+    assert json.loads(opened.read_text().splitlines()[-1])[:2] == ["-n", "-a"]
+    result, _ = run("--browser")
+    assert result.returncode == 0
+    assert (install / ".labcat-launch-mode").read_text() == "browser\n"
+
+
+def test_desktop_install_failure_does_not_start_or_fall_back(launcher):
+    run, install, opened = launcher
+    scripts = install / "scripts"
+    scripts.mkdir()
+    (scripts / "install_desktop.sh").write_text("#!/bin/sh\nexit 1\n")
+    result, calls = run("--desktop")
+    assert result.returncode != 0
+    assert "Desktop installation failed" in result.stderr
+    assert not any("up" in call for call in calls)
+    assert not opened.exists()
+    assert not (install / ".labcat-launch-mode").exists()
+
+
+@pytest.mark.parametrize("value", ["$(touch bad)", "browser\ndesktop", "unknown"])
+def test_launch_choice_is_not_evaluated_as_shell(launcher, value):
+    run, install, opened = launcher
+    (install / ".labcat-launch-mode").write_text(value)
+    result, calls = run()
+    assert result.returncode != 0
+    assert not any("up" in call for call in calls)
+    assert not opened.exists()
+    assert not (install.parent / "bad").exists()
+
+
+def test_installed_override_uses_literal_original_project_directory(launcher, tmp_path):
+    run, install, _ = launcher
+    original = tmp_path / "original with spaces and $literal"
+    original.mkdir()
+    (install / ".labcat-project-directory").write_text(str(original) + "\n")
+    (install / "compose.local.yaml").write_text("services: {}\n")
+    result, calls = run("--no-open")
+    assert result.returncode == 0, result.stderr
+    managed = [call for call in calls if call[:2] == ["compose", "--project-name"]]
+    assert managed
+    assert all(
+        call[call.index("--project-directory") + 1] == str(original) for call in managed
+    )
+
+
+@pytest.mark.parametrize(
+    "kind", ["relative", "multiline", "trailing", "missing", "symlink"]
+)
+def test_invalid_installed_project_directory_is_rejected(launcher, tmp_path, kind):
+    run, install, opened = launcher
+    marker = install / ".labcat-project-directory"
+    if kind == "symlink":
+        target = tmp_path / "marker-target"
+        target.write_text(str(tmp_path) + "\n")
+        marker.symlink_to(target)
+    else:
+        marker.write_text(
+            {
+                "relative": "relative\n",
+                "multiline": str(tmp_path) + "\nextra\n",
+                "trailing": str(tmp_path) + "\nextra",
+                "missing": str(tmp_path / "gone") + "\n",
+            }[kind]
+        )
+    result, calls = run("--no-open")
+    assert result.returncode != 0
+    assert not any("up" in call for call in calls)
+    assert not opened.exists()
+
+
+@pytest.mark.parametrize("marker_kind", ["directory", "symlink"])
+def test_invalid_mode_storage_is_rejected_before_opening(
+    launcher, tmp_path, marker_kind
+):
+    run, install, opened = launcher
+    path = install / ".labcat-launch-mode"
+    if marker_kind == "directory":
+        path.mkdir()
+    else:
+        target = tmp_path / "mode-target"
+        target.write_text("browser\n")
+        path.symlink_to(target)
+    result, calls = run("--browser")
+    assert result.returncode != 0
+    assert not any("up" in call for call in calls)
+    assert not opened.exists()
+
+
+@pytest.mark.parametrize(
+    "change", ["origin", "launcher", "compose", "override", "deployment"]
+)
+def test_stale_installed_deployment_requires_reinstallation(launcher, change):
+    run, install, opened = launcher
+    app = run.installed()
+    if change == "origin":
+        (app / "Contents/Resources/.labcat-install-source").write_text(
+            "/another/checkout\n"
+        )
+    elif change == "deployment":
+        (app / "Contents/Resources/launcher/.labcat-project-directory").write_text(
+            str(install.parent) + "\n"
+        )
+    elif change == "override":
+        (install / "compose.local.yaml").write_text("services: {}\n")
+    else:
+        name = "labcat.sh" if change == "launcher" else "compose.yaml"
+        (app / "Contents/Resources/launcher" / name).write_text("stale\n")
+    (install / ".labcat-launch-mode").write_text("desktop\n")
+    result, calls = run()
+    assert result.returncode != 0
+    assert "installer is missing" in result.stderr
+    assert not any("up" in call for call in calls)
+    assert not opened.exists()
+
+
+def test_native_open_failure_is_not_replaced_by_browser(launcher):
+    run, _, opened = launcher
+    run.installed()
+    result, _ = run("--desktop", TEST_OPEN_EXIT="1")
+    assert result.returncode != 0
+    calls = [json.loads(line) for line in opened.read_text().splitlines()]
+    assert len(calls) == 1
+    assert calls[0][:2] == ["-n", "-a"]
+
+
+def test_headless_and_lifecycle_actions_ignore_mode_and_installation(launcher):
+    run, install, opened = launcher
+    (install / ".labcat-launch-mode").mkdir()
+    for arguments in (
+        ("--choose", "--desktop", "--no-open"),
+        ("status",),
+        ("logs",),
+        ("stop",),
+        ("cli", "status"),
+    ):
+        result, _ = run(*arguments)
+        assert result.returncode == 0, result.stderr
     assert not opened.exists()

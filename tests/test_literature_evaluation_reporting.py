@@ -295,3 +295,35 @@ def test_later_retained_source_documents_are_not_evicted_during_report_rebinding
     prepared = prepare_presentation(report)
     assert "Fixture-A" in prepared["technical_audit"]
     assert "Provisional literature shortlist" in prepared["pi_summary"]
+
+
+def test_legacy_shortlist_retains_full_selected_assessment_interpretations():
+    report = evaluated_report()
+    result = report["result"]
+    interpretation = (
+        "TEST ONLY synthetic interpretation of this candidate and the cited "
+        "comparison, without establishing any measured performance; retain the "
+        "complete ending about the important scope limitation."
+    )
+    proposals = [
+        {**row, "interpretation": interpretation}
+        for row in result["literature_evaluation"]["proposals"]
+    ]
+    result["literature_evaluation"] = evaluate_candidates(
+        {"evaluations": proposals},
+        result["candidate_leads"],
+        report["sources"],
+        result["execution"]["ranking_profile"],
+        version="literature-fit-v1",
+    )["evaluation"]
+    prepared = prepare_presentation(report)
+    for field in ("pi_summary", "technical_audit"):
+        table = next(
+            data
+            for kind, data, _ in _blocks(prepared[field])
+            if kind == "table" and data[0][0] == "Provisional rank"
+        )
+        assert all(interpretation in row[3] for row in table[1:])
+        concern = next(row for row in table[1:] if "Fixture-A" in row[1])
+        assert interpretation in concern[5]
+        assert all(len(cell) < 4000 for row in table for cell in row)

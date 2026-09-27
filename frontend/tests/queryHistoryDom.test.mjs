@@ -604,8 +604,8 @@ test("question and saved preview markup stays literal without scripts, links or 
     );
   }));
 
-test("workspace follow-ups replace the main report while keeping prior query previews after navigation and reload", async (t) =>
-  environment(
+async function completeChatHistoryScenario(t, projectId) {
+  return environment(
     async ({
       dom,
       act,
@@ -621,7 +621,7 @@ test("workspace follow-ups replace the main report while keeping prior query pre
       const { defaultSettings } = await module("workspaceApi");
       const chat = {
         id: "synthetic-chat",
-        project_id: null,
+        project_id: projectId,
         title: "Synthetic query history",
         chat_number: 1,
         display_title: "Synthetic query history · #1",
@@ -630,8 +630,33 @@ test("workspace follow-ups replace the main report while keeping prior query pre
         message_count: 2,
         pin_counts: { reports: 0, sources: 0 },
       };
+      const emptyChat = {
+        ...chat,
+        id: "synthetic-empty-chat",
+        title: "Synthetic empty conversation",
+        display_title: "Synthetic empty conversation · #2",
+        chat_number: 2,
+        message_count: 0,
+      };
+      let finishEmpty;
+      const projects = projectId
+        ? [
+            {
+              id: projectId,
+              name: "Synthetic project",
+              description: "",
+              created_at: times[0],
+              updated_at: times[0],
+              pin_counts: { reports: 0, sources: 0 },
+              chat_count: 2,
+            },
+          ]
+        : [];
       const messages = structuredClone(allMessages.slice(0, 2));
-      const reports = structuredClone(allReports.slice(0, 1));
+      const reports = structuredClone(allReports.slice(0, 1)).map((value) => ({
+        ...value,
+        project_id: projectId,
+      }));
       const detail = () => ({ chat, messages, reports, sources: [] });
       const connection = {
         configured: true,
@@ -689,8 +714,9 @@ test("workspace follow-ups replace the main report while keeping prior query pre
       t.mock.method(globalThis, "fetch", async (path, options = {}) => {
         if (path === "/api/session")
           return Response.json({ csrf_token: "TEST_QUERY_HISTORY_SESSION" });
-        if (path === "/api/projects") return Response.json({ projects: [] });
-        if (path === "/api/chats") return Response.json({ chats: [chat] });
+        if (path === "/api/projects") return Response.json({ projects });
+        if (path === "/api/chats")
+          return Response.json({ chats: [chat, emptyChat] });
         if (path === "/api/settings") return Response.json(defaultSettings);
         if (path === "/api/connections") return Response.json(connection);
         if (path === "/api/connections/setup") return Response.json(setup);
@@ -699,7 +725,11 @@ test("workspace follow-ups replace the main report while keeping prior query pre
           return Response.json({
             active_profile_id: null,
             profiles: [],
-            catalog: { attributes: [], material_classes: [], applications: [] },
+            catalog: {
+              attributes: [],
+              material_classes: [],
+              applications: [],
+            },
           });
         if (path === "/api/public-sources")
           return Response.json({ sources: [], connected_sources: [] });
@@ -719,6 +749,18 @@ test("workspace follow-ups replace the main report while keeping prior query pre
             message: "Synthetic runtime.",
           });
         if (path === `/api/chats/${chat.id}`) return Response.json(detail());
+        if (path === `/api/chats/${emptyChat.id}`)
+          return new Promise((resolve) => {
+            finishEmpty = () =>
+              resolve(
+                Response.json({
+                  chat: emptyChat,
+                  messages: [],
+                  reports: [],
+                  sources: [],
+                }),
+              );
+          });
         if (path === `/api/chats/${chat.id}/messages`) {
           const submitted = JSON.parse(options.body);
           submissions.push(submitted);
@@ -729,6 +771,7 @@ test("workspace follow-ups replace the main report while keeping prior query pre
           );
           reports.push({
             ...structuredClone(allReports[index]),
+            project_id: projectId,
             result: {
               execution: { presentation: defaultSettings.presentation },
             },
@@ -785,7 +828,36 @@ test("workspace follow-ups replace the main report while keeping prior query pre
           null,
           createElement(SetupProvider, null, createElement(Workspace)),
         );
-      const openChat = () => click(document.querySelector(".global-chat-item"));
+      const savedChatButton = (title) =>
+        [...document.querySelectorAll(".global-chat-item")].find((item) =>
+          item.textContent.includes(title),
+        );
+      const openChat = async () => {
+        if (projectId && !savedChatButton(chat.title))
+          await click(document.querySelector(".project-expand"));
+        await click(savedChatButton(chat.title));
+      };
+      const pdf = () => document.querySelector(".chat-history-download");
+      const assertPdf = () => {
+        const link = pdf();
+        assert.ok(link);
+        assert.equal(link.textContent.trim(), "↓ Chat PDF");
+        assert.equal(
+          link.getAttribute("aria-label"),
+          "Download complete chat history as PDF",
+        );
+        assert.equal(
+          link.getAttribute("href"),
+          `/api/chats/${chat.id}/history.pdf`,
+        );
+        assert.equal(link.hasAttribute("download"), true);
+        assert.match(
+          link.title,
+          /all saved messages, timestamps, report revisions and sources/,
+        );
+        assert.match(link.title, /Unsaved text is not included/);
+        assert.ok(link.closest(".conversation-history-actions"));
+      };
       const latest = () => document.querySelector(".latest-report-section");
       const earlier = () => [
         ...document.querySelectorAll(".query-history-card"),
@@ -804,12 +876,21 @@ test("workspace follow-ups replace the main report while keeping prior query pre
         });
         await act(async () =>
           composer.form.dispatchEvent(
-            new dom.window.Event("submit", { bubbles: true, cancelable: true }),
+            new dom.window.Event("submit", {
+              bubbles: true,
+              cancelable: true,
+            }),
           ),
         );
       };
       await renderNode(workspace());
+      assert.equal(
+        pdf(),
+        null,
+        "an unsaved new-chat composer has no saved-history download",
+      );
       await openChat();
+      assertPdf();
       assert.ok(latest().textContent.includes(firstQuestion.content));
       assert.equal(earlier().length, 0);
       await submit(secondQuestion);
@@ -829,6 +910,7 @@ test("workspace follow-ups replace the main report while keeping prior query pre
       assert.ok(latest().textContent.includes(thirdQuestion.content));
       assert.ok(latest().textContent.includes("Latest-only-A"));
       assert.equal(earlier().length, 2);
+      assertPdf();
       assert.deepEqual(
         earlier().map(
           (card) => card.querySelector(".query-history-question").textContent,
@@ -858,7 +940,9 @@ test("workspace follow-ups replace the main report while keeping prior query pre
         "the header shortcut moves keyboard focus to prior queries",
       );
       await click(document.querySelector(".sidebar-new-chat"));
+      assert.equal(pdf(), null);
       await openChat();
+      assertPdf();
       assert.equal(
         earlier().length,
         2,
@@ -866,6 +950,7 @@ test("workspace follow-ups replace the main report while keeping prior query pre
       );
       await remountNode(workspace());
       await openChat();
+      assertPdf();
       assert.equal(
         earlier().length,
         2,
@@ -891,7 +976,31 @@ test("workspace follow-ups replace the main report while keeping prior query pre
         [{ id: firstReport.id, source: "saved" }],
         "history asks for the archived presentation, not a fresh interpretation",
       );
+      await click(savedChatButton(emptyChat.title));
+      assert.equal(
+        pdf(),
+        null,
+        "navigation to another loading chat removes the prior chat's download URL",
+      );
+      assert.equal(
+        document.querySelector(".message-history").getAttribute("aria-busy"),
+        "true",
+      );
+      assert.ok(finishEmpty);
+      await act(async () => finishEmpty());
+      assert.equal(
+        pdf(),
+        null,
+        "a loaded empty saved chat has no content to download",
+      );
+      await openChat();
+      assertPdf();
       assert.deepEqual(unexpected, []);
       assert.deepEqual(errors, []);
     },
-  ));
+  );
+}
+
+for (const projectId of [null, "synthetic-project"])
+  test(`complete ${projectId ? "project" : "general"} chat PDF stays available with earlier query previews and never leaks across empty/loading navigation`, async (t) =>
+    completeChatHistoryScenario(t, projectId));

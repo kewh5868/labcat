@@ -123,6 +123,7 @@ class ResearchToolSession:
         key_supplier: Callable[[], str | None] | None = None,
         source_observer: Callable[[dict, str | None], None] | None = None,
         prior_material_ids: list[str] | None = None,
+        current_request: str | None = None,
     ):
         from labcat.developer_settings import (
             effective_sources,
@@ -131,6 +132,7 @@ class ResearchToolSession:
         from labcat.intake import assess
 
         self._prompt = prompt
+        self._current_request = current_request
         self._progress = current_observer()
         self._config = deepcopy(config)
         self._profile = _snapshot(ranking_profile, 65536)
@@ -351,7 +353,11 @@ class ResearchToolSession:
                 ):
                     try:
                         interpreted = resolve_intent(
-                            self._prompt, arguments, self._profile, self._selection
+                            self._prompt,
+                            arguments,
+                            self._profile,
+                            self._selection,
+                            current_request=self._current_request,
                         )
                     except (TypeError, ValueError, KeyError):
                         raise AgentToolError(

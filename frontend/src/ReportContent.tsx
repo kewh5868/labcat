@@ -145,6 +145,80 @@ function isLiteratureTable(block: ReportBlock): boolean {
   );
 }
 
+function explanationExcerpt(text: string): string | null {
+  if (text.length <= 180) return null;
+  // Keep words and source tokens whole. A single long token is rendered in
+  // full rather than inventing a fragment that might look like a citation.
+  let end = 180;
+  for (const match of text.matchAll(/\[[RS][1-9][0-9]{0,4}\]/g)) {
+    if (match.index < end && match.index + match[0].length > end) {
+      end = match.index;
+      break;
+    }
+  }
+  const before = text.slice(0, end);
+  const boundary = before.search(/\s+\S*$/u);
+  if (boundary > 0) end = boundary;
+  else {
+    const next = text.slice(end).search(/\s/u);
+    if (next < 0) return null;
+    end += next;
+  }
+  const excerpt = text.slice(0, end).trimEnd();
+  return excerpt && excerpt !== text ? excerpt : null;
+}
+
+function ExpandableExplanation({
+  text,
+  references,
+  label,
+}: {
+  text: string;
+  references: ReportReference[];
+  label: string;
+}) {
+  const [expandedText, setExpandedText] = useState<string | null>(null);
+  const id = useId();
+  const excerpt = explanationExcerpt(text);
+  const expanded = expandedText === text;
+  if (!excerpt)
+    return (
+      <ReportText
+        text={text}
+        references={references}
+        chemicalTypography={false}
+      />
+    );
+  return (
+    <div className="report-explanation">
+      <span className="report-explanation-preview" hidden={expanded}>
+        <ReportText
+          text={`${excerpt}…`}
+          references={references}
+          chemicalTypography={false}
+        />
+      </span>
+      <span id={id} className="report-explanation-full" hidden={!expanded}>
+        <ReportText
+          text={text}
+          references={references}
+          chemicalTypography={false}
+        />
+      </span>
+      <button
+        type="button"
+        className="report-explanation-toggle"
+        aria-expanded={expanded}
+        aria-controls={id}
+        aria-label={`${expanded ? "Show less" : "Read more"}: ${label}`}
+        onClick={() => setExpandedText(expanded ? null : text)}
+      >
+        {expanded ? "Show less" : "Read more"}
+      </button>
+    </div>
+  );
+}
+
 function RelevantProperties({
   text,
   references,
@@ -999,6 +1073,12 @@ export default function ReportContent({
                                   <strong>{priority.percentage}%</strong>
                                   <small>{priority.label}</small>
                                 </span>
+                              ) : cellIndex === 3 || cellIndex === 5 ? (
+                                <ExpandableExplanation
+                                  text={cell}
+                                  references={references}
+                                  label={`${block.headers[cellIndex]} for ${row[1].replace(/\[[RS][1-9][0-9]{0,4}\]/g, "").trim()}`}
+                                />
                               ) : cellIndex === 4 &&
                                 block.headers[4] === "Relevant properties" ? (
                                 <RelevantProperties

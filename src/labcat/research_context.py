@@ -4,13 +4,7 @@ prose."""
 import re
 from copy import deepcopy
 
-from labcat.intake import resets_scope
-from labcat.ranking_profiles import (
-    INFERENCE_VERSION,
-    normalize_importance,
-    prompt_preferences,
-    validate_profile,
-)
+from labcat.intake import assess, resets_scope
 
 
 def continuation(context, prompt, *, enabled=True):
@@ -25,55 +19,16 @@ def continuation(context, prompt, *, enabled=True):
 
 
 def select_profile(store, requested, prompt, context, *, enabled=True):
-    """Explicit selection wins; otherwise preserve the last report's
-    preferences."""
-    active = continuation(context, prompt, enabled=enabled)
-    previous = active.get("ranking_profile")
-    if requested in (None, "infer") and isinstance(previous, dict):
-        try:
-            profile = validate_profile(
-                {
-                    key: previous[key]
-                    for key in (
-                        "name",
-                        "material_class",
-                        "application",
-                        "importance",
-                        "minimum_band_gap_ev",
-                        "target_band_gap_ev",
-                        "band_gap_tolerance_ev",
-                    )
-                    if key in previous
-                }
-            )
-            identifier = previous["id"]
-            if not isinstance(identifier, str) or not 1 <= len(identifier) <= 120:
-                raise ValueError
-        except (KeyError, ValueError, TypeError):
-            pass
-        else:
-            profile.update(
-                id=identifier,
-                normalized_weights=normalize_importance(profile["importance"]),
-            )
-            profile, adjustments = prompt_preferences(profile, prompt)
-            selection = {
-                "mode": "continued",
-                "reason": (
-                    "Continued this chat's saved ranking preferences, applying "
-                    "any explicit new property goals to this run only. "
-                    "Select a profile explicitly to replace them."
-                ),
-                "requested_profile_id": requested,
-                "selected_profile_id": identifier,
-                "previous_report_id": active["latest_completed_report_id"],
-                "inference_version": None,
-            }
-            if adjustments:
-                selection["preference_adjustments"] = adjustments
-                selection["inference_version"] = INFERENCE_VERSION
-            return profile, selection
-    return store.select(requested, prompt)
+    """Keep manual choices fixed; infer from bounded user context each
+    run."""
+    if requested != "infer":
+        # An omitted selection retains the API's active-profile contract. A
+        # concrete ID always wins, regardless of current or previous prompts.
+        return store.select(requested, prompt)
+    _, effective_prompt = assess(prompt, context=context if enabled else None)
+    # Saved reports are historical outcomes, not a new manual selection. In
+    # particular, a past fallback must never freeze future automatic inference.
+    return store.select("infer", effective_prompt)
 
 
 def material_hints(context, prompt, *, enabled=True):

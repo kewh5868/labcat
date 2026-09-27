@@ -17,9 +17,28 @@ See [source coverage](../docs/scientific-sources.md) for its scientific limits.
 
 ## Run
 
-Install/start Docker and load the provided image archive before opening the
-native application. Launching with no arguments starts or reuses the local
-backend using the bundled host launcher. A loading view appears immediately;
+Build the Docker image from the repository, or load a verified supplied image
+archive, then start Docker. From the repository or install-bundle folder, run
+`./labcat.sh` on Mac/Linux or `.\labcat.cmd` in Windows PowerShell. On first launch,
+press Enter for Desktop (option 1), or choose Browser (option 2). The launcher
+remembers your selection; `--choose` / `-Choose` opens the chooser again.
+`--desktop` / `-Desktop` and `--browser` / `-Browser` select and remember a mode
+directly. Native setup uses a supplied `desktop-bin/` app when available, otherwise
+builds the source with the prerequisites below; a source checkout does not
+include a prebuilt native app. Browser mode does not require native build tools.
+
+Desktop setup installs for the current user: `~/Applications/Labcat.app` on macOS,
+`%LOCALAPPDATA%\Programs\Labcat\Labcat.exe` with a Start menu shortcut on Windows,
+or `${XDG_DATA_HOME:-$HOME/.local/share}/labcat/desktop` with an application menu
+entry on Linux. No administrator elevation or system dependency installation is
+performed. Keep the original folder for updates and launcher commands. After
+updating source or a supplied native bundle, run `sh scripts/install_desktop.sh`
+or `.\scripts\install_desktop.ps1` from that folder to replace the installed
+shell and refresh its launcher configuration. Ordinary launches reuse the
+installed app; rebuilding Docker alone does not update it.
+
+Opening the installed native application starts or reuses the local
+backend using its installed host launcher. A loading view appears immediately;
 startup, status verification, and UI loading share a bounded deadline. Errors
 remain visible in the native window. Closing the window leaves Docker running.
 
@@ -70,6 +89,17 @@ Use a Rust toolchain, Node 24, and the operating-system build prerequisites from
 the system WebKit webview. Windows uses the WebView2 runtime; the NSIS installer
 can offer its bootstrapper if needed. Linux requires the WebKitGTK runtime.
 Neither a separate Chrome installation nor a Chrome user profile is needed.
+The first-run source installer checks for npm and Cargo plus the platform build
+tools: Xcode Command Line Tools on macOS; Visual Studio C++ Build Tools and a
+Windows SDK on Windows; or a compiler, `pkg-config` and WebKitGTK 4.1/GTK 3/libsoup 3/
+librsvg development packages on Linux. Install these prerequisites yourself before
+choosing Desktop. The browser choice needs only Docker and a browser.
+
+The automatic source build uses the committed npm and Cargo lockfiles. It builds
+a macOS app bundle or the Windows/Linux native binary and then installs fixed
+launcher resources beside it. It does not install a local AI model. Workspace
+data and the credential vault remain in Docker; native installation carries the
+shell and launcher configuration.
 
 From `desktop/`:
 
@@ -111,8 +141,9 @@ with fixed arguments and no user-provided command text. Root `labcat.sh`,
 resource mapping; no private notes or credentials are bundled.
 
 Navigation is restricted to the selected loopback origin. Downloads are limited
-to that backend's saved report exports, previews and report-scoped structure
-endpoints. Structure files use a fresh `.cif` filename in the OS Downloads folder.
+to that backend's saved report exports, complete chat PDFs, previews and
+report-scoped structure endpoints. Chat PDFs use a fresh `.pdf` filename and
+structure files use a fresh `.cif` filename in the OS Downloads folder.
 Approved public-reference
 links open in the default browser; other external destinations are rejected.
 Same-origin popups use an unprivileged native view. Loading/error content is embedded

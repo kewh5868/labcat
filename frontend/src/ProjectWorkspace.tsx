@@ -6,6 +6,7 @@ import {
   errorMessage,
   publicLink,
   reportExportUrl,
+  chatHistoryPdfUrl,
   workspaceApi,
   ResearchRequestError,
   GeneralChatsChangedError,
@@ -29,6 +30,10 @@ import type {
 } from "./workspaceApi";
 import RankingProfilesPanel from "./RankingProfiles";
 import ComposerControls from "./ComposerControls";
+import {
+  recordedRankingChoice,
+  useChatRankingPreferences,
+} from "./chatRankingPreferences";
 import ResearchProgress, { beginResearchSubmission } from "./ResearchProgress";
 import { useResearchRuns, completedResearchKey } from "./useResearchRuns";
 import type { WorkspaceResearch } from "./useResearchRuns";
@@ -345,8 +350,16 @@ export default function ProjectWorkspace({
     () => setRecoveredCompletionKey(""),
     [],
   );
-  const [recoveredRankingProfileId, setRecoveredRankingProfileId] =
-    useState("infer");
+  const chatRanking = useChatRankingPreferences();
+  const [draftRankingProfileId, setDraftRankingProfileId] = useState("infer");
+  const [projectRankingChoices, setProjectRankingChoices] = useState<
+    Record<string, string>
+  >({});
+  const [editingRankingProfileId, setEditingRankingProfileId] = useState("");
+  const rankingEditorProps = {
+    initialSelectedProfileId: editingRankingProfileId,
+    onSelectedProfileChange: setEditingRankingProfileId,
+  };
   const [composerSettings, setComposerSettings] = useState<
     "ranking" | "connections" | null
   >(null);
@@ -478,7 +491,7 @@ export default function ProjectWorkspace({
     setSearchMatch(null);
     setChatId("");
     setRecoveredDraft("");
-    setRecoveredRankingProfileId("infer");
+    setDraftRankingProfileId("infer");
     setDraftProject(project);
     setDraftSeed((value) => value + 1);
     setMode("chat");
@@ -486,7 +499,7 @@ export default function ProjectWorkspace({
   function openChat(
     id: string,
     draft = "",
-    rankingProfileId = "infer",
+    rankingProfileId?: string,
     researchError = "",
     completionKey = "",
   ) {
@@ -495,8 +508,13 @@ export default function ProjectWorkspace({
     setChatId(id);
     setRecoveredDraft(draft);
     setRecoveredResearchError(researchError);
-    setRecoveredRankingProfileId(rankingProfileId);
+    if (rankingProfileId !== undefined)
+      chatRanking.select(id, rankingProfileId);
     setMode("chat");
+  }
+  function rememberDraftChat(chat: Chat, rankingProfileId: string) {
+    chatRanking.select(chat.id, rankingProfileId);
+    rememberChat(chat);
   }
   function rememberChat(chat: Chat) {
     if (!mounted.current) return;
@@ -1518,6 +1536,7 @@ export default function ProjectWorkspace({
             ) : (
               !error && (
                 <SearchCriterionPanel
+                  rankingEditorProps={rankingEditorProps}
                   onConnections={() => setMode("connections")}
                 />
               )
@@ -1540,8 +1559,17 @@ export default function ProjectWorkspace({
                 research={research}
                 {...composerLinks}
                 key={`project-composer-${selectedProject.id}`}
+                rankingProfileId={
+                  projectRankingChoices[selectedProject.id] ?? "infer"
+                }
+                onRankingProfileChange={(id) =>
+                  setProjectRankingChoices((current) => ({
+                    ...current,
+                    [selectedProject.id]: id,
+                  }))
+                }
                 project={selectedProject}
-                onCreated={rememberChat}
+                onCreated={rememberDraftChat}
                 onOpen={openChat}
                 onReload={() => setRevision((value) => value + 1)}
                 loadingHistory={false}
@@ -1562,7 +1590,11 @@ export default function ProjectWorkspace({
             <ChatView
               research={research}
               {...composerLinks}
-              initialRankingProfileId={recoveredRankingProfileId}
+              rankingProfileId={chatRanking.choices[chatId] ?? "infer"}
+              onRankingProfileChange={(id) => chatRanking.select(chatId, id)}
+              onRestoreRankingProfile={(id) =>
+                chatRanking.select(chatId, id, true)
+              }
               key={chatId}
               chatId={chatId}
               identity={chats.find((chat) => chat.id === chatId)}
@@ -1586,10 +1618,12 @@ export default function ProjectWorkspace({
               research={research}
               {...composerLinks}
               key={draftSeed}
+              rankingProfileId={draftRankingProfileId}
+              onRankingProfileChange={setDraftRankingProfileId}
               project={
                 projects.find((item) => item.id === draftProject) ?? null
               }
-              onCreated={rememberChat}
+              onCreated={rememberDraftChat}
               onOpen={openChat}
               onReload={() => setRevision((value) => value + 1)}
               loadingHistory={loading}
@@ -1618,6 +1652,7 @@ export default function ProjectWorkspace({
       )}
       {composerSettings && (
         <ComposerSettingsDialog
+          rankingEditorProps={rankingEditorProps}
           section={composerSettings}
           onClose={() => setComposerSettings(null)}
         />
@@ -1715,11 +1750,18 @@ function PinTotals({
   );
 }
 
+type RankingEditorProps = {
+  initialSelectedProfileId: string;
+  onSelectedProfileChange: (id: string) => void;
+};
+
 function ComposerSettingsDialog({
+  rankingEditorProps,
   section,
   onClose,
 }: {
   section: "ranking" | "connections";
+  rankingEditorProps: RankingEditorProps;
   onClose: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -1757,7 +1799,7 @@ function ComposerSettingsDialog({
       </header>
       <div className="composer-settings-body">
         {section === "ranking" ? (
-          <RankingProfilesPanel />
+          <RankingProfilesPanel {...rankingEditorProps} />
         ) : (
           <ConnectionsPanel />
         )}
@@ -2050,6 +2092,8 @@ function PromptComposer({
 }
 
 function DraftChat({
+  rankingProfileId,
+  onRankingProfileChange,
   research,
   project,
   onCreated,
@@ -2060,8 +2104,10 @@ function DraftChat({
   ...composerLinks
 }: ComposerLinks & {
   research: WorkspaceResearch;
+  rankingProfileId: string;
+  onRankingProfileChange: (id: string) => void;
   project: Project | null;
-  onCreated: (chat: Chat) => void;
+  onCreated: (chat: Chat, rankingProfileId: string) => void;
   onOpen: (
     id: string,
     draft?: string,
@@ -2076,7 +2122,6 @@ function DraftChat({
   const setup = useSetup();
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
-  const [rankingProfileId, setRankingProfileId] = useState("infer");
   const [searchStructures, setSearchStructures] = useState(true);
   const [submission, setSubmission] = useState<ResearchSubmission | null>(null);
   const [progressChatId, setProgressChatId] = useState<string | null>(null);
@@ -2108,7 +2153,7 @@ function DraftChat({
       created = project
         ? await workspaceApi.projectDraft(project.id)
         : await workspaceApi.startChat();
-      onCreated(created);
+      onCreated(created, rankingProfileId);
       const pending = research.start(
         created.id,
         content,
@@ -2170,7 +2215,7 @@ function DraftChat({
         searchStructures={searchStructures}
         onSearchStructuresChange={setSearchStructures}
         rankingProfileId={rankingProfileId}
-        onRankingProfileChange={setRankingProfileId}
+        onRankingProfileChange={onRankingProfileChange}
         draft={draft}
         onDraft={setDraft}
         onSubmit={send}
@@ -2214,12 +2259,16 @@ function ChatView({
   sidebarMoving,
   sidebarMoveRevision,
   onBusyChange,
-  initialRankingProfileId,
+  rankingProfileId,
+  onRankingProfileChange,
+  onRestoreRankingProfile,
   searchMatch,
   ...composerLinks
 }: ComposerLinks & {
   research: WorkspaceResearch;
-  initialRankingProfileId: string;
+  rankingProfileId: string;
+  onRankingProfileChange: (id: string) => void;
+  onRestoreRankingProfile: (id: string) => void;
   chatId: string;
   identity?: Chat;
   projects: Project[];
@@ -2249,9 +2298,6 @@ function ChatView({
   const run = research.runs[chatId];
   const sending = run?.status === "running";
   const submission = run?.submission ?? null;
-  const [rankingProfileId, setRankingProfileId] = useState(
-    initialRankingProfileId,
-  );
   const [searchStructures, setSearchStructures] = useState(true);
   const [uncertain, setUncertain] = useState(Boolean(initialDraft));
   const [mutating, setMutating] = useState(false);
@@ -2311,6 +2357,8 @@ function ChatView({
       .then((next) => {
         if (controller.signal.aborted) return;
         setData(next);
+        const recordedChoice = recordedRankingChoice(next.reports);
+        if (recordedChoice) onRestoreRankingProfile(recordedChoice);
         setUncertain(false);
         onChanged(next.chat);
         const lastUser = [...next.messages]
@@ -2443,6 +2491,15 @@ function ChatView({
       else onBusyChange(chatId, false, busyOwner);
     }
   }
+  const historyPdfUrl =
+    !loading &&
+    !error &&
+    data?.chat.id === chatId &&
+    (data.messages.length > 0 ||
+      data.reports.length > 0 ||
+      data.sources.length > 0)
+      ? chatHistoryPdfUrl(chatId)
+      : null;
   const latestReport =
     data?.reports
       .filter((report) => ["complete", "partial"].includes(report.stage))
@@ -2500,7 +2557,11 @@ function ChatView({
           </span>
           <strong>{message.role === "user" ? "You" : brandName}</strong>
           {message.intake?.status === "clarification_required" && (
-            <span className="intake-label">A little more detail</span>
+            <span className="intake-label">
+              {message.intake.reason_code === "assessment_missing"
+                ? "Research not started"
+                : "A little more detail"}
+            </span>
           )}
           <SavedTime value={message.created_at} />
         </div>
@@ -2546,21 +2607,36 @@ function ChatView({
           )}
         </div>
         <div className="mascot-conversation-meta">
-          <span className="neutral-badge">Saved history</span>
-          {pastQueries.length > 0 && (
-            <button
-              type="button"
-              className="query-history-link"
-              onClick={() => {
-                const target =
-                  history.current?.querySelector<HTMLElement>(".query-history");
-                target?.scrollIntoView?.({ block: "start" });
-                target?.focus({ preventScroll: true });
-              }}
-            >
-              Earlier questions ({pastQueries.length})
-            </button>
-          )}
+          <div className="conversation-history-actions">
+            <span className="neutral-badge">Saved history</span>
+            {pastQueries.length > 0 && (
+              <button
+                type="button"
+                className="query-history-link"
+                onClick={() => {
+                  const target =
+                    history.current?.querySelector<HTMLElement>(
+                      ".query-history",
+                    );
+                  target?.scrollIntoView?.({ block: "start" });
+                  target?.focus({ preventScroll: true });
+                }}
+              >
+                Earlier questions ({pastQueries.length})
+              </button>
+            )}
+            {historyPdfUrl && (
+              <a
+                className="chat-history-download"
+                href={historyPdfUrl}
+                download
+                aria-label="Download complete chat history as PDF"
+                title="Download all saved messages, timestamps, report revisions and sources. Unsaved text is not included."
+              >
+                <span aria-hidden="true">↓</span> Chat PDF
+              </a>
+            )}
+          </div>
           <ResearchCompletionMascot
             className="mascot-header"
             completionKey={completionKey}
@@ -2691,7 +2767,7 @@ function ChatView({
         searchStructures={searchStructures}
         onSearchStructuresChange={setSearchStructures}
         rankingProfileId={rankingProfileId}
-        onRankingProfileChange={setRankingProfileId}
+        onRankingProfileChange={onRankingProfileChange}
         draft={draft}
         onDraft={setDraft}
         onSubmit={send}
@@ -2704,9 +2780,11 @@ function ChatView({
 }
 
 function SearchCriterionPanel({
+  rankingEditorProps,
   onConnections,
 }: {
   onConnections: () => void;
+  rankingEditorProps: RankingEditorProps;
 }) {
   return (
     <section className="search-settings">
@@ -2719,7 +2797,7 @@ function SearchCriterionPanel({
           research.
         </p>
       </header>
-      <RankingProfilesPanel />
+      <RankingProfilesPanel {...rankingEditorProps} />
       <PublicSourcesPanel onConnections={onConnections} />
     </section>
   );

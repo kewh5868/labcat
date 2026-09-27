@@ -51,6 +51,10 @@ chat numbers distinguish conversations with matching names.
 - **Earlier questions** opens the chat's prior questions and report previews.
   Choose **View saved report** to inspect a revision and its downloads without
   rerunning research.
+- **Chat PDF** in the conversation header downloads the complete saved chat:
+  timestamped questions and replies, every saved report revision with both
+  report views and its sources. Collapsed earlier questions are included.
+  The download uses saved content and does not rerun research.
 - Drag a General Chat onto a project, or choose **Move chat** from its three-dot
   menu. Moving preserves history but clears report pins in the old project;
   pin the reports again in their new location.
@@ -88,10 +92,15 @@ To try different priorities:
 4. Select that named profile in the prompt's ranking control and submit a new
    request. Check the resulting report's recorded profile and weights.
 
-An explicit selection applies to that request without changing the workspace
-default. **Infer from prompt** may choose other catalog priorities; continuing
-a chat normally retains its previous profile, with new goals able to refine
-inferred preferences. Always check the report's recorded selection.
+The selected named profile keeps its saved criteria, weights and numeric
+preferences for new requests. The chat remembers your choice after a reload;
+select another profile or **Infer from prompt** to change it. This does not
+change the workspace default.
+
+**Infer from prompt** reassesses each question, using bounded earlier user
+messages for follow-ups when history is enabled. If the class or application
+cannot be resolved, Labcat uses neutral exploration preferences without
+defaulting to oxide/high-k criteria. Always check the report's recorded selection.
 
 Higher relative importance gives an attribute more influence when usable
 assessment or property evidence exists. It cannot create missing evidence, and
@@ -114,6 +123,11 @@ and [request interpretation](semantic-intake.md).
 | **Technical View**              | Candidate assessments, cited passages, property context and comparisons.                    |
 | **Sources**                     | The saved references and their access and provenance details.                               |
 | **Search and analysis details** | Search outcomes, applied preferences, calculation details and supporting property records.  |
+
+In shortlist rows, choose **Read more** under a long explanation or caveat to
+read its complete retained assessment and citations. **Show less** collapses it
+again. Summary and Technical View use the same controls; downloads retain the
+full explanations regardless of what is collapsed on screen.
 
 The main **screening priority** reflects cited application relevance,
 demonstrated use and assessed attributes. It is separate from the numerical

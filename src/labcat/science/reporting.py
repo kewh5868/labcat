@@ -1415,7 +1415,7 @@ def validated_literature_evaluation(result: dict, sources: list[dict]) -> dict |
 
 
 def _literature_assessment_text(
-    criterion: dict, references: dict, *, detailed=False
+    criterion: dict, references: dict, *, detailed=False, truncate=True
 ) -> str:
     judgments = {
         "supports": "Supports fit",
@@ -1434,7 +1434,7 @@ def _literature_assessment_text(
                 "A literature assessment requires a verified public citation."
             )
         text = _text(assessment["interpretation"])
-        if not detailed:
+        if not detailed and truncate:
             text = _excerpt(text, 140)
         items.append(text + f" [{reference['id']}]")
     text = label + (": " + "; ".join(dict.fromkeys(items)) if items else "")
@@ -1515,7 +1515,7 @@ def _literature_lines(
                 "; ".join(
                     criterion_label(item["criterion_id"])
                     + " — "
-                    + _literature_assessment_text(item, references)
+                    + _literature_assessment_text(item, references, truncate=False)
                     for item in highlighted
                 )
                 or "No selected criterion assessment"
@@ -1532,7 +1532,7 @@ def _literature_lines(
             stability_text = "; ".join(
                 criteria[item["criterion_id"]]["label"]
                 + " — "
-                + _literature_assessment_text(item, references)
+                + _literature_assessment_text(item, references, truncate=False)
                 for item in concerns
             )
             unknown_stability = [
@@ -1764,9 +1764,9 @@ def _preliminary_literature_lines(
         )
         return definition["label"] + " (" + preference + ")"
 
-    def compact_assessment(item):
-        # One concise reason per table cell; all interpretations and their
-        # conflicts remain in the criterion-by-criterion audit below.
+    def shortlist_assessment(item):
+        # Retain the complete selected interpretation for inline expansion and
+        # downloads. Further assessments remain in the criterion-by-criterion audit.
         ordered = sorted(
             item["assessments"],
             key=lambda assessment: {
@@ -1779,15 +1779,10 @@ def _preliminary_literature_lines(
         return _literature_assessment_text(
             {
                 **item,
-                "assessments": [
-                    {
-                        **assessment,
-                        "interpretation": _excerpt(assessment["interpretation"], 100),
-                    }
-                    for assessment in ordered[:1]
-                ],
+                "assessments": ordered[:1],
             },
             references,
+            detailed=True,
         )
 
     def relevant_properties(row):
@@ -1855,21 +1850,12 @@ def _preliminary_literature_lines(
             "; ".join(
                 definitions[item["criterion_id"]]["label"]
                 + " — "
-                + compact_assessment(item)
-                for item in general[:1]
+                + shortlist_assessment(item)
+                for item in general
             )
             or "Named in retrieved discussion; application relevance and use "
             "unassessed."
         )
-        if len(general) > 1:
-            why += (
-                "; demonstrated use: "
-                + {
-                    "supports": "supported",
-                    "mixed": "mixed",
-                    "concern": "concern",
-                }[by_id["demonstrated_use"]["judgment"]]
-            )
         attributes = [
             item
             for item in row["criteria"]
@@ -1899,11 +1885,9 @@ def _preliminary_literature_lines(
         caution = "; ".join(
             definitions[item["criterion_id"]]["label"]
             + " — "
-            + compact_assessment(item)
-            for item in concerns[:1]
+            + shortlist_assessment(item)
+            for item in concerns
         )
-        if len(concerns) > 1:
-            caution += f"; {len(concerns) - 1} more in Technical Overview"
         if row["stability_unknown"]:
             caution += ("; " if caution else "") + "Stability evidence incomplete"
         if not caution:

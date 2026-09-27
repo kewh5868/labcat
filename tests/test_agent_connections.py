@@ -68,7 +68,7 @@ class Broker:
         self.takes += 1
         return auth_fixture()
 
-    def metadata(self, auth):
+    def metadata(self, auth, **kwargs):
         refreshed = copy.deepcopy(auth)
         refreshed["tokens"]["refresh_token"] = "rotated-test-refresh-credential"
         return {
@@ -216,7 +216,7 @@ def test_metadata_cannot_resurrect_concurrently_forgotten_login(tmp_path):
     manager.vault.update({"oauth_" + identifier: _pack(auth_fixture())}, [], "session")
 
     class Changed(Broker):
-        def metadata(self, auth):
+        def metadata(self, auth, **kwargs):
             manager.agent.forget_login(identifier)
             return super().metadata(auth)
 
@@ -576,3 +576,127 @@ def test_successful_worker_rotation_survives_restart_with_deployment_key_file(
     )
     for saved in path.parent.iterdir():
         assert b"worker-rotated-synthetic-credential" not in saved.read_bytes()
+
+
+def test_concurrent_catalog_reads_share_one_credential_bound_probe(
+    tmp_path, monkeypatch
+):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    manager = ConnectionManager(tmp_path / "workspace.sqlite3")
+    identifier = add(manager)
+    manager.vault.update({"oauth_" + identifier: _pack(auth_fixture())}, [], "session")
+    entered, release = Event(), Event()
+
+    class SlowBroker(Broker):
+        calls = 0
+
+        def metadata(self, auth, **kwargs):
+            self.calls += 1
+            assert kwargs["include_usage"] is False
+            entered.set()
+            assert release.wait(5)
+            return super().metadata(auth)
+
+    broker = manager.agent._auth = SlowBroker()
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(manager.agent.models, identifier)
+        assert entered.wait(5)
+        second = pool.submit(manager.agent.models, identifier)
+        release.set()
+        assert first.result(5) == second.result(5)
+    assert broker.calls == 1
+    result = manager.agent.models(identifier)
+    result["models"][0]["id"] = "changed-outside-cache"
+    assert manager.agent.models(identifier)["models"][0]["id"] == "test-model"
+    assert broker.calls == 1
+    assert "refresh_token" not in json.dumps(manager.agent._model_metadata, default=str)
+
+
+@pytest.mark.parametrize("change", ["token", "revision", "expiry", "storage"])
+def test_model_cache_rechecks_current_credential_state(tmp_path, monkeypatch, change):
+    manager = ConnectionManager(tmp_path / "workspace.sqlite3")
+    identifier = add(manager)
+    document = auth_fixture()
+    manager.vault.update({"oauth_" + identifier: _pack(document)}, [], "session")
+
+    class CountBroker(Broker):
+        calls = 0
+
+        def metadata(self, auth, **kwargs):
+            self.calls += 1
+            return super().metadata(auth)
+
+    broker = manager.agent._auth = CountBroker()
+    manager.agent.models(identifier)
+    if change == "token":
+        document["tokens"]["refresh_token"] = "different-test-credential"
+        manager.vault.update({"oauth_" + identifier: _pack(document)}, [], "session")
+    elif change == "revision":
+        manager.agent._credential_revisions[identifier] = 1
+    elif change == "expiry":
+        manager.agent._model_metadata[identifier]["expires"] = 0
+    else:
+        manager.agent._model_metadata[identifier]["storage"] = "encrypted"
+    manager.agent.models(identifier)
+    assert broker.calls == 2
+    manager.agent.forget_login(identifier)
+    with pytest.raises(ConnectionError):
+        manager.agent.models(identifier)
+    assert broker.calls == 2
+
+
+def test_metadata_timestamp_does_not_cancel_verified_readiness(tmp_path, monkeypatch):
+    monkeypatch.setenv("LABCAT_AGENT_ENGINE", "goose")
+    manager = ConnectionManager(tmp_path / "workspace.sqlite3")
+    identifier = add(manager)
+    manager._profile["allow_paid_inference"] = True
+    manager.vault.update({"oauth_" + identifier: _pack(auth_fixture())}, [], "session")
+    manager.agent._auth = Broker()
+    assert manager.setup.verify()["can_research"]
+    before = manager.setup.status()
+    from labcat.agent_connections import _unpack
+
+    document = _unpack(manager.vault.get("oauth_" + identifier))
+    document["last_refresh"] = "2026-09-27T12:00:00Z"
+    manager.vault.update({"oauth_" + identifier: _pack(document)}, [], "session")
+    assert manager.setup.status() == before
+    document["tokens"]["refresh_token"] = "another-test-credential"
+    manager.vault.update({"oauth_" + identifier: _pack(document)}, [], "session")
+    assert not manager.setup.status()["can_research"]
+
+
+def test_locked_vault_never_serves_a_cached_model_catalog(tmp_path):
+    manager = ConnectionManager(tmp_path / "workspace.sqlite3")
+    identifier = add(manager)
+    manager.vault_action({"action": "create", "passphrase": "test vault passphrase"})
+    manager.vault.update(
+        {"oauth_" + identifier: _pack(auth_fixture())}, [], "encrypted"
+    )
+    manager.agent._auth = Broker()
+    assert manager.agent.models(identifier)["models"]
+    manager.vault_action({"action": "lock"})
+    assert manager.agent._model_metadata == {}
+    with pytest.raises(ConnectionError):
+        manager.agent.models(identifier)
+
+
+def test_failed_new_account_probe_discards_cached_discovery(tmp_path):
+    manager = ConnectionManager(tmp_path / "workspace.sqlite3")
+    identifier = add(manager)
+    manager.vault.update({"oauth_" + identifier: _pack(auth_fixture())}, [], "session")
+    manager.agent._auth = Broker()
+    assert manager.agent.models(identifier)["models"]
+
+    class Revoked(Broker):
+        def metadata(self, auth, **kwargs):
+            public, updated = super().metadata(auth)
+            public["account_ready"] = False
+            return public, updated
+
+    manager.agent._auth = Revoked()
+    manager.agent.metadata(identifier)
+    with pytest.raises(ConnectionError, match="could not be verified"):
+        manager.agent.models(identifier)
+    assert manager.agent._model_metadata == {}

@@ -205,24 +205,28 @@ test("project, new chat and Connections switches never leave duplicate prompt fi
         created_at: at,
       });
       const clarification = messageRequests.length !== 2;
+      const assessmentMissing = messageRequests.length === 4;
       messages.push({
         id: `message-${messages.length}`,
         chat_id: chat.id,
         role: "assistant",
-        content: clarification
-          ? "Please narrow the materials research question.\n\n1. Which material class?\n2. What application should the search support?"
-          : "I can help research public materials evidence within this workspace’s constraints.",
+        content: assessmentMissing
+          ? "The model did not return a usable request assessment. Research did not start."
+          : clarification
+            ? "Please narrow the materials research question.\n\n1. Which material class?\n2. What application should the search support?"
+            : "I can help research public materials evidence within this workspace’s constraints.",
         report_id: null,
         created_at: at,
         intake: {
           status: clarification ? "clarification_required" : "refused",
-          reason_code: "fixture",
-          questions: clarification
-            ? [
-                "Which material class?",
-                "What application should the search support?",
-              ]
-            : [],
+          reason_code: assessmentMissing ? "assessment_missing" : "fixture",
+          questions:
+            clarification && !assessmentMissing
+              ? [
+                  "Which material class?",
+                  "What application should the search support?",
+                ]
+              : [],
         },
       });
       chat.message_count = messages.length;
@@ -524,7 +528,6 @@ test("project, new chat and Connections switches never leave duplicate prompt fi
       );
       assert.equal(composers().length, 1, "saved chat has one composer");
     }
-    await change(composers()[0], "Keep this draft through settings");
     await click(document.querySelector(".composer-ranking-button"));
     await click(
       [
@@ -537,6 +540,41 @@ test("project, new chat and Connections switches never leave duplicate prompt fi
       document.querySelector(".composer-ranking-button").textContent,
       /Custom priorities/,
     );
+    // A real page change unmounts the composer; explicit choices must survive.
+    await click(namedButton("Connections"));
+    await click(namedButton("Chat"));
+    assert.match(
+      document.querySelector(".composer-ranking-button").textContent,
+      /Custom priorities/,
+    );
+    await click(document.querySelector(".sidebar-new-chat"));
+    assert.match(
+      document.querySelector(".composer-ranking-button").textContent,
+      /Infer from prompt/,
+      "a new chat does not inherit another chat's explicit choice",
+    );
+    await click(document.querySelector(".composer-ranking-button"));
+    await click(
+      [
+        ...document.querySelectorAll(
+          ".composer-ranking-popover .composer-choice",
+        ),
+      ].find((button) => button.textContent.includes("Preset priorities")),
+    );
+    await click(namedButton("Connections"));
+    await click(namedButton("Chat"));
+    assert.match(
+      document.querySelector(".composer-ranking-button").textContent,
+      /Preset priorities/,
+      "the unsent draft keeps its own choice through navigation",
+    );
+    await click(document.querySelector(".nested-chat-list .global-chat-item"));
+    assert.match(
+      document.querySelector(".composer-ranking-button").textContent,
+      /Custom priorities/,
+      "reopening an existing chat preserves its own manual choice",
+    );
+    await change(composers()[0], "Keep this draft through settings");
     await click(document.querySelector(".composer-model-button"));
     await click(
       [
@@ -568,6 +606,23 @@ test("project, new chat and Connections switches never leave duplicate prompt fi
       ),
     );
     assert.equal(composers()[0].value, "Keep this draft through settings");
+    await change(document.getElementById("ranking-profile"), "profile-custom");
+    assert.equal(
+      rankingProfiles.active_profile_id,
+      "profile-active",
+      "inspecting a profile does not activate it",
+    );
+    await click(document.querySelector(".composer-settings-header button"));
+    await click(document.querySelector(".composer-ranking-button"));
+    await click(
+      document.querySelector(".composer-ranking-popover footer button"),
+    );
+    assert.equal(
+      document.getElementById("ranking-profile").value,
+      "profile-custom",
+      "the profile being edited survives closing and reopening Search Criterion",
+    );
+    assert.equal(rankingProfiles.active_profile_id, "profile-active");
     await click(document.querySelector(".composer-settings-header button"));
     pauseMessage = true;
     await click(document.querySelector('[aria-label="Send message"]'));
@@ -608,6 +663,10 @@ test("project, new chat and Connections switches never leave duplicate prompt fi
     const clarification = document.querySelector(".message-assistant");
     assert.match(clarification.textContent, /Which material class\?/);
     assert.equal(
+      clarification.querySelector(".intake-label").textContent,
+      "A little more detail",
+    );
+    assert.equal(
       clarification.closest("details"),
       null,
       "guiding questions are visible without opening history",
@@ -616,6 +675,13 @@ test("project, new chat and Connections switches never leave duplicate prompt fi
       clarification.textContent.match(/Which material class\?/g).length,
       1,
       "questions are not duplicated from intake metadata",
+    );
+    await click(namedButton("Connections"));
+    await click(namedButton("Chat"));
+    assert.match(
+      document.querySelector(".composer-ranking-button").textContent,
+      /Custom priorities/,
+      "manual choice survives a submitted clarification and navigation",
     );
     await click(structureChoice());
     await change(composers()[0], "Infer preferences for this question");
@@ -649,6 +715,14 @@ test("project, new chat and Connections switches never leave duplicate prompt fi
       /within this workspace’s constraints/,
     );
 
+    assert.equal(
+      [...document.querySelectorAll(".message-assistant")]
+        .at(-1)
+        .querySelector(".intake-label"),
+      null,
+      "refusals keep their existing presentation",
+    );
+
     // A later clarification must remain visible after an existing saved report.
     messages.push({
       id: "saved-request",
@@ -673,6 +747,14 @@ test("project, new chat and Connections switches never leave duplicate prompt fi
       message_id: "saved-response",
       title: "Synthetic saved report",
       stage: "fixture",
+      result: {
+        execution: {
+          ranking_selection: {
+            mode: "explicit",
+            requested_profile_id: "profile-custom",
+          },
+        },
+      },
       pi_summary: "Saved renderer fixture without scientific data.",
       technical_audit: "Saved renderer fixture without scientific data.",
       source_ids: [],
@@ -682,6 +764,11 @@ test("project, new chat and Connections switches never leave duplicate prompt fi
     await click(document.querySelector(".project-nav-item"));
     await click(document.querySelector(".nested-chat-list .global-chat-item"));
     assert.equal(document.querySelectorAll(".research-report").length, 1);
+    assert.match(
+      document.querySelector(".composer-ranking-button").textContent,
+      /Infer from prompt/,
+      "restoring an older explicit report never overrides the user's switch back to infer",
+    );
     await change(composers()[0], "Follow up without enough detail");
     await click(document.querySelector('[aria-label="Send message"]'));
     const followup = [...document.querySelectorAll(".message-assistant")].at(
@@ -698,6 +785,57 @@ test("project, new chat and Connections switches never leave duplicate prompt fi
       1,
       "the existing report is retained without fabricating another",
     );
+    assert.equal(
+      followup.querySelector(".intake-label").textContent,
+      "A little more detail",
+    );
+    await change(composers()[0], "Retry the same synthetic research request");
+    await click(document.querySelector('[aria-label="Send message"]'));
+    const assessment = [...document.querySelectorAll(".message-assistant")].at(
+      -1,
+    );
+    assert.equal(
+      assessment.querySelector(".intake-label").textContent,
+      "Research not started",
+    );
+    assert.match(
+      assessment.textContent,
+      /model did not return a usable request assessment/,
+    );
+    assert.doesNotMatch(
+      assessment.textContent,
+      /A little more detail|Which material class/,
+    );
+    assert.deepEqual(messages.at(-1).intake.questions, []);
+    assert.equal(document.querySelectorAll(".research-report").length, 1);
+    messages.push({
+      id: "historical-assessment-missing",
+      chat_id: chat.id,
+      role: "assistant",
+      content: "Historical saved assessment failure text.",
+      report_id: null,
+      created_at: at,
+      intake: {
+        status: "clarification_required",
+        reason_code: "assessment_missing",
+        questions: ["Historical fallback question?"],
+      },
+    });
+    await click(document.querySelector(".project-nav-item"));
+    await click(document.querySelector(".nested-chat-list .global-chat-item"));
+    const labels = [...document.querySelectorAll(".intake-label")].map(
+      (item) => item.textContent,
+    );
+    assert.equal(
+      labels.filter((label) => label === "Research not started").length,
+      2,
+      "current and historical missing assessments use the same failure label",
+    );
+    assert.ok(
+      labels.includes("A little more detail"),
+      "genuine saved clarification retains its original label",
+    );
+    assert.equal(document.querySelectorAll(".research-report").length, 1);
     assert.equal(composers().length, 1);
     await click(document.querySelector(".project-nav-item"));
     assert.equal(
@@ -833,6 +971,36 @@ test("project, new chat and Connections switches never leave duplicate prompt fi
         "Messages guide the task. They are never evidence.",
       ),
     );
+    const requestsBeforeReload = messageRequests.length;
+    for (const restoreFromReport of [false, true]) {
+      if (restoreFromReport)
+        window.localStorage.removeItem("labcat-chat-ranking-v1");
+      await act(async () =>
+        root.render(
+          createElement(
+            ConnectionsProvider,
+            { key: `reload-${restoreFromReport}` },
+            createElement(SetupProvider, null, createElement(Workspace)),
+          ),
+        ),
+      );
+      await click(document.querySelector(".project-nav-item"));
+      await click(
+        document.querySelector(".nested-chat-list .global-chat-item"),
+      );
+      assert.match(
+        document.querySelector(".composer-ranking-button").textContent,
+        restoreFromReport ? /Custom priorities/ : /Infer from prompt/,
+        restoreFromReport
+          ? "without a local choice, reopen restores the last report's explicit request"
+          : "a full app remount preserves explicit infer instead of the old manual report",
+      );
+      assert.equal(
+        messageRequests.length,
+        requestsBeforeReload,
+        "restoration never starts research",
+      );
+    }
     assert.ok(
       !errors.some((message) =>
         /same key|unique.*key|not wrapped in act/i.test(message),
