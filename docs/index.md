@@ -44,9 +44,6 @@ cd labcat
 docker build -t labcat:0.1.0.dev0 .
 ```
 
-The final `.` means “use this folder as the build context”; keep it in the
-command, separated from the image tag by a space.
-
 The first build downloads dependencies and can take several minutes. It builds
 for your computer's architecture, including Apple Silicon. Wait for it to finish.
 
@@ -130,6 +127,4 @@ follow up](examples.md).
 Select the sections you want beside the report tabs, choose an export format,
 and download. [Tour the workspace](user-guide.md)
 
-Labcat is an **interview prototype**. Rankings guide further research; they do
-not establish experimental performance or safety. Missing measurements remain
-unknown. [Ranking details](ranking.md) · [Validation and limitations](validation.md)
+[Ranking details](ranking.md) · [Validation and limitations](validation.md)
