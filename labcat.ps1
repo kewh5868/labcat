@@ -143,6 +143,23 @@ function Get-LabcatLaunchMode {
     }
 }
 
+function Get-LabcatFileDigest {
+    param([string]$LiteralPath)
+    # Framework hashing works in Windows PowerShell and PowerShell 7 without
+    # relying on the module search path inherited from the calling shell.
+    $stream = $null
+    $sha256 = $null
+    try {
+        $stream = [IO.File]::OpenRead($LiteralPath)
+        $sha256 = [Security.Cryptography.SHA256]::Create()
+        return [Convert]::ToBase64String($sha256.ComputeHash($stream))
+    }
+    finally {
+        if ($null -ne $sha256) { $sha256.Dispose() }
+        if ($null -ne $stream) { $stream.Dispose() }
+    }
+}
+
 function Test-LabcatInstalledShell {
     param([string]$Destination)
     $sourceMarker = Join-Path $Destination '.labcat-install-source'
@@ -157,7 +174,7 @@ function Test-LabcatInstalledShell {
         if ($sourceExists -ne (Test-Path -LiteralPath $copy -PathType Leaf)) { return $false }
         if ($sourceExists) {
             if ((Get-Item -Force -LiteralPath $copy).Attributes -band [IO.FileAttributes]::ReparsePoint) { return $false }
-            if ((Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash -cne (Get-FileHash -LiteralPath $copy -Algorithm SHA256).Hash) { return $false }
+            if ((Get-LabcatFileDigest -LiteralPath $source) -cne (Get-LabcatFileDigest -LiteralPath $copy)) { return $false }
         }
     }
     $savedProject = Join-Path $Destination 'launcher\.labcat-project-directory'

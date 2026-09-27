@@ -4,6 +4,7 @@ host files."""
 import hashlib
 import importlib.util
 import os
+import re
 import stat
 import zipfile
 from pathlib import Path
@@ -136,7 +137,9 @@ def test_bundle_does_not_collect_private_or_unlisted_files(bundle_inputs):
 def test_missing_required_launcher_is_not_silently_omitted(bundle_inputs, missing):
     root, archive = bundle_inputs
     (root / missing).unlink()
-    with pytest.raises(bundle_builder.BundleError, match=missing):
+    with pytest.raises(
+        bundle_builder.BundleError, match=re.escape(str(root / missing))
+    ):
         bundle_builder.build_install_bundle(archive, project_root=root)
 
 

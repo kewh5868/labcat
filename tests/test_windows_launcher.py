@@ -47,6 +47,11 @@ def launcher(tmp_path):
                     ConvertTo-Json -Compress |
                     Add-Content -Encoding UTF8 -LiteralPath $env:LABCAT_TEST_OPENS
             }
+            if ($env:LABCAT_TEST_NO_HASH_CMDLET) {
+                function global:Get-FileHash {
+                    throw 'Get-FileHash unavailable fixture'
+                }
+            }
             $launcherParameters = @{
                 Action = $Action
                 NoOpen = $NoOpen
@@ -55,7 +60,17 @@ def launcher(tmp_path):
                 Choose = $Choose
                 CliArguments = $CliArguments
             }
-            & $env:LABCAT_TEST_SCRIPT @launcherParameters
+            $lockedResource = $null
+            if ($env:LABCAT_TEST_LOCK_RESOURCE) {
+                $folder = Join-Path $env:LOCALAPPDATA 'Programs/Labcat/launcher'
+                $path = Join-Path $folder 'compose.yaml'
+                $lockedResource = [IO.File]::Open($path, [IO.FileMode]::Open,
+                    [IO.FileAccess]::Read, [IO.FileShare]::None)
+            }
+            try { & $env:LABCAT_TEST_SCRIPT @launcherParameters }
+            finally {
+                if ($null -ne $lockedResource) { $lockedResource.Dispose() }
+            }
             exit $LASTEXITCODE
             """),
         encoding="utf-8",
@@ -149,6 +164,7 @@ def launcher(tmp_path):
         docker_environment=None,
         open_window=False,
         native=False,
+        changed_native_resource=None,
         auto_mode=True,
         interactive_answer=None,
         **settings,
@@ -164,6 +180,10 @@ def launcher(tmp_path):
             resources.mkdir(exist_ok=True)
             for name in ("labcat.ps1", "labcat.cmd", "compose.yaml"):
                 shutil.copyfile(install / name, resources / name)
+            if changed_native_resource:
+                changed = resources / changed_native_resource
+                original = changed.read_bytes()
+                changed.write_bytes(original[:-1] + bytes([original[-1] ^ 1]))
         else:
             desktop_executable.unlink(missing_ok=True)
         env = os.environ.copy()
@@ -759,6 +779,45 @@ def test_installer_failure_does_not_start_backend_or_save_choice(launcher):
     result, calls = launcher("-Desktop", open_window=True)
     assert result.returncode != 0
     assert "installation failure fixture" in result.stderr
+    assert not any("up" in call for call in calls)
+    assert launcher.openings() == []
+    assert not (launcher.install / ".labcat-launch-mode").exists()
+
+
+def test_installed_desktop_hashing_does_not_require_get_filehash_cmdlet(launcher):
+    result, _ = launcher("-Desktop", open_window=True, native=True, NO_HASH_CMDLET="1")
+    assert result.returncode == 0, result.stderr
+    assert len(launcher.openings()) == 1
+    assert launcher.openings()[0]["path"].endswith("Labcat.exe")
+
+
+@pytest.mark.parametrize("resource", ["labcat.ps1", "labcat.cmd", "compose.yaml"])
+def test_changed_installed_resource_is_rejected_without_hash_cmdlet(launcher, resource):
+    result, calls = launcher(
+        "-Desktop",
+        open_window=True,
+        native=True,
+        changed_native_resource=resource,
+        NO_HASH_CMDLET="1",
+    )
+    assert result.returncode != 0
+    assert "desktop installer is missing" in result.stderr
+    assert "Get-FileHash" not in result.stderr
+    assert not any("up" in call for call in calls)
+    assert launcher.openings() == []
+    assert not (launcher.install / ".labcat-launch-mode").exists()
+
+
+def test_unreadable_installed_resource_fails_closed_without_hash_cmdlet(launcher):
+    result, calls = launcher(
+        "-Desktop",
+        open_window=True,
+        native=True,
+        NO_HASH_CMDLET="1",
+        LOCK_RESOURCE="1",
+    )
+    assert result.returncode != 0
+    assert "Get-FileHash" not in result.stderr
     assert not any("up" in call for call in calls)
     assert launcher.openings() == []
     assert not (launcher.install / ".labcat-launch-mode").exists()
