@@ -125,6 +125,10 @@ def test_bundle_does_not_collect_unreviewed_documentation_assets(bundle_inputs):
         "docs/assets/screenshots/private-session.png",
         "docs/assets/screenshots/setup-sign-in-original.png",
         "docs/assets/screenshots/nested/private.png",
+        "docs/assets/examples/unreviewed-shortlist.png",
+        "docs/assets/examples/raw/response.json",
+        "docs/assets/examples/private-run.json",
+        "docs/assets/examples/private-notes.txt",
         "docs/assets/private-notes.txt",
     ):
         path = root / name
@@ -137,7 +141,13 @@ def test_bundle_does_not_collect_unreviewed_documentation_assets(bundle_inputs):
 
 
 @pytest.mark.parametrize(
-    "missing", ["docs/resources.md", "docs/assets/screenshots/setup-sign-in.jpg"]
+    "missing",
+    [
+        "docs/resources.md",
+        "docs/assets/screenshots/setup-sign-in.jpg",
+        "docs/assets/examples/perovskites-astra-shortlist.jpg",
+        "docs/assets/examples/provenance.txt",
+    ],
 )
 def test_bundle_requires_guides_and_approved_images(bundle_inputs, missing):
     root, archive = bundle_inputs

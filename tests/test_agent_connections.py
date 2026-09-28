@@ -495,6 +495,7 @@ def test_failed_goose_run_preserves_rotated_tokens_privately(
     monkeypatch.setattr("labcat.goose_worker_client.run_remote_goose", fail)
     with pytest.raises(GooseRuntimeError) as failure:
         manager.agent.run("test", None, None)
+    assert failure.value.research_account_id == identifier
     assert failure.value.research_attempt == {
         "provider": "chatgpt",
         "model": "test-model",
@@ -700,3 +701,166 @@ def test_failed_new_account_probe_discards_cached_discovery(tmp_path):
     with pytest.raises(ConnectionError, match="could not be verified"):
         manager.agent.models(identifier)
     assert manager.agent._model_metadata == {}
+
+
+@pytest.fixture
+def missing_assessment_run(tmp_path, monkeypatch):
+    monkeypatch.setenv("LABCAT_AGENT_ENGINE", "goose")
+    manager = ConnectionManager(tmp_path / "workspace.sqlite3")
+    identifier = manager.save_account(
+        {
+            "label": "Test quota account",
+            "profile": {
+                **DEFAULT_PROFILE,
+                "provider": "chatgpt",
+                "model": "test-model",
+                "allow_paid_inference": True,
+            },
+            "secret_storage": "session",
+        }
+    )["active_account_id"]
+    manager.vault.update({"oauth_" + identifier: _pack(auth_fixture())}, [], "session")
+
+    class QuotaBroker(Broker):
+        def __init__(self):
+            super().__init__()
+            self.reads = []
+            self.callback = None
+            self.controls = {
+                "ordinary_usage_allowed": False,
+                "buckets": [
+                    {
+                        "id": "codex",
+                        "model": None,
+                        "normal_model": None,
+                        "reached_type": "rate_limit_reached",
+                        "spend_control_reached": False,
+                        "has_usable_credits": False,
+                    }
+                ],
+            }
+
+        def metadata(self, auth, **kwargs):
+            self.reads.append(kwargs.get("include_usage"))
+            public, updated = super().metadata(auth, **kwargs)
+            public["usage_limits"] = copy.deepcopy(self.controls)
+            if self.callback:
+                self.callback(public)
+            return public, updated
+
+    broker = manager.agent._auth = QuotaBroker()
+    monkeypatch.setattr(
+        "labcat.goose_worker_client.run_remote_goose",
+        lambda *args, **kwargs: {"status": "completed", "usage": None},
+    )
+    attempt = manager.agent.run("Synthetic materials prompt", None, None)
+    broker.reads.clear()
+    return manager, broker, attempt
+
+
+def test_postfailure_diagnosis_uses_fresh_metadata_without_changing_readiness(
+    missing_assessment_run,
+):
+    manager, broker, attempt = missing_assessment_run
+    before = copy.deepcopy(manager.setup.status())
+    assert (
+        manager.agent.failure_after_missing_assessment(attempt)
+        == "provider_usage_limit"
+    )
+    assert broker.reads == [True]
+    assert manager.setup.status() == before
+    assert (
+        manager.agent._credential_snapshot(attempt["account_id"])[0]["tokens"][
+            "refresh_token"
+        ]
+        == "rotated-test-refresh-credential"
+    )
+    assert "usage_limits" not in json.dumps(manager.status())
+
+
+@pytest.mark.parametrize(
+    "change",
+    ["credits", "ordinary", "unknown", "missing", "not_ready", "catalog_missing"],
+)
+def test_postfailure_unknown_or_usable_usage_never_becomes_limit_failure(
+    missing_assessment_run, change
+):
+    manager, broker, attempt = missing_assessment_run
+    if change == "credits":
+        broker.controls["buckets"][0]["has_usable_credits"] = True
+    elif change == "ordinary":
+        broker.controls["ordinary_usage_allowed"] = True
+    elif change == "unknown":
+        broker.controls["buckets"][0]["id"] = "unrelated-meter"
+    elif change == "missing":
+        broker.controls = None
+    elif change == "not_ready":
+        broker.callback = lambda public: public.update(account_ready=False)
+    else:
+        broker.callback = lambda public: public.update(models=[])
+    assert manager.agent.failure_after_missing_assessment(attempt) is None
+
+
+@pytest.mark.parametrize("change", ["provider", "model", "account_id"])
+def test_postfailure_diagnostic_rejects_uncaptured_attempt(
+    missing_assessment_run, change
+):
+    manager, broker, attempt = missing_assessment_run
+    attempt[change] = "different-value"
+    assert manager.agent.failure_after_missing_assessment(attempt) is None
+    assert broker.reads == []
+
+
+@pytest.mark.parametrize("change", ["forget", "revision", "model", "account"])
+def test_postfailure_diagnostic_rejects_concurrent_account_changes(
+    missing_assessment_run, change
+):
+    manager, broker, attempt = missing_assessment_run
+    identifier = attempt["account_id"]
+
+    def mutate(public):
+        if change == "forget":
+            manager.agent.forget_login(identifier)
+        elif change == "revision":
+            manager.agent._credential_revisions[identifier] = 10
+        elif change == "model":
+            manager.agent._account(identifier)["profile"]["model"] = "another-model"
+        else:
+            changed = auth_fixture()
+            changed["tokens"]["account_id"] = "another-underlying-account"
+            manager.vault.update({"oauth_" + identifier: _pack(changed)}, [], "session")
+
+    broker.callback = mutate
+    assert manager.agent.failure_after_missing_assessment(attempt) is None
+    if change == "forget":
+        assert manager.vault.get("oauth_" + identifier) is None
+
+
+def test_postfailure_diagnostic_does_not_query_after_reconnect(missing_assessment_run):
+    manager, broker, attempt = missing_assessment_run
+    manager.agent._credential_revisions[attempt["account_id"]] = 10
+    assert manager.agent.failure_after_missing_assessment(attempt) is None
+    assert broker.reads == []
+
+
+def test_postfailure_diagnostic_does_not_compete_with_running_research(
+    missing_assessment_run,
+):
+    manager, broker, attempt = missing_assessment_run
+    with manager.agent._run_lock:
+        assert manager.agent.failure_after_missing_assessment(attempt) is None
+    assert broker.reads == []
+
+
+def test_optional_diagnostic_error_does_not_replace_original_failure(
+    missing_assessment_run,
+):
+    manager, broker, attempt = missing_assessment_run
+
+    def fail(public):
+        raise RuntimeError("private upstream diagnostics")
+
+    broker.callback = fail
+    assert manager.agent.failure_after_missing_assessment(attempt) is None
+    assert manager.agent._run_lock.acquire(blocking=False)
+    manager.agent._run_lock.release()

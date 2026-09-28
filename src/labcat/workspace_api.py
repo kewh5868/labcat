@@ -158,13 +158,23 @@ def _call(operation, *args, **kwargs):
                 "setup_required": False,
             },
         ) from None
-    except (ModelError, ConnectionError):
+    except (ModelError, ConnectionError) as error:
+        from labcat.model_failures import (
+            PROVIDER_FAILURE_MESSAGES,
+            provider_failure_code,
+        )
+
+        failure_code = provider_failure_code(error)
         raise HTTPException(
             502,
             {
                 "code": "model_execution_failed",
-                "message": "The model connection failed. Check Connections and retry.",
+                "message": PROVIDER_FAILURE_MESSAGES.get(
+                    failure_code,
+                    "The model connection failed. Check Connections and retry.",
+                ),
                 "setup_required": False,
+                **({"failure_code": failure_code} if failure_code else {}),
             },
         ) from None
     except WorkspaceNotFound as error:

@@ -56,3 +56,4 @@ prune .codex
 
 global-exclude .labcat-launch-mode .labcat-project-directory .labcat-install-source
 include docs/assets/screenshots/provenance.txt
+include docs/assets/examples/provenance.txt

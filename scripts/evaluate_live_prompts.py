@@ -312,6 +312,30 @@ def _lead_linked(lead, sources):
             unicodedata.normalize("NFKC", text).split()
         ):
             return True
+        # Reconstruct approved body passages with their source/hash binding.
+        # Raw metadata strings and matching substrings cannot establish a
+        # retained document or replace its original citation identity.
+        from labcat.science.candidate_leads import (
+            _body_documents,
+            validate_candidate_leads,
+        )
+
+        documents = [document for document, _ in _body_documents(source)]
+        rebound = validate_candidate_leads(
+            [
+                {"document_id": document["document_id"], "name": name, "quote": quote}
+                for document in documents
+            ],
+            documents,
+            [source],
+        )
+        citations = lead.get("citations", [])
+        if isinstance(citations, list) and any(
+            citation in citations
+            for candidate in rebound
+            for citation in candidate["citations"]
+        ):
+            return True
     return False
 
 

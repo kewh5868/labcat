@@ -174,14 +174,21 @@ export default function QueryHistory({
                 <p className="query-result-note">
                   {turn.responses.some(
                     (message) =>
-                      message.intake?.status === "clarification_required",
+                      message.intake?.status === "clarification_required" &&
+                      message.intake.reason_code !== "assessment_missing",
                   )
                     ? "Clarification requested · no shortlist yet."
                     : turn.responses.some(
-                          (message) => message.intake?.status === "refused",
+                          (message) =>
+                            message.intake?.reason_code ===
+                            "assessment_missing",
                         )
-                      ? "Request declined · no shortlist generated."
-                      : "No saved shortlist for this question."}
+                      ? "Research not started · no shortlist generated."
+                      : turn.responses.some(
+                            (message) => message.intake?.status === "refused",
+                          )
+                        ? "Request declined · no shortlist generated."
+                        : "No saved shortlist for this question."}
                 </p>
               )}
               {turn.responses.length > 0 && (

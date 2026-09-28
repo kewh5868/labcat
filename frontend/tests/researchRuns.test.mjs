@@ -277,3 +277,30 @@ test("active-run transport validates run IDs, scope and full status schema", asy
     await h.close();
   }
 });
+
+test("a provider usage limit stops this run, preserves its draft and never auto-retries", async (t) => {
+  const h = await harness(t);
+  let posts = 0;
+  t.mock.method(h.workspaceApi, "message", async () => {
+    posts++;
+    throw new h.ResearchRequestError(false, "provider_usage_limit");
+  });
+  try {
+    await h.act(async () => {
+      await assert.rejects(h.start(), /usage allowance are exhausted/);
+    });
+    const failed = h.research.runs["chat-one"];
+    assert.equal(failed.status, "failed");
+    assert.equal(failed.failureCode, "provider_usage_limit");
+    assert.equal(failed.setupRequired, false);
+    assert.equal(failed.prompt, "First prompt");
+    assert.equal(failed.requestPending, false);
+    assert.equal(failed.completionKey, undefined);
+    await h.tick();
+    await h.tick();
+    assert.equal(posts, 1);
+    assert.equal(h.research.runs["chat-one"].status, "failed");
+  } finally {
+    await h.close();
+  }
+});

@@ -543,6 +543,103 @@ def _rate_limits(value, account_id):
     return result
 
 
+_USAGE_LIMIT_TYPES = frozenset(
+    {
+        "rate_limit_reached",
+        "workspace_owner_credits_depleted",
+        "workspace_member_credits_depleted",
+        "workspace_owner_usage_limit_reached",
+        "workspace_member_usage_limit_reached",
+    }
+)
+
+
+def _usage_limits(value, account_id):
+    """Keep only explicit, account-bound Codex 0.154 usage controls.
+
+    Percentages, reset times and token activity cannot establish
+    exhaustion. This optional diagnostic never changes connection
+    readiness.
+    """
+    if not isinstance(value, dict) or value.get("accountId") != account_id:
+        return None
+    ordinary = value.get("ordinaryUsageAllowed")
+    if ordinary is not None and type(ordinary) is not bool:
+        _fail()
+    buckets = value.get("rateLimitsByLimitId")
+    if buckets is None:
+        buckets = {"codex": value.get("rateLimits")}
+    if not isinstance(buckets, dict) or not 1 <= len(buckets) <= 32:
+        _fail()
+    result = []
+    for key, bucket in buckets.items():
+        if not isinstance(bucket, dict):
+            _fail()
+        identifier = _safe_label(bucket.get("limitId") or key, 80)
+        if buckets is value.get("rateLimitsByLimitId") and identifier != key:
+            _fail()
+        label = bucket.get("limitName")
+        normal_model = bucket.get("normalModelSlug")
+        for name in (label, normal_model):
+            if name is not None:
+                _safe_label(name, 200)
+        reached = bucket.get("rateLimitReachedType")
+        if reached is not None and (
+            not isinstance(reached, str) or reached not in _USAGE_LIMIT_TYPES
+        ):
+            _fail()
+        spend = bucket.get("spendControlReached")
+        if spend is not None and type(spend) is not bool:
+            _fail()
+        credits = bucket.get("credits")
+        usable_credits = None
+        if credits is not None:
+            if not isinstance(credits, dict) or any(
+                type(credits.get(name)) is not bool
+                for name in ("hasCredits", "unlimited")
+            ):
+                _fail()
+            usable_credits = credits["hasCredits"] or credits["unlimited"]
+        result.append(
+            {
+                "id": identifier,
+                "model": label,
+                # This describes a quota alias, not the model using its meter.
+                "normal_model": normal_model,
+                "reached_type": reached,
+                "spend_control_reached": spend,
+                "has_usable_credits": usable_credits,
+            }
+        )
+    return {"ordinary_usage_allowed": ordinary, "buckets": result}
+
+
+def usage_limit_after_failure(value, model):
+    """Diagnose a failed selected-model request, never pre-empt a
+    request."""
+    if not isinstance(value, dict) or value.get("ordinary_usage_allowed") is not False:
+        return False
+    buckets = value.get("buckets")
+    if not isinstance(buckets, list) or not 1 <= len(buckets) <= 32:
+        return False
+    if any(not isinstance(bucket, dict) for bucket in buckets):
+        return False
+    # An explicitly named model meter takes precedence over ordinary usage.
+    # normal_model is display metadata; using it would conflate reserve aliases.
+    matched = [
+        bucket for bucket in buckets if model in (bucket.get("model"), bucket.get("id"))
+    ]
+    relevant = matched or [bucket for bucket in buckets if bucket.get("id") == "codex"]
+    return any(
+        bucket.get("has_usable_credits") is False
+        and (
+            bucket.get("reached_type") in _USAGE_LIMIT_TYPES
+            or bucket.get("spend_control_reached") is True
+        )
+        for bucket in relevant
+    )
+
+
 def _token_activity(value):
     if not isinstance(value, dict) or not isinstance(value.get("summary"), dict):
         _fail()
@@ -743,6 +840,7 @@ class ChatGPTAuthBroker:
             "models": [],
             "account_ready": False,
             "rate_limits": None,
+            "usage_limits": None,
             "token_activity": None,
             "notices": [],
             "inference_tested": False,
@@ -827,9 +925,12 @@ class ChatGPTAuthBroker:
                     public["notices"].append("The account model list is unavailable.")
                 if include_usage:
                     try:
+                        limits = session.request("account/rateLimits/read")
                         public["rate_limits"] = _rate_limits(
-                            session.request("account/rateLimits/read"),
-                            auth["tokens"]["account_id"],
+                            limits, auth["tokens"]["account_id"]
+                        )
+                        public["usage_limits"] = _usage_limits(
+                            limits, auth["tokens"]["account_id"]
                         )
                     except ChatGPTAuthError:
                         public["notices"].append(

@@ -9,6 +9,12 @@ MAX_DISCOVERY_ARTICLES = 2
 MAX_DISCOVERY_PASSAGES = 3
 MAX_DISCOVERY_PARAGRAPH = 2400
 
+_CORRECTION_NOTICE = re.compile(
+    r"^\s*(?:(?:author|publisher)(?:['’]s)?\s+)?"
+    r"(?:correction|corrigendum|erratum)\s*(?::|to\b|for\b|$)",
+    re.I,
+)
+
 
 def tandem_terms(query, semantic_scope=None):
     """Keep the requested absorber role in searches, without naming
@@ -98,12 +104,24 @@ def retain_device_passages(
         raise ValueError("Discovery body budget must be between zero and two.")
     # Leave time to return accepted metadata if an optional body times out.
     deadline -= 0.25
+    # A short correction notice can otherwise consume the same bounded body
+    # attempt as the substantive article. Change only reading order: keep all
+    # original references, including notices, available with their provenance.
+    # This does not establish that an article is unaffected by a correction.
+    reading_order = sorted(
+        (
+            reference
+            for reference in references
+            if reference.get("source_id") == "europe_pmc"
+        ),
+        key=lambda reference: bool(
+            _CORRECTION_NOTICE.match(reference.get("title", ""))
+        ),
+    )
     attempted = 0
-    for reference in references:
+    for reference in reading_order:
         if attempted >= article_budget or time.monotonic() >= deadline:
             break
-        if reference.get("source_id") != "europe_pmc":
-            continue
         attempted += 1
         identity = reference["record_id"]
         try:

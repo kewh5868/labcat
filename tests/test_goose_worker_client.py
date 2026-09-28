@@ -429,7 +429,17 @@ def test_callback_preserves_model_veto_and_never_starts_source_retrieval(
     assert result["result"]["intake"]["status"] == expected
 
 
-@pytest.mark.parametrize("code", ["time_limit", "output_limit", "invalid_usage"])
+@pytest.mark.parametrize(
+    "code",
+    [
+        "time_limit",
+        "output_limit",
+        "invalid_usage",
+        "provider_usage_limit",
+        "provider_authentication",
+        "provider_rate_limit",
+    ],
+)
 def test_failed_worker_retains_only_allowlisted_diagnostic_code(monkeypatch, code):
     _wire(
         monkeypatch,

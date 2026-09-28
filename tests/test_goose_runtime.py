@@ -351,3 +351,218 @@ def test_timeout_includes_child_that_does_not_read_stdin(monkeypatch, tmp_path):
             b"x" * 64000,
         )
     assert failure.value.failure_code == "time_limit"
+
+
+def _completed_output(messages):
+    return json.dumps(
+        {
+            "messages": messages,
+            "metadata": {"status": "completed", "total_tokens": 0},
+        }
+    ).encode()
+
+
+@pytest.mark.parametrize(
+    ("block", "expected"),
+    [
+        (
+            {
+                "type": "systemNotification",
+                "notificationType": "creditsExhausted",
+                "msg": "private-provider-message",
+                "data": {"top_up_url": "https://private-provider.example/secret"},
+            },
+            "provider_usage_limit",
+        ),
+        (
+            {
+                "type": "error",
+                "kind": "creditsExhausted",
+                "message": "private-provider-message",
+            },
+            "provider_usage_limit",
+        ),
+        (
+            {
+                "type": "error",
+                "kind": "authentication",
+                "message": "private-provider-message",
+            },
+            "provider_authentication",
+        ),
+    ],
+)
+def test_typed_provider_failure_is_not_successful_zero_token_usage(block, expected):
+    # These are the serialized content variants in pinned Goose 1.50.0's
+    # goose-provider-types/conversation/message.rs, not provider response prose.
+    raw = _completed_output([{"role": "assistant", "content": [block]}])
+    with pytest.raises(goose_runtime.GooseRuntimeError) as caught:
+        goose_runtime._usage(raw)
+    assert caught.value.failure_code == expected
+    assert str(caught.value) == goose_runtime.PROVIDER_FAILURE_MESSAGES[expected]
+    assert "private-provider" not in str(caught.value)
+    assert "secret" not in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        {
+            "role": "user",
+            "content": [
+                {"type": "systemNotification", "notificationType": "creditsExhausted"}
+            ],
+        },
+        {"role": "tool", "content": [{"type": "error", "kind": "authentication"}]},
+        {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "insufficient_quota usage_limit_reached creditsExhausted",
+                }
+            ],
+        },
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "text", "text": '{"type":"error","kind":"creditsExhausted"}'}
+            ],
+        },
+        {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "toolResponse",
+                    "toolResult": {
+                        "type": "systemNotification",
+                        "notificationType": "creditsExhausted",
+                    },
+                }
+            ],
+        },
+        {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "systemNotification",
+                    "notificationType": "inlineMessage",
+                    "msg": "creditsExhausted",
+                }
+            ],
+        },
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "error", "kind": "other", "message": "usage_limit_reached"}
+            ],
+        },
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "error", "kind": "rateLimitExceeded", "message": "429"}
+            ],
+        },
+        {
+            "role": "assistant",
+            "content": [{"type": "error", "kind": "contextLengthExceeded"}],
+        },
+        {
+            "role": "assistant",
+            "content": [{"type": "error", "kind": {"creditsExhausted": True}}],
+        },
+        {"role": "assistant", "content": "creditsExhausted"},
+        {"role": "assistant", "content": [None, "creditsExhausted", 1]},
+        None,
+    ],
+)
+def test_prose_echoed_errors_and_unknown_types_cannot_assert_account_limits(message):
+    result = goose_runtime._usage(_completed_output([message]))
+    assert all(value is None for value in result.values())
+
+
+@pytest.mark.parametrize("stopped_after_report", [False, True])
+def test_exit_zero_typed_credit_failure_preserves_refresh_and_retained_report(
+    monkeypatch, tmp_path, stopped_after_report
+):
+    tokens = {
+        "access_token": "sensitive-access",
+        "refresh_token": "sensitive-refresh",
+        "id_token": None,
+        "account_id": "same",
+        "expires_at": "2099-01-01T00:00:00Z",
+    }
+    raw = _completed_output(
+        [
+            {
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "systemNotification",
+                        "notificationType": "creditsExhausted",
+                        "msg": "private-provider-message",
+                    }
+                ],
+            }
+        ]
+    )
+    original_execute = goose_runtime._execute
+
+    @contextmanager
+    def directory(_):
+        yield tmp_path
+
+    @contextmanager
+    def broker(_):
+        yield (
+            "http://127.0.0.1:2222",
+            "t" * 43,
+            [],
+            goose_runtime._ReportRetentionSignal(),
+        )
+
+    def execute(_command, _env, folder, payload, **kwargs):
+        # Real local process exits successfully with the typed Goose JSON.
+        # It makes no provider call and does not test an actual credit balance.
+        if stopped_after_report:
+            return goose_runtime._ProcessResult(raw, True)
+        return original_execute(
+            [
+                sys.executable,
+                "-c",
+                "import sys; sys.stdout.buffer.write(" + repr(raw) + ")",
+            ],
+            {},
+            folder,
+            payload,
+        )
+
+    monkeypatch.setattr(goose_runtime, "runtime_status", lambda: {"available": True})
+    monkeypatch.setattr(goose_runtime, "_tool_broker", broker)
+    monkeypatch.setattr(goose_runtime, "_runtime_directory", directory)
+    monkeypatch.setattr(goose_runtime, "_execute", execute)
+    if stopped_after_report:
+        result = goose_runtime.run_goose(
+            profile("chatgpt"),
+            None,
+            "Find materials",
+            tool_session=Tools(),
+            chatgpt_tokens=tokens,
+        )
+        assert result.pop("refreshed_chatgpt_tokens") == tokens
+        assert result["status"] == "stopped_after_report"
+        assert result["usage"] is None
+        assert "private-provider-message" not in json.dumps(result)
+    else:
+        with pytest.raises(goose_runtime.GooseRuntimeError) as caught:
+            goose_runtime.run_goose(
+                profile("chatgpt"),
+                None,
+                "Find materials",
+                tool_session=Tools(),
+                chatgpt_tokens=tokens,
+            )
+        assert caught.value.failure_code == "provider_usage_limit"
+        assert caught.value.refreshed_chatgpt_tokens == tokens
+        assert "sensitive" not in str(caught.value)
+        assert "private-provider-message" not in str(caught.value)

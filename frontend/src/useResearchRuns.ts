@@ -4,7 +4,12 @@ import {
   errorMessage,
   ResearchRequestError,
 } from "./workspaceApi";
-import type { Chat, ChatDetail, ResearchReport } from "./workspaceApi";
+import type {
+  Chat,
+  ChatDetail,
+  ResearchReport,
+  ResearchFailureCode,
+} from "./workspaceApi";
 import type { ResearchSubmission } from "./ResearchProgress";
 
 export interface WorkspaceRun {
@@ -13,6 +18,7 @@ export interface WorkspaceRun {
   prompt?: string;
   error?: string;
   setupRequired?: boolean;
+  failureCode?: ResearchFailureCode;
   completionKey?: string;
   revision: number;
   requestPending: boolean;
@@ -119,6 +125,7 @@ export function useResearchRuns(onChatChanged: (chat: Chat) => void) {
                   revision: latest.revision + 1,
                   error: errorMessage(error),
                   setupRequired: error.setupRequired,
+                  failureCode: error.failureCode,
                 }
               : { ...latest, requestPending: false },
           );

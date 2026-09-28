@@ -174,6 +174,97 @@ def test_discovery_is_bounded_and_failures_retain_metadata(monkeypatch):
     assert calls == []
 
 
+@pytest.mark.parametrize(
+    "notice_title",
+    [
+        "Author Correction: TEST ONLY perovskite silicon tandem device",
+        "Publisher Correction: TEST ONLY perovskite silicon tandem device",
+        "Correction to: TEST ONLY perovskite silicon tandem device",
+        "Corrigendum to TEST ONLY perovskite silicon tandem device",
+        "Erratum: TEST ONLY perovskite silicon tandem device",
+    ],
+)
+def test_substantive_bodies_precede_notices_without_reordering_metadata(
+    monkeypatch, notice_title
+):
+    items = [reference("PMC" + str(index)) for index in range(1, 6)]
+    items[0]["title"] = notice_title
+    items[1]["title"] = "Author Correction: another TEST ONLY device article"
+    # This is a substantive research title, not a correction notice.
+    items[2][
+        "title"
+    ] = "Correction methods for TEST ONLY perovskite device measurements"
+    before = deepcopy(items)
+    calls = []
+
+    def fetch(identity, deadline):
+        calls.append(identity)
+        return (
+            xml(identity),
+            f"https://www.ebi.ac.uk/europepmc/webservices/rest/{identity}/fullTextXML",
+        )
+
+    monkeypatch.setattr(property_research, "_fetch_full_text", fetch)
+    discovery.retain_device_passages(items, time.monotonic() + 1)
+
+    assert calls == ["PMC3", "PMC4"]
+    assert [item["record_id"] for item in items] == [
+        item["record_id"] for item in before
+    ]
+    assert items[:2] == before[:2]
+    assert items[4] == before[4]
+    for item, original in zip(items, before, strict=True):
+        assert item["title"] == original["title"]
+        assert item["url"] == original["url"]
+        assert item["provenance"] == original["provenance"]
+        assert item["metadata"]["abstract"] == original["metadata"]["abstract"]
+    for item in items[2:4]:
+        bodies = _body_documents(item, include_context=True)
+        assert len(bodies) == 1
+        assert "TESTONLY-Mixed" in bodies[0][0]["text"]
+        assert bodies[0][0]["record_id"] == item["record_id"]
+
+
+def test_notice_reordering_preserves_failed_attempts_and_deadline(monkeypatch):
+    items = [reference("PMC" + str(index)) for index in range(1, 5)]
+    items[0]["title"] = "Author Correction: TEST ONLY device"
+    before = deepcopy(items)
+    calls = []
+
+    def fail(identity, deadline):
+        calls.append(identity)
+        raise ValueError("Synthetic unavailable article")
+
+    monkeypatch.setattr(property_research, "_fetch_full_text", fail)
+    discovery.retain_device_passages(items, time.monotonic() + 1)
+    assert calls == ["PMC2", "PMC3"]
+    assert items == before
+    calls.clear()
+    discovery.retain_device_passages(items, time.monotonic() - 1)
+    assert calls == []
+
+
+def test_notices_remain_readable_when_only_notices_are_available(monkeypatch):
+    items = [reference("PMC" + str(index)) for index in range(1, 4)]
+    for item in items:
+        item["title"] = "Author Correction: TEST ONLY device"
+    calls = []
+
+    def fetch(identity, deadline):
+        calls.append(identity)
+        return (
+            xml(identity),
+            f"https://www.ebi.ac.uk/europepmc/webservices/rest/{identity}/fullTextXML",
+        )
+
+    monkeypatch.setattr(property_research, "_fetch_full_text", fetch)
+    discovery.retain_device_passages(items, time.monotonic() + 1)
+    assert calls == ["PMC1", "PMC2"]
+    assert len(_body_documents(items[0])) == 1
+    assert len(_body_documents(items[1])) == 1
+    assert "discovery_passages" not in items[2]["metadata"]
+
+
 def test_body_parser_rejects_identity_mismatch_and_active_instructions(monkeypatch):
     raw = xml("PMC999")
     monkeypatch.setattr(

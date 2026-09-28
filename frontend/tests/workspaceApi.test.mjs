@@ -1091,6 +1091,61 @@ test("research rejection distinguishes setup from execution and hides provider d
     mock.restoreAll();
   }
 });
+test("provider limits are explicit, bounded errors without retries or leaked diagnostics", async () => {
+  for (const [failure_code, expected] of [
+    [
+      "provider_usage_limit",
+      /credits or usage allowance are exhausted.*Changing your question will not fix this/,
+    ],
+    ["provider_rate_limit", /temporarily rate limiting.*Wait before retrying/],
+    ["provider_authentication", /could not authenticate.*Reconnect/],
+    ["process_failed", /could not complete this research request/],
+    ["PRIVATE_PROVIDER_DIAGNOSTIC", /could not complete this research request/],
+    ["toString", /could not complete this research request/],
+    [
+      { code: "provider_usage_limit" },
+      /could not complete this research request/,
+    ],
+    [null, /could not complete this research request/],
+  ]) {
+    const fetch = mock.method(globalThis, "fetch", async () =>
+      Response.json(
+        {
+          detail: {
+            code: "model_execution_failed",
+            setup_required: false,
+            failure_code,
+            message: "PRIVATE_PROVIDER_DIAGNOSTIC",
+            token: "PRIVATE_PROVIDER_DIAGNOSTIC",
+          },
+        },
+        { status: 502 },
+      ),
+    );
+    await assert.rejects(
+      workspaceApi.message("chat-a", "Draft question"),
+      (error) => {
+        assert.ok(error instanceof ResearchRequestError);
+        assert.equal(error.setupRequired, false);
+        const recognized = [
+          "provider_usage_limit",
+          "provider_rate_limit",
+          "provider_authentication",
+        ].includes(failure_code);
+        assert.equal(error.failureCode, recognized ? failure_code : undefined);
+        assert.match(error.message, expected);
+        assert.doesNotMatch(error.message, /PRIVATE_PROVIDER_DIAGNOSTIC/);
+        if (recognized)
+          assert.match(error.message, /Connections.*draft is still here/);
+        if (failure_code !== "provider_usage_limit")
+          assert.doesNotMatch(error.message, /credits.*exhausted/);
+        return true;
+      },
+    );
+    assert.equal(fetch.mock.calls.length, 1);
+    mock.restoreAll();
+  }
+});
 test("unrecognized conflicts do not promise a research mutation was rejected", async () => {
   mock.method(globalThis, "fetch", async () =>
     Response.json(

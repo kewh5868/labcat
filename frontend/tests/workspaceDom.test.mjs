@@ -104,7 +104,8 @@ test("project, new chat and Connections switches never leave duplicate prompt fi
     reports = [],
     progressRequests = [];
   let pauseMessage = false,
-    finishMessage;
+    finishMessage,
+    providerFailure;
   const rankingProfile = (id, name, preset) => ({
     id,
     name,
@@ -192,6 +193,18 @@ test("project, new chat and Connections switches never leave duplicate prompt fi
     if (path === "/api/chats/chat-one/messages") {
       const value = JSON.parse(options.body);
       messageRequests.push(value);
+      if (providerFailure)
+        return Response.json(
+          {
+            detail: {
+              code: "model_execution_failed",
+              setup_required: false,
+              failure_code: providerFailure,
+              message: "PRIVATE_PROVIDER_DIAGNOSTIC",
+            },
+          },
+          { status: 502 },
+        );
       if (pauseMessage)
         await new Promise((resolve) => {
           finishMessage = resolve;
@@ -837,6 +850,80 @@ test("project, new chat and Connections switches never leave duplicate prompt fi
     );
     assert.equal(document.querySelectorAll(".research-report").length, 1);
     assert.equal(composers().length, 1);
+    providerFailure = "provider_usage_limit";
+    const savedMessages = messages.length;
+    const failedPrompt =
+      "Compare synthetic candidates with enough research detail";
+    await change(composers()[0], failedPrompt);
+    await click(document.querySelector('[aria-label="Send message"]'));
+    const failureNotice = document.querySelector(
+      ".message-history .workspace-error",
+    );
+    assert.match(
+      failureNotice.textContent,
+      /credits or usage allowance are exhausted/,
+    );
+    assert.match(
+      failureNotice.textContent,
+      /Changing your question will not fix this/,
+    );
+    assert.doesNotMatch(
+      failureNotice.textContent,
+      /PRIVATE_PROVIDER_DIAGNOSTIC|more detail/,
+    );
+    assert.equal(composers()[0].value, failedPrompt);
+    assert.equal(
+      messages.length,
+      savedMessages,
+      "provider failure never invents a clarification",
+    );
+    assert.equal(document.querySelectorAll(".research-report").length, 1);
+    assert.equal(document.querySelector(".research-progress-panel"), null);
+    const limitBanner = document.querySelector(".connection-notice");
+    assert.match(
+      limitBanner.textContent,
+      /Your last request reached a provider limit/,
+    );
+    assert.doesNotMatch(limitBanner.textContent, /Ready for research/);
+    assert.equal(
+      document.querySelector(".composer-model-button").disabled,
+      false,
+      "an exhausted account never locks model switching",
+    );
+    const postsBeforeConnections = messageRequests.length;
+    await click(
+      [...failureNotice.querySelectorAll("button")].find(
+        (button) => button.textContent === "Open Connections",
+      ),
+    );
+    assert.ok(document.querySelector(".composer-settings-dialog").open);
+    assert.equal(composers()[0].value, failedPrompt);
+    await click(document.querySelector(".composer-settings-header button"));
+    assert.equal(
+      messageRequests.length,
+      postsBeforeConnections,
+      "opening connection settings never retries research",
+    );
+    // A first failed request has no saved messages: do not ask for a better
+    // question or promise an upcoming report underneath its provider error.
+    const retainedMessages = messages.splice(0);
+    const retainedReports = reports.splice(0);
+    await click(document.querySelector(".project-nav-item"));
+    assert.doesNotMatch(
+      document.querySelector(".connection-notice").textContent,
+      /Your last request reached a provider limit/,
+      "limit guidance stays scoped to the selected chat",
+    );
+    await click(document.querySelector(".nested-chat-list .global-chat-item"));
+    assert.equal(document.querySelector(".first-message"), null);
+    assert.match(
+      document.querySelector(".message-history .workspace-error").textContent,
+      /usage allowance are exhausted/,
+    );
+    assert.equal(composers()[0].value, failedPrompt);
+    messages.push(...retainedMessages);
+    reports.push(...retainedReports);
+    providerFailure = undefined;
     await click(document.querySelector(".project-nav-item"));
     assert.equal(
       document.querySelectorAll(".sidebar-menu-trigger").length,

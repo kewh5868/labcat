@@ -12,6 +12,11 @@ from labcat.connections import PROVIDERS, ConnectionManager
 from labcat.developer_settings import defaults as default_controls
 from labcat.developer_settings import effective_sources, validate_controls
 from labcat.extended_discovery import valid_wikipedia_url
+from labcat.model_failures import (
+    PROVIDER_FAILURE_MESSAGES,
+    provider_failure_code,
+    research_model_error,
+)
 from labcat.models import ModelBusy, ModelError
 from labcat.onboarding import SetupRequired
 from labcat.research_progress import ResearchProgress, report_progress
@@ -975,6 +980,21 @@ def research(
         try:
             report_progress("model")
             agent_run = connections.agent.run(prompt, context, session)
+            # Some provider failures lose their typed error inside Goose. A fresh,
+            # account-bound provider denial can explain an absent assessment;
+            # prose or missing token counts cannot establish exhausted allowance.
+            if not session.build_plan["intent_assessed"]:
+                usage_failure = connections.agent.failure_after_missing_assessment(
+                    agent_run
+                )
+                if usage_failure in PROVIDER_FAILURE_MESSAGES:
+                    error = ModelError(PROVIDER_FAILURE_MESSAGES[usage_failure])
+                    error.failure_code = usage_failure
+                    error.research_attempt = {
+                        "provider": agent_run["provider"],
+                        "model": agent_run["model"],
+                    }
+                    raise error
             if (
                 agent_run.get("status") == "stopped_after_report"
                 and not session.report_retained
@@ -1005,6 +1025,19 @@ def research(
                 provider = attempt["provider"]
                 requested_profile = {**requested_profile, **attempt}
             code = getattr(error, "failure_code", None)
+            if (
+                provider_failure_code(error) is None
+                and not session.build_plan["intent_assessed"]
+                and attempt is not None
+            ):
+                usage_failure = connections.agent.failure_after_missing_assessment(
+                    {
+                        **attempt,
+                        "account_id": getattr(error, "research_account_id", None),
+                    }
+                )
+                if usage_failure in PROVIDER_FAILURE_MESSAGES:
+                    code = error.failure_code = usage_failure
             if isinstance(code, str) and code in FAILURE_CODES:
                 failure_code = code
             diagnostics = getattr(error, "worker_rejection_diagnostics", None)
@@ -1013,17 +1046,22 @@ def research(
                     worker_rejections = safe_worker_rejection_diagnostics(diagnostics)
                 except ValueError:
                     pass  # Untrusted diagnostic content cannot enter the report.
-            connections.setup.invalidate(
-                "The model request failed. Check the connection and available quota.",
-                generation=getattr(
-                    error, "connection_generation", connection_generation
-                ),
-            )
+            # An allowance or rate limit does not invalidate a signed-in account.
+            # Keep account/model switching available and report the actual obstacle.
+            provider_code = provider_failure_code(error)
+            if provider_code not in {"provider_usage_limit", "provider_rate_limit"}:
+                connections.setup.invalidate(
+                    PROVIDER_FAILURE_MESSAGES.get(
+                        provider_code,
+                        "The model request failed. "
+                        "Check the connection and available quota.",
+                    ),
+                    generation=getattr(
+                        error, "connection_generation", connection_generation
+                    ),
+                )
             if not session.can_complete_without_model:
-                raise ModelError(
-                    "The language-model request failed. No report was saved and no "
-                    "automatic retry was made. Check the connection and quota."
-                ) from None
+                raise research_model_error(error) from None
             # The request already passed both intake checks. Complete only the
             # fixed, selected public-source stages; no model retry or generated
             # facts are needed to retain approved evidence and render the report.
@@ -1041,6 +1079,11 @@ def research(
                 attempted_model=attempt["model"] if attempt else None,
                 failure_code=failure_code,
                 warning=(
+                    (PROVIDER_FAILURE_MESSAGES[failure_code] + " ")
+                    if failure_code in PROVIDER_FAILURE_MESSAGES
+                    else ""
+                )
+                + (
                     "Model-led research stopped before completion. The server "
                     "completed the configured public-source stages without "
                     "another model call. Search coverage may be incomplete."
@@ -1077,14 +1120,19 @@ def research(
     except ModelBusy:
         raise
     except ModelError as error:
-        connections.setup.invalidate(
-            "The model request failed. Check the connection and available quota.",
-            generation=getattr(error, "connection_generation", connection_generation),
-        )
-        raise ModelError(
-            "The language-model request failed. No report was saved and no "
-            "automatic retry was made. Check the connection and quota."
-        ) from None
+        provider_code = provider_failure_code(error)
+        if provider_code not in {"provider_usage_limit", "provider_rate_limit"}:
+            connections.setup.invalidate(
+                PROVIDER_FAILURE_MESSAGES.get(
+                    provider_code,
+                    "The model request failed. "
+                    "Check the connection and available quota.",
+                ),
+                generation=getattr(
+                    error, "connection_generation", connection_generation
+                ),
+            )
+        raise research_model_error(error) from None
     if plan["task"] == "unsupported":
         outcome = intake_outcome(
             decision("clarification_required", "model_scope_uncertain")

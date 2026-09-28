@@ -87,6 +87,14 @@ The developer recommends **ChatGPT account sign-in**, the most thoroughly tested
 connection in Labcat. Your account needs Codex access and available usage
 allowance. Other providers have their own model access and billing requirements.
 
+If Labcat reports exhausted credits or usage allowance, rewriting the question
+will not restore access. Open **Connections** to check usage or choose another
+account or model; otherwise restore credits with your provider or wait for an
+allowance reset. Your question remains in the draft. A temporary rate limit is
+a separate condition. When a provider does not supply a reliable error category,
+Labcat reports that the model could not finish the assessment rather than
+claiming that your account has no credits.
+
 1. Under **Model provider**, select **ChatGPT · account sign-in**.
 2. Click **Sign in with ChatGPT**, finish authorization on the provider's page,
    and return to Labcat. Your password belongs on the provider's page.

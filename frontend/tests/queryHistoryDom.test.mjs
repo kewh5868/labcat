@@ -1004,3 +1004,36 @@ async function completeChatHistoryScenario(t, projectId) {
 for (const projectId of [null, "synthetic-project"])
   test(`complete ${projectId ? "project" : "general"} chat PDF stays available with earlier query previews and never leaks across empty/loading navigation`, async (t) =>
     completeChatHistoryScenario(t, projectId));
+
+test("saved missing assessments are not labeled as requests for more user detail", async () =>
+  environment(async ({ queryHistory, render }) => {
+    const items = [];
+    for (const [index, reason_code] of [
+      "assessment_missing",
+      "materials_scope_needed",
+    ].entries()) {
+      const question = message(
+        `q-${index}`,
+        "user",
+        `Synthetic question ${index}`,
+        index,
+      );
+      const answer = {
+        ...message(`a-${index}`, "assistant", "Saved response.", index),
+        intake: {
+          status: "clarification_required",
+          reason_code,
+          questions: ["Legacy saved question?"],
+        },
+      };
+      items.push(question, answer);
+    }
+    await render(queryHistory(items, []));
+    const notes = [...document.querySelectorAll(".query-result-note")].map(
+      (node) => node.textContent,
+    );
+    assert.deepEqual(notes, [
+      "Research not started · no shortlist generated.",
+      "Clarification requested · no shortlist yet.",
+    ]);
+  }));

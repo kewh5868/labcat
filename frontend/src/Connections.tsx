@@ -141,11 +141,13 @@ export function ConnectionNotice({
   readiness,
   checking = false,
   unavailable = false,
+  latestRequestLimited = false,
 }: {
   onConfigure: () => void;
   readiness: SetupStatus | null;
   checking?: boolean;
   unavailable?: boolean;
+  latestRequestLimited?: boolean;
 }) {
   const { status, loading, busy, error } = useConnections();
   const model = modelConnectionSummary({
@@ -161,7 +163,12 @@ export function ConnectionNotice({
     >
       <div>
         <strong>{model.title}</strong>
-        <p>{model.note} Saved chats and reports remain available.</p>
+        <p>
+          {latestRequestLimited
+            ? "Your last request reached a provider limit. Review the message below before retrying."
+            : model.note}{" "}
+          Saved chats and reports remain available.
+        </p>
         {error && (
           <p className="connection-error-text" role="alert">
             {error}

@@ -115,20 +115,21 @@ def test_worker_transports_only_closed_intent_assessment(monkeypatch, decision):
     ]
 
 
-def test_worker_does_not_expose_provider_error_body(monkeypatch):
+@pytest.mark.parametrize(
+    "code", ["time_limit", "provider_usage_limit", "provider_authentication"]
+)
+def test_worker_does_not_expose_provider_error_body(monkeypatch, code):
     tokens = {"access_token": "internal-only"}
 
     def failure(*args, **kwargs):
-        raise GooseRuntimeError(
-            "private upstream failure", tokens, failure_code="time_limit"
-        )
+        raise GooseRuntimeError("private upstream failure", tokens, failure_code=code)
 
     monkeypatch.setattr(goose_worker, "run_goose", failure)
     result = goose_worker._run(job())
     assert result.pop("refreshed_chatgpt_tokens") == tokens
     assert "private upstream" not in json.dumps(result)
     assert result["status"] == "failed"
-    assert result["failure_code"] == "time_limit"
+    assert result["failure_code"] == code
 
 
 def test_channel_key_is_private_regular_file(monkeypatch, tmp_path):

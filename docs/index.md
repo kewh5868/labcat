@@ -27,8 +27,8 @@ structures.
   choose Browser or a native source build, and connect a model.
 - [Use Labcat](user-guide.md): screenshots for chats, ranking priorities,
   reports, structures and downloads.
-- [Examples](examples.md): scientific questions and expected responses to
-  social-engineering requests.
+- [Examples](examples.md): actual shortlists, crystal structures and outputs
+  from two models, plus social-engineering checks.
 - [Sources & methods](resources.md): connected repositories, API keys and
   evidence interpretation.
 - [Developer notes](development.md): work on the source and run checks.

@@ -36,6 +36,7 @@ from labcat.agent_rejections import (
     parent_rejection_reply,
 )
 from labcat.credentials import unique_json_object
+from labcat.model_failures import PROVIDER_FAILURE_MESSAGES
 from labcat.models import (
     MAX_PROMPT_CHARS,
     ModelError,
@@ -52,6 +53,7 @@ MAX_TOOL_CALLS = 8
 REPORT_EXIT_GRACE_SECONDS = 2.0
 FAILURE_CODES = frozenset(
     {"time_limit", "output_limit", "process_failed", "invalid_usage", "worker_failed"}
+    | PROVIDER_FAILURE_MESSAGES.keys()
 )
 RESEARCH_TOOLS = frozenset(
     {
@@ -736,12 +738,55 @@ def _execute(command, env, folder, payload, *, report_retained=None):
         writer.join(timeout=2)
 
 
+def _provider_failure(value):
+    """Read only Goose-owned typed failure blocks, never provider/model
+    text.
+
+    Goose 1.50.0 may exit zero and report completed usage after a provider
+    failure. Its credits notification and MessageContent::Error survive in
+    JSON. User messages, tool results, ordinary assistant prose and nested
+    JSON cannot establish an account condition. Pinned protocol definitions:
+    crates/goose-provider-types/src/conversation/message.rs; handling in
+    crates/goose/src/agents/agent.rs. Other errors lose their typed identity
+    upstream, including HTTP 429; do not guess their cause from prose.
+    """
+    messages = value.get("messages")
+    if not isinstance(messages, list):
+        return None
+    for message in reversed(messages):
+        if not isinstance(message, dict) or message.get("role") != "assistant":
+            continue
+        content = message.get("content")
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            if (
+                block.get("type") == "systemNotification"
+                and block.get("notificationType") == "creditsExhausted"
+            ):
+                return "provider_usage_limit"
+            if block.get("type") == "error":
+                kind = block.get("kind")
+                if kind == "creditsExhausted":
+                    return "provider_usage_limit"
+                if kind == "authentication":
+                    return "provider_authentication"
+    return None
+
+
 def _usage(raw: bytes) -> dict:
     try:
         value = json.loads(raw, object_pairs_hook=unique_json_object)
         metadata = value["metadata"]
         if not isinstance(metadata, dict) or metadata.get("status") != "completed":
             raise ValueError
+        failure_code = _provider_failure(value)
+        if failure_code is not None:
+            raise GooseRuntimeError(
+                PROVIDER_FAILURE_MESSAGES[failure_code], failure_code=failure_code
+            )
         result = {}
         for key in (
             "input_tokens",

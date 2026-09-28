@@ -760,3 +760,149 @@ def test_legacy_full_metadata_path_can_add_two_optional_timeouts(broker, factory
     waited[0] = 0
     assert broker.metadata(auth, include_usage=False)[0]["models"]
     assert waited[0] == 0
+
+
+def usage_controls(**bucket_changes):
+    bucket = {
+        "limitId": "codex",
+        "limitName": None,
+        "normalModelSlug": None,
+        "rateLimitReachedType": "rate_limit_reached",
+        "spendControlReached": False,
+        "credits": {"hasCredits": False, "unlimited": False, "balance": "0"},
+        "primary": {"usedPercent": 100},
+        "secondary": None,
+    }
+    bucket.update(bucket_changes)
+    return {
+        "accountId": "test-account",
+        "ordinaryUsageAllowed": False,
+        "rateLimitsByLimitId": {bucket["limitId"]: bucket},
+    }
+
+
+def test_broker_preserves_only_account_bound_usage_controls(broker, factory, auth):
+    raw = usage_controls()
+    raw["rateLimitUpsell"] = {"email": "do-not-return@example.invalid"}
+    factory.callback = lambda session: session.results.update(
+        {"account/rateLimits/read": raw}
+    )
+    public, _ = broker.metadata(auth)
+    limits = public["usage_limits"]
+    assert limits == {
+        "ordinary_usage_allowed": False,
+        "buckets": [
+            {
+                "id": "codex",
+                "model": None,
+                "normal_model": None,
+                "reached_type": "rate_limit_reached",
+                "spend_control_reached": False,
+                "has_usable_credits": False,
+            }
+        ],
+    }
+    assert module.usage_limit_after_failure(limits, "test-model")
+    assert "accountId" not in json.dumps(limits)
+    assert "do-not-return" not in json.dumps(public)
+    assert public["account_ready"] is True
+
+
+@pytest.mark.parametrize(
+    "has_credits,unlimited", [(True, False), (False, True), (True, True)]
+)
+def test_usage_diagnostic_never_blocks_available_credits(has_credits, unlimited):
+    raw = usage_controls(credits={"hasCredits": has_credits, "unlimited": unlimited})
+    limits = module._usage_limits(raw, "test-account")
+    assert not module.usage_limit_after_failure(limits, "test-model")
+
+
+@pytest.mark.parametrize("ordinary", [True, None])
+def test_usage_diagnostic_requires_explicit_ordinary_denial(ordinary):
+    raw = usage_controls()
+    raw["ordinaryUsageAllowed"] = ordinary
+    assert not module.usage_limit_after_failure(
+        module._usage_limits(raw, "test-account"), "test-model"
+    )
+
+
+@pytest.mark.parametrize("account_id", [None, "another-account"])
+def test_usage_diagnostic_requires_explicit_matching_account(account_id):
+    raw = usage_controls()
+    raw["accountId"] = account_id
+    assert module._usage_limits(raw, "test-account") is None
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"credits": None},
+        {"rateLimitReachedType": None, "spendControlReached": False},
+        {"limitId": "unrelated-meter", "limitName": "Another model"},
+        {
+            "limitId": "codex_reserve",
+            "limitName": "reserve-alias",
+            "normalModelSlug": "test-model",
+        },
+    ],
+)
+def test_percentages_and_unrelated_meters_do_not_diagnose_exhaustion(changes):
+    limits = module._usage_limits(usage_controls(**changes), "test-account")
+    assert not module.usage_limit_after_failure(limits, "test-model")
+
+
+@pytest.mark.parametrize("reached", sorted(module._USAGE_LIMIT_TYPES))
+def test_explicit_model_meter_applies_only_to_exact_request_model(reached):
+    raw = usage_controls(
+        limitId="model-meter", limitName="test-model", rateLimitReachedType=reached
+    )
+    limits = module._usage_limits(raw, "test-account")
+    assert module.usage_limit_after_failure(limits, "test-model")
+    assert not module.usage_limit_after_failure(limits, "another-model")
+
+
+def test_usable_selected_model_meter_overrides_exhausted_ordinary_meter():
+    raw = usage_controls()
+    raw["rateLimitsByLimitId"]["selected-meter"] = {
+        "limitId": "selected-meter",
+        "limitName": "test-model",
+        "rateLimitReachedType": None,
+        "spendControlReached": False,
+        "credits": {"hasCredits": True, "unlimited": False},
+    }
+    limits = module._usage_limits(raw, "test-account")
+    assert not module.usage_limit_after_failure(limits, "test-model")
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"credits": {"hasCredits": "false", "unlimited": False}},
+        {"credits": {"hasCredits": False}},
+        {"spendControlReached": 1},
+        {"rateLimitReachedType": "unrecognized_future_type"},
+        {"normalModelSlug": {"unexpected": "record"}},
+    ],
+)
+def test_malformed_optional_controls_preserve_catalog_but_remain_unknown(
+    broker, factory, auth, changes
+):
+    raw = usage_controls(**changes)
+    factory.callback = lambda session: session.results.update(
+        {"account/rateLimits/read": raw}
+    )
+    public, _ = broker.metadata(auth)
+    assert public["models"] and public["account_ready"]
+    assert public["usage_limits"] is None
+    assert public["rate_limits"]
+
+
+def test_usage_diagnostic_rejects_inconsistent_meter_key_and_nonboolean_permission():
+    raw = usage_controls()
+    raw["rateLimitsByLimitId"]["codex"]["limitId"] = "something-else"
+    with pytest.raises(ChatGPTAuthError):
+        module._usage_limits(raw, "test-account")
+    raw = usage_controls()
+    raw["ordinaryUsageAllowed"] = 0
+    with pytest.raises(ChatGPTAuthError):
+        module._usage_limits(raw, "test-account")

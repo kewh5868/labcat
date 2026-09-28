@@ -101,6 +101,7 @@ class AgentConnections:
         self._auth_epoch = 0
         self._run_lock = threading.Lock()
         self._running_oauth_account = None
+        self._last_research_attempt = None
         self._credential_revisions = {}
         self._claude_sessions = {}
         self._claude_revisions = {}
@@ -380,6 +381,66 @@ class AgentConnections:
         finally:
             self._auth_lock.release()
 
+    def failure_after_missing_assessment(self, attempt):
+        """Return only a confirmed account-limit diagnosis for a
+        captured run.
+
+        Call after research failed to assess its intent. This is not a
+        readiness gate, and no diagnosis persists or prevents switching
+        models/accounts.
+        """
+        from labcat.chatgpt_auth import usage_limit_after_failure
+
+        if not isinstance(attempt, dict) or attempt.get("provider") != "chatgpt":
+            return None
+        if not self._run_lock.acquire(blocking=False):
+            return None
+        try:
+            with self.manager._lock:
+                captured = self._last_research_attempt
+                if not captured or any(
+                    attempt.get(key) != captured[key]
+                    for key in ("provider", "model", "account_id")
+                ):
+                    return None
+                identifier = captured["account_id"]
+                if not self._same_research_account(captured):
+                    return None
+            # include_usage=True deliberately bypasses the model-catalog cache.
+            public = self.metadata(identifier, include_usage=True)
+            with self.manager._lock:
+                if (
+                    self._last_research_attempt is not captured
+                    or not self._same_research_account(captured)
+                    or public.get("account_ready") is not True
+                    or not any(
+                        row.get("id") == captured["model"]
+                        for row in public.get("models", [])
+                        if isinstance(row, dict)
+                    )
+                ):
+                    return None
+                if usage_limit_after_failure(
+                    public.get("usage_limits"), captured["model"]
+                ):
+                    return "provider_usage_limit"
+        except Exception:
+            # Optional diagnostics must not replace the original research failure.
+            return None
+        finally:
+            self._run_lock.release()
+        return None
+
+    def _same_research_account(self, captured):
+        identifier = captured["account_id"]
+        account = self._account(identifier)
+        document, _, _ = self._credential_snapshot(identifier)
+        return (
+            account["profile"]["model"] == captured["model"]
+            and self._credential_revision(identifier) == captured["revision"]
+            and document["tokens"]["account_id"] == captured["oauth_account_id"]
+        )
+
     def claude_status(self, identifier, *, logout=False):
         """Only native sign-in readiness crosses the worker boundary."""
         with self.manager._lock:
@@ -588,6 +649,7 @@ class AgentConnections:
                 provider = profile["provider"]
                 secret = snapshot["secret"] if provider in API_KEY_PROVIDERS else None
                 tokens, old, storage, revision = None, None, None, None
+                self._last_research_attempt = None
                 if provider == "chatgpt":
                     from labcat.chatgpt_auth import goose_token_cache
 
@@ -596,6 +658,13 @@ class AgentConnections:
                     tokens = goose_token_cache(document)
                     revision = self._credential_revision(identifier)
                     self._running_oauth_account = identifier
+                    self._last_research_attempt = {
+                        "provider": provider,
+                        "model": profile["model"],
+                        "account_id": identifier,
+                        "revision": revision,
+                        "oauth_account_id": document["tokens"]["account_id"],
+                    }
         finally:
             self._auth_lock.release()
         try:
@@ -620,6 +689,7 @@ class AgentConnections:
             # never recover model identity from provider prose or a later selection.
             error.research_attempt = {"provider": provider, "model": profile["model"]}
             error.connection_generation = snapshot["generation"]
+            error.research_account_id = identifier
             refreshed = getattr(error, "refreshed_chatgpt_tokens", None)
             if refreshed is not None and provider == "chatgpt":
                 from labcat.chatgpt_auth import update_from_goose_tokens

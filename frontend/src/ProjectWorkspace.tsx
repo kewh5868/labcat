@@ -20,6 +20,7 @@ import type {
   Project,
   ProjectContents,
   ResearchReport,
+  ResearchFailureCode,
   ReportPin,
   ReportPresentation,
   ReportView,
@@ -124,10 +125,12 @@ function Notice({
   error,
   onRetry,
   label = "Reload",
+  onOpenConnections,
 }: {
   error: string;
   onRetry?: () => void;
   label?: string;
+  onOpenConnections?: () => void;
 }) {
   return (
     <div className="workspace-error" role="alert">
@@ -135,6 +138,15 @@ function Notice({
       {onRetry && (
         <button type="button" className="quiet-button" onClick={onRetry}>
           {label} <span aria-hidden="true">↻</span>
+        </button>
+      )}
+      {onOpenConnections && (
+        <button
+          type="button"
+          className="quiet-button"
+          onClick={onOpenConnections}
+        >
+          Open Connections
         </button>
       )}
     </div>
@@ -1451,6 +1463,13 @@ export default function ProjectWorkspace({
                 readiness={setup.status}
                 checking={setup.loading || setup.busy}
                 unavailable={Boolean(setup.error)}
+                latestRequestLimited={
+                  mode === "chat" &&
+                  research.runs[chatId]?.status === "failed" &&
+                  ["provider_usage_limit", "provider_rate_limit"].includes(
+                    research.runs[chatId]?.failureCode ?? "",
+                  )
+                }
               />
             ) : (
               <aside
@@ -2126,6 +2145,7 @@ function DraftChat({
   const [submission, setSubmission] = useState<ResearchSubmission | null>(null);
   const [progressChatId, setProgressChatId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [failureCode, setFailureCode] = useState<ResearchFailureCode>();
   const [uncertain, setUncertain] = useState(false);
   const lock = useRef(false);
   const mounted = useMounted();
@@ -2148,6 +2168,7 @@ function DraftChat({
     setProgressChatId(null);
     setSaving(true);
     setError("");
+    setFailureCode(undefined);
     let created: Chat | null = null;
     try {
       created = project
@@ -2172,6 +2193,7 @@ function DraftChat({
       if (mounted.current) {
         if (error instanceof ResearchRequestError) {
           setError(errorMessage(error));
+          setFailureCode(error.failureCode);
           void setup.refresh().catch(() => undefined);
           if (error.setupRequired) composerLinks.onRequireSetup();
         }
@@ -2237,7 +2259,14 @@ function DraftChat({
         </p>
       )}
       {error && (
-        <Notice error={error} onRetry={onReload} label="Reload chat history" />
+        <Notice
+          error={error}
+          onRetry={failureCode ? undefined : onReload}
+          label="Reload chat history"
+          onOpenConnections={
+            failureCode ? composerLinks.onOpenConnections : undefined
+          }
+        />
       )}
       {!compact && <MaterialsFact />}
     </section>
@@ -2649,7 +2678,14 @@ function ChatView({
         aria-label="Chat history"
         aria-busy={loading || sending}
       >
-        {failureNotice && <Notice error={failureNotice} />}
+        {failureNotice && (
+          <Notice
+            error={failureNotice}
+            onOpenConnections={
+              run?.failureCode ? composerLinks.onOpenConnections : undefined
+            }
+          />
+        )}
         {searchMatch && searchMatch.match_field !== "title" && (
           <p className="chat-search-match-note">
             Found in saved{" "}
@@ -2658,15 +2694,19 @@ function ChatView({
           </p>
         )}
         {loading && <Loading label="Loading conversation…" />}
-        {!loading && !sending && data && !data.messages.length && (
-          <div className="first-message">
-            <h3>Continue with your question.</h3>
-            <p>
-              This chat is saved. Your report will identify the evidence used
-              and any gaps.
-            </p>
-          </div>
-        )}
+        {!loading &&
+          !sending &&
+          data &&
+          !data.messages.length &&
+          !(failureNotice && run?.failureCode) && (
+            <div className="first-message">
+              <h3>Continue with your question.</h3>
+              <p>
+                This chat is saved. Your report will identify the evidence used
+                and any gaps.
+              </p>
+            </div>
+          )}
         {!loading && latestReport && (
           <section
             className="latest-report-section"

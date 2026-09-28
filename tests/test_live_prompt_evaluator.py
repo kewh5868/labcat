@@ -971,3 +971,111 @@ def test_full_plain_language_matrix_covers_the_class_catalog_without_fixed_answe
 def test_invalid_expectations_fail_before_any_live_operation(patch):
     with pytest.raises(ValueError):
         EVALUATOR["validate_cases"]({"test": {**CASES["perovskite"], **patch}})
+
+
+@pytest.fixture
+def body_discovery_detail(monkeypatch):
+    """Persist a lead selected from an approved, synthetic full-text
+    response."""
+    import time
+
+    from test_perovskite_discovery import reference, xml
+
+    from labcat import perovskite_discovery, property_research
+    from labcat.science.candidate_leads import (
+        _body_documents,
+        discovery_documents,
+        validate_candidate_leads,
+    )
+
+    source = reference()
+    monkeypatch.setattr(
+        property_research,
+        "_fetch_full_text",
+        lambda identity, deadline: (
+            xml(),
+            f"https://www.ebi.ac.uk/europepmc/webservices/rest/{identity}/fullTextXML",
+        ),
+    )
+    perovskite_discovery.retain_device_passages([source], time.monotonic() + 60)
+    document = _body_documents(source)[0][0]
+    detail = reference_detail()
+    source.update(
+        id="workspace-source-id", chat_ids=["test-chat"], report_ids=["test-report"]
+    )
+    detail["sources"] = [source]
+    detail["reports"][0]["result"]["candidate_leads"] = validate_candidate_leads(
+        [
+            {
+                "document_id": document["document_id"],
+                "name": "TESTONLY-Mixed",
+                "quote": document["text"],
+            }
+        ],
+        discovery_documents([source]),
+        [source],
+    )
+    assert len(detail["reports"][0]["result"]["candidate_leads"]) == 1
+    assert "TESTONLY-Mixed" not in source["title"] + source["metadata"]["abstract"]
+    return detail
+
+
+def test_full_text_discovery_lead_counts_as_source_linked_without_mutating_report(
+    body_discovery_detail,
+):
+    before = deepcopy(body_discovery_detail)
+    result = assess(body_discovery_detail, CASES["polymer"])
+    assert result["checks"]["source_linked_candidate_leads"]
+    assert result["candidate_lead_count"] == 1
+    assert body_discovery_detail == before
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "digest",
+        "article",
+        "locator",
+        "incomplete",
+        "provenance_url",
+        "not_read",
+        "citation",
+        "text",
+        "name_boundary",
+        "quote",
+    ],
+)
+def test_evaluator_rejects_tampered_full_text_discovery_binding(
+    body_discovery_detail,
+    change,
+):
+    source = body_discovery_detail["sources"][0]
+    metadata = source["metadata"]
+    passage = metadata["discovery_passages"][0]
+    lead = body_discovery_detail["reports"][0]["result"]["candidate_leads"][0]
+    if change == "digest":
+        passage["response_sha256"] = "f" * 64
+    elif change == "article":
+        passage["article_id"] = "PMC999"
+    elif change == "locator":
+        passage["locator"] = "references/p[1]"
+    elif change == "incomplete":
+        passage["paragraph_complete"] = False
+    elif change == "provenance_url":
+        metadata["discovery_full_text_provenance"][
+            "full_text_request_url"
+        ] = "https://www.ebi.ac.uk/europepmc/webservices/rest/PMC999/fullTextXML"
+    elif change == "not_read":
+        metadata["full_text_read"] = False
+    elif change == "citation":
+        lead["citations"][0]["document_id"] = "doc-" + "f" * 24
+    elif change == "text":
+        # The quoted mention remains present, but its saved document identity
+        # no longer matches the altered body. A substring check would miss this.
+        passage["text"] += " TEST ONLY additional paragraph text."
+    elif change == "name_boundary":
+        lead["name"] = "TESTONLY-Mix"
+    else:
+        lead["quote"] = "TESTONLY-Mixed was used in a different, unretained device."
+    result = assess(body_discovery_detail, CASES["polymer"])
+    assert not result["checks"]["source_linked_candidate_leads"]

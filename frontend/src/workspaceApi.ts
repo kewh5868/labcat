@@ -491,12 +491,38 @@ function detail(
   };
 }
 
+export type ResearchFailureCode =
+  | "provider_usage_limit"
+  | "provider_rate_limit"
+  | "provider_authentication";
+
+const researchFailureMessages: Record<ResearchFailureCode, string> = {
+  provider_usage_limit:
+    "The workspace model provider reported that this account's credits or usage allowance are exhausted. Changing your question will not fix this. Check the provider's usage or billing, or select another connected account or model in Connections. Your draft is still here.",
+  provider_rate_limit:
+    "The workspace model provider is temporarily rate limiting requests. Wait before retrying, or select another connected account or model in Connections. Your draft is still here.",
+  provider_authentication:
+    "The workspace model provider could not authenticate this account. Reconnect it or select another connected account or model in Connections. Your draft is still here.",
+};
+
+function researchFailureCode(value: unknown): ResearchFailureCode | undefined {
+  return typeof value === "string" &&
+    Object.hasOwn(researchFailureMessages, value)
+    ? (value as ResearchFailureCode)
+    : undefined;
+}
+
 export class ResearchRequestError extends Error {
-  constructor(readonly setupRequired: boolean) {
+  constructor(
+    readonly setupRequired: boolean,
+    readonly failureCode?: ResearchFailureCode,
+  ) {
     super(
       setupRequired
         ? "The workspace needs a verified model connection before research can run. Your prompt has not been submitted."
-        : "The workspace model could not complete this research request. No report was saved; your draft is still here.",
+        : failureCode
+          ? researchFailureMessages[failureCode]
+          : "The workspace model could not complete this research request. No report was saved; your draft is still here.",
     );
   }
 }
@@ -584,7 +610,10 @@ async function request(
           detail?.code === "model_execution_failed" &&
           detail?.setup_required === false
         )
-          throw new ResearchRequestError(false);
+          throw new ResearchRequestError(
+            false,
+            researchFailureCode(detail.failure_code),
+          );
         if (
           response.status === 409 &&
           /\/(report-pins|tracked-reports)\//.test(path)

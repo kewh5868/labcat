@@ -2377,10 +2377,18 @@ def _research_completion_lines(result: dict) -> list[str]:
         ]
     if result.get("execution", {}).get("model_interrupted") is not True:
         return []
+    from labcat.model_failures import PROVIDER_FAILURE_MESSAGES
+
+    # Report only a closed server-owned category, never saved exception prose.
+    code = execution.get("failure_code")
+    provider_notice = (
+        PROVIDER_FAILURE_MESSAGES.get(code, "") if type(code) is str else ""
+    )
     return [
         "",
         "Research completion:",
         "",
+        *([provider_notice, ""] if provider_notice else []),
         (
             "Model-led research stopped before completion. The server retained the "
             "available evidence and completed the configured public-source stages "
