@@ -1,182 +1,284 @@
-# Using Labcat
+# Use Labcat
 
-Labcat explores materials through public sources and saves cited shortlists,
-property records, chats and reports. Compatible public records can also supply
-structures to view and download. Coverage and answer quality vary by topic;
-results are provisional screening aids, not predictions of material performance.
+Ask a question, compare cited candidates, and keep related work together.
+Start with [Install & setup](first-run.md) if this is your first launch.
+Numbered outlines identify the controls; click any screenshot to enlarge it.
 
-Start with the [first-run walkthrough](first-run.md) for exact installation
-commands and setup clicks, then try the [example research prompts](examples.md).
-For installation alternatives, see [installation](installation.md); for account
-recovery, see [model setup](onboarding.md).
+## Find your way around
 
-## Start a research chat
+1. **New chat** starts a separate conversation.
+2. **Create project** groups related chats and their pinned reports.
+3. **Search workspace** finds saved names, messages and reports locally.
+4. **Connections**, **Search Criterion** and **Report Format** manage accounts,
+   research preferences and presentation. The setup guide shows how to
+   [connect or change a model](first-run.md#4-connect-your-model).
 
-1. Choose **New chat**, or **Create project** to group related work. A new project
-   starts with an untitled chat; write your question beneath the project title.
-2. Describe the material class, its role, and your preferred properties and
-   operating conditions. Ask for missing evidence explicitly.
-3. Check the controls below the prompt. **Infer from prompt** selects ranking
-   preferences from the supported catalog; choose a saved profile explicitly
-   when you want its exact priorities. The model control selects the connected
-   model. **Find reference structures** enables an optional lookup after the
-   report is saved.
-4. Submit the prompt. Labcat shows elapsed time and research stages. An unclear
-   request may receive a clarification question instead of a report.
-5. Review **Summary**, **Technical View** and **Sources**, then ask a follow-up
-   in the same chat. Each completed report is saved as a new revision.
+<div class="guide-shot" markdown="1">
 
-A flask marks a running chat. You can open another chat or reload the page and
-return to its progress. Stopping or restarting the backend interrupts unfinished
-work; it does not resume automatically.
+[![Workspace navigation: new chat, projects, search and settings.](assets/screenshots/workspace.jpg)](assets/screenshots/workspace.jpg)
 
-## Connect or change a model
+<svg viewBox="0 0 2200 1600" aria-hidden="true" focusable="false">
+<rect x="32" y="204" width="313" height="78" rx="12" />
+<circle cx="56" cy="189" r="30" /><text x="56" y="189">1</text>
+<rect x="43" y="283" width="295" height="54" rx="12" />
+<circle cx="67" cy="268" r="30" /><text x="67" y="268">2</text>
+<rect x="32" y="343" width="313" height="68" rx="12" />
+<circle cx="56" cy="328" r="30" /><text x="56" y="328">3</text>
+<rect x="41" y="1260" width="296" height="194" rx="12" />
+<circle cx="65" cy="1245" r="30" /><text x="65" y="1245">4</text>
+</svg>
 
-Open **Connections** to sign in to ChatGPT or configure a supported API provider,
-select a model and consent to sending research context. **Save and test
-connections** checks readiness without running inference. Research uses the
-provider's allowance or billing; local workspace processing still needs a model.
+</div>
 
-The model popup beneath a prompt can change models or open Connections while
-preserving your draft. Changes apply to new requests throughout the workspace.
-Credentials are session-only by default; optional vault storage can retain them
-and may need unlocking after restart. Chats and reports persist independently.
-See [connection setup and recovery](onboarding.md).
+<p class="guide-caption">1. New chat. 2. Create project. 3. Search saved work. 4. Report Format, Search Criterion and Connections.</p>
 
-## Organize and revisit work
+In **Create project**, enter a name and an optional description, then select
+**Create project**. The new project includes an empty chat ready for a question.
 
-Select a project for its pinned contents or expand it to open a chat. Permanent
-chat numbers distinguish conversations with matching names.
+<div class="guide-shot" markdown="1">
 
-- **Earlier questions** opens the chat's prior questions and report previews.
-  Choose **View saved report** to inspect a revision and its downloads without
-  rerunning research.
-- **Chat PDF** in the conversation header downloads the complete saved chat:
-  timestamped questions and replies, every saved report revision with both
-  report views and its sources. Collapsed earlier questions are included.
-  The download uses saved content and does not rerun research.
-- Drag a General Chat onto a project, or choose **Move chat** from its three-dot
-  menu. Moving preserves history but clears report pins in the old project;
-  pin the reports again in their new location.
-- **Pin snapshot** preserves one report revision and its recorded format.
-  **Track latest report** keeps a project pin following the chat's latest
-  completed report. **Update snapshot to latest** explicitly replaces an older
-  snapshot; pin a second snapshot if you want both versions.
-- **Search workspace** finds project names and descriptions, chat titles, and
-  saved message or report text. Search runs locally without a model call.
-  Select a result to open it; clear the search or press Escape to return to the
-  sidebar lists.
-- **Remove** moves a chat or project to **Removed items**, where it can be
-  restored for 30 days. Permanent deletion and expiry remove it from the app.
-  Exported files and external backups are separate.
+[![Project creation: name, optional description and Create project button.](assets/screenshots/create-project.jpg)](assets/screenshots/create-project.jpg)
 
-The Projects and General Chats lists scroll independently; drag their divider
-to resize them. See [projects, history and pins](projects.md).
+<svg viewBox="0 0 2200 1600" aria-hidden="true" focusable="false">
+<rect x="930" y="780" width="722" height="100" rx="12" />
+<circle cx="954" cy="765" r="30" /><text x="954" y="765">1</text>
+<rect x="930" y="922" width="722" height="168" rx="12" />
+<circle cx="954" cy="907" r="30" /><text x="954" y="907">2</text>
+<rect x="1437" y="1110" width="214" height="79" rx="12" />
+<circle cx="1461" cy="1095" r="30" /><text x="1461" y="1095">3</text>
+</svg>
+
+</div>
+
+<p class="guide-caption">1. Name the project. 2. Add an optional description. 3. Create the project.</p>
+
+## Ask a useful question
+
+Describe the material's role, the properties you care about, and operating
+conditions. See the [example prompts](examples.md) for starting points.
+
+1. Enter your question in the prompt box.
+2. Leave **Infer from prompt** selected for automatic priorities, or choose a
+   saved profile. A manual selection takes precedence over inference.
+3. Check the connected model and keep **Find reference structures** checked if
+   you want structure discovery.
+4. Click **Send**, or press **Command + Enter** / **Ctrl + Enter**.
+
+<div class="guide-shot" markdown="1">
+
+[![Question composer: prompt, criteria, model, structure lookup and Send.](assets/screenshots/composer.jpg)](assets/screenshots/composer.jpg)
+
+<svg viewBox="0 0 2200 1600" aria-hidden="true" focusable="false">
+<rect x="716" y="926" width="1150" height="173" rx="12" />
+<circle cx="740" cy="911" r="30" /><text x="740" y="911">1</text>
+<rect x="728" y="1112" width="260" height="76" rx="12" />
+<circle cx="752" cy="1097" r="30" /><text x="752" y="1097">2</text>
+<rect x="995" y="1112" width="636" height="76" rx="12" />
+<circle cx="1019" cy="1097" r="30" /><text x="1019" y="1097">3</text>
+<rect x="1723" y="1112" width="146" height="77" rx="12" />
+<circle cx="1747" cy="1097" r="30" /><text x="1747" y="1097">4</text>
+</svg>
+
+</div>
+
+<p class="guide-caption">1. Write the research question. 2. Choose automatic or saved criteria. 3. Check model and reference-structure lookup. 4. Send after connecting.</p>
+
+_This setup screenshot is before sign-in; sending requires a ready connection._
+
+A running chat is marked by a flask. You may switch chats while research
+continues. Keep the backend running: stopping it interrupts unfinished work.
+Follow-ups in the same chat retain earlier questions and saved report revisions.
 
 ## Choose criteria and change their influence
 
-**Search Criterion** contains ranking profiles, material/application presets,
-attributes and public-source choices. Presets express preferences; they do not
-expand evidence coverage. Materials Project requires a verified API key; the
-other supported sources do not require keys in Labcat.
+Open **Search Criterion** from the sidebar. Choose an existing **Ranking profile**,
+or select **New ranking profile** and give it a name. Presets are editable starting
+points, not material recommendations.
 
-To try different priorities:
+<div class="guide-shot" markdown="1">
 
-1. Choose **New ranking profile**, give it a name, and select the relevant
-   attributes or preset.
-2. Adjust each importance from **0 to 1**, using its slider or number field.
-   Values are independent and do not need to add to one; Labcat calculates their
-   relative weights. Keep at least one positive importance.
-3. Choose **Save ranking profile**. **Use ranking profile** makes it the workspace
-   default.
-4. Select that named profile in the prompt's ranking control and submit a new
-   request. Check the resulting report's recorded profile and weights.
+[![Ranking profile settings: profile selection, new profile, name and save.](assets/screenshots/ranking-profile.jpg)](assets/screenshots/ranking-profile.jpg)
 
-The selected named profile keeps its saved criteria, weights and numeric
-preferences for new requests. The chat remembers your choice after a reload;
-select another profile or **Infer from prompt** to change it. This does not
-change the workspace default.
+<svg viewBox="0 0 2200 1600" aria-hidden="true" focusable="false">
+<rect x="286" y="776" width="805" height="84" rx="12" />
+<circle cx="310" cy="761" r="30" /><text x="310" y="761">1</text>
+<rect x="1110" y="700" width="235" height="73" rx="12" />
+<circle cx="1134" cy="685" r="30" /><text x="1134" y="685">2</text>
+<rect x="286" y="944" width="1628" height="87" rx="12" />
+<circle cx="310" cy="929" r="30" /><text x="310" y="929">3</text>
+<rect x="1421" y="1186" width="493" height="99" rx="12" />
+<circle cx="1445" cy="1171" r="30" /><text x="1445" y="1171">4</text>
+</svg>
 
-**Infer from prompt** reassesses each question, using bounded earlier user
-messages for follow-ups when history is enabled. If the class or application
-cannot be resolved, Labcat uses neutral exploration preferences without
-defaulting to oxide/high-k criteria. Always check the report's recorded selection.
+</div>
 
-Higher relative importance gives an attribute more influence when usable
-assessment or property evidence exists. It cannot create missing evidence, and
-candidates may remain tied. In the separate property calculation, missing or
-unsupported criteria keep their share of the weight and contribute zero; that
-is an evidence limitation, not proof of poor material performance. Element
-screening is a special case: any positive importance enables its exclusion list.
-It is not a compound-safety assessment.
+<p class="guide-caption">1. Select a saved profile. 2. Start a new profile. 3. Edit the name and preset. 4. Save; optionally make it the workspace default.</p>
 
-Profile edits do not recalculate existing reports or snapshots. New requests may
-also retrieve different sources, so changed results may reflect more than changed
-weights. See [ranking rules](ranking.md), [literature screening](literature-ranking.md)
-and [request interpretation](semantic-intake.md).
+Scroll to **Material properties**. Select the properties you need and adjust each
+importance from **0 to 1** with a slider or number field. Values need not add to
+one; the preview shows their relative contribution. Keep at least one positive
+importance. Return to **Save ranking profile**, then select its name in the
+prompt's ranking control. **Use ranking profile** changes the workspace default.
 
-## Read and download a report
+<div class="guide-shot" markdown="1">
 
-| View                            | What to inspect                                                                             |
-| ------------------------------- | ------------------------------------------------------------------------------------------- |
-| **Summary**                     | Main findings, candidate shortlist, reasons for consideration, tradeoffs and evidence gaps. |
-| **Technical View**              | Candidate assessments, cited passages, property context and comparisons.                    |
-| **Sources**                     | The saved references and their access and provenance details.                               |
-| **Search and analysis details** | Search outcomes, applied preferences, calculation details and supporting property records.  |
+[![Property selection and independent importance controls.](assets/screenshots/ranking-weights.jpg)](assets/screenshots/ranking-weights.jpg)
 
-In shortlist rows, choose **Read more** under a long explanation or caveat to
-read its complete retained assessment and citations. **Show less** collapses it
-again. Summary and Technical View use the same controls; downloads retain the
-full explanations regardless of what is collapsed on screen.
+<svg viewBox="0 0 2200 1600" aria-hidden="true" focusable="false">
+<rect x="290" y="826" width="275" height="39" rx="12" />
+<circle cx="314" cy="811" r="30" /><text x="314" y="811">1</text>
+<rect x="1550" y="803" width="365" height="64" rx="12" />
+<circle cx="1574" cy="788" r="30" /><text x="1574" y="788">2</text>
+<rect x="310" y="355" width="1567" height="105" rx="12" />
+<circle cx="334" cy="340" r="30" /><text x="334" y="340">3</text>
+</svg>
 
-The main **screening priority** reflects cited application relevance,
-demonstrated use and assessed attributes. It is separate from the numerical
-ranking of validated property records. Read reported concerns and ties alongside
-the score. Percentages, colors and evidence coverage are not confidence estimates
-or experimental performance predictions.
+</div>
 
-Check composition, phase, sample, material role and conditions. A quotation can
-support a qualitative interpretation without establishing a numerical property.
-Unknown stability, processability or lifetime remains unresolved. Prompts supply
-preferences and hints, never scientific evidence. See
-[source coverage](scientific-sources.md).
+<p class="guide-caption">1. Include a property. 2. Set its importance. 3. Check the normalized preview. These are illustrative preferences.</p>
 
-To export, check the sections beside **Summary**, **Technical View** and
-**Sources**, choose **Plain text**, **JSON**, **PDF** or **Word (.docx)**, then
-select **Download**. Sources is selected by default and can be downloaded alone.
-Checkboxes affect downloads, not which tabs you can view. Downloads do not
-rerun research.
+Automatic inference uses neutral exploration preferences when it cannot identify
+a class or application. Check the profile recorded in each report. Changing
+weights affects future research, not previously saved evidence; missing
+properties remain missing. See [Sources & methods](resources.md).
 
-**Report Format** adjusts verbosity, terminology and document appearance.
-Ordinary reports and tracked reports use current formatting preferences;
-pinned snapshots keep their recorded format. Formatting does not change the
-saved evidence or rankings.
+## Read, compare and export
 
-## Inspect structures and download CIF files
+<div class="guide-shot" markdown="1">
 
-Choose **View structure** beside an eligible candidate in Summary or Technical
-View, then select a record if several are offered. In JSmol, drag to rotate,
-scroll to zoom, or use **Reset view** and **Toggle rotation**. Read the source,
-retrieval information and **Structure limitations** before using the file.
+[![Saved report tabs, export controls and project pins.](assets/screenshots/report-controls.jpg)](assets/screenshots/report-controls.jpg)
 
-**Find reference structures** starts checked in each new prompt composer. It
-searches selected supported repositories after an eligible report is saved;
-it does not guarantee a match or retrieve coordinates just by opening a report.
-An inline **Retry reference lookup** can retry missing or failed discovery.
+<svg viewBox="0 0 1280 720" aria-hidden="true" focusable="false">
+<rect x="57" y="353" width="297" height="44" rx="7" style="stroke-width: 3" />
+<circle cx="74" cy="343" r="19" /><text x="74" y="343" style="font-size: 22px">1</text>
+<rect x="1010" y="351" width="215" height="47" rx="7" style="stroke-width: 3" />
+<circle cx="1027" cy="341" r="19" /><text x="1027" y="341" style="font-size: 22px">2</text>
+<rect x="1029" y="278" width="197" height="46" rx="7" style="stroke-width: 3" />
+<circle cx="1046" cy="268" r="19" /><text x="1046" y="268" style="font-size: 22px">3</text>
+</svg>
 
-**Download CIF** or **Download displayed structure** exports the validated
-geometry as a derived P1 CIF. It is not a symmetry determination or necessarily
-the original source file. **Download original CIF** appears separately only for
-supported, validated source attachments.
+</div>
 
-A **phase match unverified** label means composition matching has not established
-the report's exact phase or sample. For supported multi-component candidates,
-**Component 1**, **Component 2** and similar entries can show separate bulk
-reference structures. They do not represent an assembled interface, core/shell
-geometry or particle shape. Viewer bonds are illustrative. Structure lookups
-and downloads do not supply property measurements or change the ranking.
+<p class="guide-caption">1. Switch views and choose export sections. 2. Choose an export type and download. 3. Pin a fixed snapshot or track the latest report.</p>
 
-Unavailable or failed retrieval does not prove a structure does not exist. The
-app does not substitute demonstration structures. See
-[structure coverage and safeguards](structures.md) for supported sources,
-reference matching and file limitations.
+Start with **Summary** for the shortlist, **Technical View** for detailed
+assessments and comparisons, and **Sources** for the saved references. Expand
+long explanations with **Read more**; **Show less** collapses them again.
+
+<div class="guide-shot" markdown="1">
+
+[![Expanded screening explanation, citations and View structure controls.](assets/screenshots/shortlist-details.jpg)](assets/screenshots/shortlist-details.jpg)
+
+<svg viewBox="0 0 1280 720" aria-hidden="true" focusable="false">
+<rect x="474" y="278" width="318" height="126" rx="7" style="stroke-width: 3" />
+<circle cx="491" cy="268" r="19" /><text x="491" y="268" style="font-size: 22px">1</text>
+<rect x="170" y="524" width="86" height="28" rx="7" style="stroke-width: 3" />
+<circle cx="187" cy="514" r="19" /><text x="187" y="514" style="font-size: 22px">2</text>
+</svg>
+
+</div>
+
+<p class="guide-caption">1. Expanded explanation and Show less. 2. Open a candidate’s structure panel.</p>
+
+Check material identity, phase, sample conditions and missing evidence alongside
+the ranking. Screening percentages indicate review priority, not confidence or
+measured performance. A partial report retains useful findings with explicit gaps.
+
+For an export, check the desired report sections, choose **Plain text**, **JSON**,
+**PDF** or **Word (.docx)**, and select **Download**. Keep **Sources** selected for
+citations. Exports use saved content without rerunning research.
+
+<div class="guide-shot" markdown="1">
+
+[![Conversation header showing Chat PDF and the timestamped research question.](assets/screenshots/chat-history.jpg)](assets/screenshots/chat-history.jpg)
+
+<svg viewBox="0 0 1280 720" aria-hidden="true" focusable="false">
+<rect x="1165" y="236" width="83" height="35" rx="7" style="stroke-width: 3" />
+<circle cx="1182" cy="226" r="19" /><text x="1182" y="226" style="font-size: 22px">1</text>
+<rect x="58" y="407" width="283" height="52" rx="7" style="stroke-width: 3" />
+<circle cx="75" cy="397" r="19" /><text x="75" y="397" style="font-size: 22px">2</text>
+</svg>
+
+</div>
+
+<p class="guide-caption">1. Download complete chat history. 2. Research question and original timestamp.</p>
+
+**Chat PDF** exports the complete saved conversation, including earlier questions
+and report revisions. For project chats, **Pin snapshot** keeps a fixed report
+revision; **Pin tracking** follows the latest completed report.
+
+_The report screenshots show a genuine partial oxide report generated on
+27 September 2026 with ChatGPT `gpt-6-astra`, reopened in the current interface.
+The saved evidence and timestamps were preserved; these captures are not a new
+research run or a guarantee of the same results._
+
+## Inspect a structure
+
+<div class="guide-shot" markdown="1">
+
+[![Hafnium dioxide reference structure displayed in JSmol with CIF and view controls.](assets/screenshots/structures.jpg)](assets/screenshots/structures.jpg)
+
+<svg viewBox="0 0 1280 720" aria-hidden="true" focusable="false">
+<rect x="132" y="22" width="115" height="44" rx="7" style="stroke-width: 3" />
+<circle cx="125" cy="42" r="19" /><text x="125" y="42" style="font-size: 22px">1</text>
+<rect x="754" y="83" width="207" height="51" rx="7" style="stroke-width: 3" />
+<circle cx="770" cy="73" r="19" /><text x="770" y="73" style="font-size: 22px">2</text>
+<rect x="130" y="620" width="282" height="68" rx="7" style="stroke-width: 3" />
+<circle cx="146" cy="610" r="19" /><text x="146" y="610" style="font-size: 22px">3</text>
+</svg>
+
+</div>
+
+<p class="guide-caption">1. Download CIF. 2. Reset view or toggle rotation. 3. Read structure limitations and file provenance. The HfO₂ reference shown was retrieved from the public dielectric dataset; its phase match to the cited application is unverified.</p>
+
+In a shortlist, choose **View structure** and select an available record.
+Drag in JSmol to rotate; scroll to zoom. **Reset view** restores the initial view.
+Use **Download CIF** for available validated geometry.
+
+Read the source and phase label. A reference may match composition without
+matching the report's phase or sample. Separate core/shell component structures
+are bulk references, not an assembled interface. Missing matches stay unavailable.
+See the [resource list and JSmol acknowledgement](resources.md).
+
+## Change report appearance
+
+Open **Report Format** in the sidebar to change report verbosity, terminology,
+export type and document appearance.
+
+<div class="guide-shot" markdown="1">
+
+[![Report Format: report views, verbosity, terminology and default export type.](assets/screenshots/report-format.jpg)](assets/screenshots/report-format.jpg)
+
+<svg viewBox="0 0 2200 1600" aria-hidden="true" focusable="false">
+<rect x="287" y="607" width="378" height="61" rx="12" />
+<circle cx="311" cy="592" r="30" /><text x="311" y="592">1</text>
+<rect x="1112" y="646" width="803" height="86" rx="12" />
+<circle cx="1136" cy="631" r="30" /><text x="1136" y="631">2</text>
+<rect x="286" y="782" width="1628" height="89" rx="12" />
+<circle cx="310" cy="767" r="30" /><text x="310" y="767">3</text>
+</svg>
+
+</div>
+
+<p class="guide-caption">1. Choose report views. 2. Set verbosity. 3. Choose terminology and default export type.</p>
+
+Scroll down and choose **Save report format** after making changes. The template
+preview contains placeholders, not research results. Formatting does not change
+the saved evidence or ranking; pinned snapshots keep their recorded format.
+
+<div class="guide-shot" markdown="1">
+
+[![Report appearance, Save report format and template preview.](assets/screenshots/report-format-save.jpg)](assets/screenshots/report-format-save.jpg)
+
+<svg viewBox="0 0 2200 1600" aria-hidden="true" focusable="false">
+<rect x="284" y="145" width="1634" height="591" rx="12" />
+<circle cx="308" cy="130" r="30" /><text x="308" y="130">1</text>
+<rect x="1706" y="808" width="253" height="81" rx="12" />
+<circle cx="1730" cy="793" r="30" /><text x="1730" y="793">2</text>
+<rect x="283" y="1001" width="1629" height="261" rx="12" />
+<circle cx="307" cy="986" r="30" /><text x="307" y="986">3</text>
+</svg>
+
+</div>
+
+<p class="guide-caption">1. Adjust document appearance. 2. Save changes. 3. Inspect the placeholder preview or download its PDF template.</p>

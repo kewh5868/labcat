@@ -14,7 +14,7 @@ prune frontend/node_modules
 prune frontend/dist
 recursive-include tests *.py
 recursive-include tests/fixtures *.json *.md
-recursive-include docs *.md *.png *.css
+recursive-include docs *.md *.png *.jpg *.css
 include mkdocs.yml
 recursive-include third_party *
 include docs/evaluation-results.json
@@ -54,3 +54,4 @@ prune .aws
 prune .codex
 
 global-exclude .labcat-launch-mode .labcat-project-directory .labcat-install-source
+include docs/assets/screenshots/provenance.txt

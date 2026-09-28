@@ -21,25 +21,26 @@ theme:
     - content.code.copy
     - search.suggest
     - search.highlight
+# Keep detailed technical records in Git without crowding the published guide.
+exclude_docs: |
+  /*.md
+  !/index.md
+  !/first-run.md
+  !/installation.md
+  !/user-guide.md
+  !/examples.md
+  !/resources.md
+  !/development.md
+  /evaluation-results.json
+not_in_nav: |
+  /installation.md
 nav:
-  - Get started: index.md
-  - First-run walkthrough: first-run.md
-  - Installation: installation.md
-  - User guide: user-guide.md
-  - Example questions: examples.md
-  - Research reference:
-      - How ranking works: ranking.md
-      - Application evidence: literature-ranking.md
-      - Structures and CIF files: structures.md
-      - Public sources: scientific-sources.md
-      - Model connections: onboarding.md
-      - Chats and projects: projects.md
-      - Research safeguards: research-safeguards.md
-  - Advanced:
-      - Deployment and troubleshooting: deployment.md
-      - Developer guide: development.md
-      - Architecture: architecture.md
-      - Validation: validation.md
+  - Start: index.md
+  - Install & setup: first-run.md
+  - Use Labcat: user-guide.md
+  - Examples: examples.md
+  - Sources & methods: resources.md
+  - Developer notes: development.md
 plugins:
   - search
 markdown_extensions:

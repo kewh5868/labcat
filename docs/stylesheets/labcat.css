@@ -67,3 +67,60 @@
 .md-typeset pre > code {
   border-radius: 0.3rem;
 }
+
+/* Numbered vector callouts leave the captured application pixels untouched. */
+.guide-shot {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid #d8e2d4;
+  border-radius: 0.5rem;
+  margin: 1rem 0 0.6rem;
+  background: #f4f6ef;
+}
+
+.guide-shot > p {
+  margin: 0;
+  line-height: 0;
+}
+
+.guide-shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.guide-shot svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.guide-shot rect {
+  fill: none;
+  stroke: #b34518;
+  stroke-width: 5;
+}
+
+.guide-shot circle {
+  fill: #b34518;
+  stroke: #fff;
+  stroke-width: 3;
+}
+
+.guide-shot text {
+  fill: #fff;
+  font:
+    700 36px system-ui,
+    sans-serif;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+.guide-caption {
+  color: #415b50;
+  font-size: 0.85em;
+  line-height: 1.55;
+  margin-top: 0.4rem;
+}

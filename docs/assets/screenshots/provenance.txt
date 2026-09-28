@@ -1,0 +1,17 @@
+Labcat documentation screenshots, captured 27 September 2026.
+
+Setup, workspace, project and preferences screens: fresh installation of the
+published application (ac84956), macOS desktop. Captured before model sign-in;
+no successful new research or authenticated setup is implied.
+
+Report, chat history and shortlist screens: original 27 September 2026 oxide
+report (ChatGPT gpt-6-astra, partial, 5 leads, 47 sources) restored with its
+original evidence and timestamps, then captured in the current browser UI.
+No new model call was made for these captures.
+
+Structure screen: public dielectric dataset record dielectric:mp-352 (HfO2),
+freshly retrieved and displayed in JSmol. Composition match only; phase match
+with the literature candidate remains unverified.
+
+JPEG files are unmodified application captures. Numbered outlines are separate
+SVG overlays in the guides; they do not alter the captured application state.

@@ -1,31 +1,18 @@
-# First run: from installation to your first report
+# Install & setup
 
-Follow this walkthrough on the computer where you want to run Labcat. It uses
-Docker with either a native desktop window or your browser. The first launch
-asks which you prefer; **Enter selects Desktop**. Desktop builds from source
-require Node 24, Rust/Cargo and OS build tools. Browser mode needs none of those
-host tools. The same in-app steps apply to both interfaces.
+Run Labcat on your computer with Docker, then use either its desktop application
+or your browser.
 
-**Have ready:** an internet connection and a supported ChatGPT account, an
-eligible Claude Code account, or an API key from a supported model provider.
-A Materials Project key is optional.
-Your selected provider runs the AI model and controls access, allowances and
-charges. Docker runs the Labcat workspace locally.
+## 1. Prepare your computer
 
-Already running Labcat? Jump to [connect your model](#4-connect-your-model).
-For image bundles, native builds and other installation routes, use the
-[installation guide](installation.md).
+Install [Git](https://git-scm.com/downloads) and start
+[Docker Desktop](https://docs.docker.com/desktop/) on Mac or Windows. Windows
+must use Linux containers. On Linux, install
+[Docker Engine](https://docs.docker.com/engine/install/) and the
+[Compose plugin](https://docs.docker.com/compose/install/linux/).
+Use a local Docker context and an internet connection.
 
-## 1. Open a terminal and check the tools
-
-1. Install [Git](https://git-scm.com/downloads) if it is not already installed.
-2. On Mac or Windows, install and open
-   [Docker Desktop](https://docs.docker.com/desktop/). Wait until its engine is
-   running. On Windows, use **Linux containers**. On Linux, install and start
-   [Docker Engine and Compose](installation.md#1-prepare-docker).
-3. Open **Terminal** on Mac, **PowerShell** on Windows, or your Linux terminal.
-   You can find Terminal or PowerShell using your computer's application search.
-4. Copy each command below into that terminal and press **Enter**:
+In Terminal or PowerShell, check:
 
 ```text
 git --version
@@ -33,334 +20,178 @@ docker info
 docker compose version
 ```
 
-**Check before continuing:** Git and Compose should print version information.
-`docker info` should include information about a running Docker server. If a
-command is not found, finish installing that tool and reopen your terminal. If
-Docker cannot connect to its engine, start Docker and try again.
+For the desktop application, also install the
+[desktop prerequisites](installation.md#desktop-prerequisites).
+Browser mode needs no host Python, Node or Rust.
 
-**For Desktop:** install the [desktop prerequisites](installation.md#desktop-prerequisites)
-before continuing. Docker builds the backend only; it does not provide the host's
-native compiler or webview. You can choose Browser without installing native tools.
+## 2. Download and build
 
-**Where to type:**
-Terminal commands go in Terminal or PowerShell. Research questions go in
-Labcat's chat box later. Copy only the commands inside the code blocks;
-do not type terminal prompts such as `$` or `>`.
+Run in your chosen installation folder:
 
-## 2. Download Labcat and build it
-
-In the terminal, run:
-
-```text
+```sh
 git clone https://github.com/kewh5868/labcat.git
 cd labcat
 docker build -t labcat:0.1.0.dev0 .
 ```
 
-The first command creates a `labcat` folder in your current directory. The
-second enters it. The third builds the application, including its dependencies.
-Keep the final `.` in the build command, with a space before it: this is the
-required build context argument, meaning the current folder. The first build can
-take several minutes; wait for it to finish successfully and return to the terminal prompt.
-
-If you already cloned Labcat, open a terminal in that existing folder and run
-only the build command. The folder should contain `Dockerfile` and `compose.yaml`.
-An existing installation can be updated using the
-[update instructions](installation.md#saved-work-and-updates).
+Wait for a successful build; downloading dependencies can take several minutes.
 
 ## 3. Open the application
 
-From the same `labcat` folder, run the command for your operating system:
+From the same folder:
 
-=== "Mac / Linux"
+| Mac / Linux   | Windows PowerShell |
+| ------------- | ------------------ |
+| `./labcat.sh` | `.\labcat.cmd`     |
 
-    ```sh
-    ./labcat.sh
-    ```
+Press **Enter** for **Desktop**, or choose **2** for **Browser**. Desktop builds
+and installs a native app for your user; Browser opens your default browser.
+The launcher remembers this choice. To choose again, use `./labcat.sh --choose`
+or `.\labcat.cmd -Choose`.
 
-=== "Windows PowerShell"
-
-    ```powershell
-    .\labcat.cmd
-    ```
-
-Choose **1 — Desktop**, or press **Enter**, to install and open the native app.
-Choose **2 — Browser** to open your default browser. Desktop uses a supplied native
-app when present, otherwise compiles this checkout with the prerequisites above.
-The launcher remembers your choice. Both interfaces use the same Docker workspace.
-
-To choose again later, run `./labcat.sh --choose` or `.\labcat.cmd -Choose`.
-To select Browser directly, use `./labcat.sh --browser` or `.\labcat.cmd -Browser`;
-for Desktop, use `--desktop` or `-Desktop`. If Browser mode does not open a window,
-copy the launcher's local URL into your browser. Use its printed port.
-
-After installation, Labcat is available in your user Applications folder on Mac,
-the Start menu on Windows, or the application menu on Linux. Start Docker before
-opening it. A desktop build failure does not silently change your selected mode.
-
-**You should see:** the Labcat workspace and a setup dialog headed
-**Connect your research model.**, with **Model**, **Public sources** and **Ready**
-across the top. Keep Docker running for the following steps.
-
-If setup is already complete, open **Connections** in the sidebar to review or
-change your model connection. Do not rebuild the image each time you open Labcat.
+The workspace opens with a setup dialog. Keep Docker running during setup and
+research; ordinary launches do not need a rebuild.
 
 ## 4. Connect your model
 
-Labcat's developer currently recommends **ChatGPT account sign-in** because it
-is the application's most thoroughly tested model connection.
+The developer recommends **ChatGPT account sign-in**, the most thoroughly tested
+connection in Labcat. Your account needs Codex access and available usage
+allowance. Other providers have their own model access and billing requirements.
 
-In the **Model** setup step, open the **Model provider** dropdown. Choose one
-of the routes below. A credential vault is optional; you can connect for the
-current server session without creating or unlocking one.
+1. Under **Model provider**, select **ChatGPT · account sign-in**.
+2. Click **Sign in with ChatGPT**, finish authorization on the provider's page,
+   and return to Labcat. Your password belongs on the provider's page.
+3. Wait for **Connected**, then select an available **Model**.
 
-=== "ChatGPT account"
+<div class="guide-shot" markdown="1">
 
-    1. Select **ChatGPT · account sign-in** in **Model provider**.
-    2. Click **Sign in with ChatGPT**.
-    3. Click **Open ChatGPT sign-in** if the provider page has not opened.
-       Complete sign-in and authorization on the provider's page, then return
-       to Labcat. Keep Labcat running while you connect.
-    4. If Labcat displays a device code, enter it on the provider page as
-       instructed. If the connection still says it is waiting after you finish,
-       click **Check sign-in status**.
-    5. Wait for the **Connected** badge and the available models to load.
+[![Model setup before sign-in: provider, account, sign-in and model controls.](assets/screenshots/setup-sign-in.jpg)](assets/screenshots/setup-sign-in.jpg)
 
-    Your ChatGPT password belongs on the provider's sign-in page, never in
-    Labcat. Account eligibility and available models depend on your provider.
+<svg viewBox="0 0 2200 1600" aria-hidden="true" focusable="false">
+<rect x="450" y="410" width="1300" height="65" rx="12" />
+<circle cx="474" cy="395" r="30" /><text x="474" y="395">1</text>
+<rect x="480" y="785" width="265" height="82" rx="12" />
+<circle cx="504" cy="770" r="30" /><text x="504" y="770">2</text>
+<rect x="450" y="1097" width="1300" height="68" rx="12" />
+<circle cx="474" cy="1082" r="30" /><text x="474" y="1082">3</text>
+</svg>
 
-=== "Claude Code account"
+</div>
 
-    1. Select **Anthropic (Claude Code sign-in)** in **Model provider**.
-    2. Click **Set up Claude Code sign-in**. Labcat saves the connection and
-       displays its account-specific terminal command.
-    3. Copy that command into Terminal or PowerShell from your `labcat` folder:
+<p class="guide-caption">1. Choose the model provider. 2. Start provider sign-in. 3. Select a model after connection.</p>
 
-       ```text
-       docker compose exec goose-worker python -m labcat.claude_auth login <account-id>
-       ```
+_Before sign-in. Model choices load after the account connects._
 
-       Use the command shown in **Connections**, which already contains the
-       account ID; do not type the `<account-id>` placeholder literally.
-    4. Follow the native Claude Code instructions in that terminal. Open its
-       provider sign-in URL in your browser when instructed, and complete any
-       code entry in the native terminal flow. Do not paste a code or token into
-       Labcat.
-    5. Return to Labcat and click **Check Claude Code sign-in**.
+Then save the connection:
 
-    The native CLI keeps its session on temporary memory-backed storage in the
-    Docker worker. **End Claude Code session** or a worker container restart
-    ends it. Creating, locking or resetting Labcat's vault does not affect this
-    separate session. The `default`, `sonnet` and `haiku` choices are aliases;
-    sign-in detection does not establish access to a particular model or test
-    inference. Live Claude account inference has not yet been validated in Labcat.
+1. Read and enable the consent checkbox for sending research context to your
+   provider.
+2. Click **Save and test connections**. After verification, click **Continue**.
+   A saved connection may offer **Verify and continue** instead.
 
-=== "Provider API key"
+<div class="guide-shot" markdown="1">
 
-    1. Choose your provider in **Model provider**, such as OpenAI API,
-       Anthropic, Gemini or Kimi.
-    2. Paste a key created in that provider's API dashboard into its **API key**
-       field. A consumer chat subscription is not an API key.
-    3. Click **Connect [provider]**. If updating a saved connection, the button
-       says **Save API key**.
-    4. Wait for the available models to load.
+[![Model selection, consent, save and test, and the setup Continue control.](assets/screenshots/setup-save.jpg)](assets/screenshots/setup-save.jpg)
 
-    API use follows that provider's billing.
+<svg viewBox="0 0 2200 1600" aria-hidden="true" focusable="false">
+<rect x="478" y="836" width="1242" height="48" rx="12" />
+<circle cx="502" cy="821" r="30" /><text x="502" y="821">1</text>
+<rect x="1462" y="1055" width="328" height="77" rx="12" />
+<circle cx="1486" cy="1040" r="30" /><text x="1486" y="1040">2</text>
+<rect x="1616" y="1400" width="173" height="84" rx="12" />
+<circle cx="1640" cy="1385" r="30" /><text x="1640" y="1385">3</text>
+</svg>
 
-Then complete these steps for your route:
+</div>
 
-1. Open the **Model** dropdown and select a model or a Claude Code alias. If the list fails to
-   load, check your connection and click **Refresh models**.
-2. Read the consent notice, then check **I allow this provider to receive that
-   context and run potentially billable planning calls.** to enable research.
-3. Click **Save and test connections**. Wait for the connection check to finish.
-4. When setup reports **Saved model connection verified**, click **Continue**.
-   An existing saved connection may instead offer **Verify and continue**.
+<p class="guide-caption">1. Consent to sending research context. 2. Save and test connections. 3. Continue once ready.</p>
 
-This check uses authentication and available model metadata; it does not run a
-research prompt. For Claude Code it detects native sign-in and validates the
-configured alias, without checking model entitlement or inference.
-If **Continue** is disabled, scroll through the model step, save any changed
-model or consent setting, and resolve the displayed connection error. Clicking
-**View workspace** closes the dialog but does not make an unverified connection
-ready for research. [More connection help](onboarding.md)
+_Continue remains unavailable until the required connection is ready. This
+readiness check does not run a research query._
 
-**Switch accounts or models later.** Open **Connections**, choose **Model
-provider**, then use **Account** to select a saved connection or **Connect another
-account…** to add one. Give a new alternate account an **Account label** if useful.
-Each connection keeps its own model choice. You can also open the language-model
-control below a chat prompt, choose a saved account, and change **Active model**.
-Changes apply to the next request.
+The credential vault is optional. Session credentials work without a vault;
+encrypted storage can remember supported credentials between server sessions.
+Saved key values are never displayed back in the browser.
 
-## 5. Choose public sources and finish setup
+## 5. Choose sources and finish
 
-1. **Public sources:** for a first run, keep the default public-source settings
-   and click **Continue**. You can also click **Skip for now** to leave this
-   optional step without applying unsaved changes.
-2. **Ready:** check that the displayed model is the one you selected, then click
-   **Finish setup**. The setup dialog closes and the workspace is ready for a
-   question.
+In **Public sources**, keep the default sources for a first run. Optionally enter
+a Materials Project API key on its card and select **Save and verify**.
+The card is also in **Connections**.
 
-**Optional: connect Materials Project.**
-In **Public sources**, find the Materials Project card. Use
-**Register or get an API key** if needed, paste your key into its field, and
-click **Save and verify**. Wait for verification before continuing. You can
-add it later in **Connections**. Other supported public sources can be used
-without this key; no source can guarantee a structure for every candidate.
+<div class="guide-shot" markdown="1">
 
-## 6. Send your first research question
+[![Materials Project connection card with registration, API-key and verification controls.](assets/screenshots/sources.jpg)](assets/screenshots/sources.jpg)
 
-Use this example for your first run:
+<svg viewBox="0 0 2200 1600" aria-hidden="true" focusable="false">
+<rect x="990" y="700" width="280" height="66" rx="12" />
+<circle cx="1014" cy="685" r="30" /><text x="1014" y="685">1</text>
+<rect x="505" y="805" width="755" height="84" rx="12" />
+<circle cx="529" cy="790" r="30" /><text x="529" y="790">2</text>
+<rect x="504" y="982" width="220" height="77" rx="12" />
+<circle cx="528" cy="967" r="30" /><text x="528" y="967">3</text>
+</svg>
 
-```text
-I need an oxide for a very thin transistor insulating layer. Put a high
-dielectric constant ahead of ease of manufacture, but include leakage and
-room-temperature phase stability in the comparison. Explain the tradeoffs
-and cite the evidence for each candidate.
-```
+</div>
 
-1. Click **New chat** near the top of the left sidebar.
-2. Click the box that says **What would you like to explore?** and paste the
-   example question above.
-3. Below the question, leave **Infer from prompt** selected for this first run.
-   It lets Labcat infer supported ranking preferences from your request. Check
-   that the model control shows the model you connected.
-4. Leave **Find reference structures** checked if you want Labcat to look for
-   available public reference structures alongside the report.
-5. Click **Send** at the right of the question box. You can also press
-   **Command + Enter** on Mac or **Ctrl + Enter** on Windows/Linux.
+<p class="guide-caption">1. Get a Materials Project key. 2. Enter the key. 3. Verify the connection. This card is shown on Connections.</p>
 
-**You should see:** the chat gets a title and shows research progress. A bubbling
-flask in the sidebar marks the running chat. You can open a different chat and
-return while it works. Keep Docker and the Labcat backend running; stopping the
-backend interrupts unfinished research.
+Choose **Continue**, then **Finish setup** on the **Ready** step. See
+[Sources & methods](resources.md) for each connected repository and its access
+requirements. Anonymous sources remain available without a Materials Project key.
 
-If Labcat asks a clarification question, answer in the same chat box and click
-**Send** again. Results depend on live sources and your model; this example does
-not have a preset shortlist or a guaranteed number of matches.
+## 6. Ask a question
 
-## 7. Read the report and inspect a structure
+Choose **New chat** in the sidebar. **Create project** groups related chats;
+the [user guide](user-guide.md) shows the project workflow.
 
-Start with the report tabs below your research question:
+<div class="guide-shot" markdown="1">
 
-1. Click **Summary**. Read the findings and candidate shortlist. Look at why
-   each material is considered and its key caveats, including ties or missing
-   evidence. Screening priority is not a measured performance percentage.
-2. Click **Technical View** for candidate comparisons and available property
-   evidence. Check whether the phase, conditions and material role fit your
-   intended use.
-3. Click **Sources** to inspect the references. Follow a source link or an
-   inline citation to examine the evidence behind a claim.
-4. In a shortlist, click **View structure** beneath a material when offered.
-   Select a record if there are several. If the panel offers **Retrieve and
-   view structure**, click it to fetch the coordinates and open the viewer.
-5. In the JSmol viewer, drag to rotate and scroll to zoom. Use **Download CIF**
-   or **Download displayed structure** to save the displayed geometry.
+[![Workspace sidebar showing New chat, Create project and Connections.](assets/screenshots/workspace.jpg)](assets/screenshots/workspace.jpg)
 
-Read the structure's matching and phase labels. A bulk reference structure may
-not represent the exact device phase, quantum dot, or core/shell interface.
-If no file is found, the panel reports that limitation; a failed lookup is not
-proof that no structure exists. [Structure help](structures.md)
+<svg viewBox="0 0 2200 1600" aria-hidden="true" focusable="false">
+<rect x="32" y="204" width="313" height="78" rx="12" />
+<circle cx="56" cy="189" r="30" /><text x="56" y="189">1</text>
+<rect x="43" y="283" width="295" height="54" rx="12" />
+<circle cx="67" cy="268" r="30" /><text x="67" y="268">2</text>
+<rect x="32" y="343" width="313" height="68" rx="12" />
+<circle cx="56" cy="328" r="30" /><text x="56" y="328">3</text>
+<rect x="41" y="1260" width="296" height="194" rx="12" />
+<circle cx="65" cy="1245" r="30" /><text x="65" y="1245">4</text>
+</svg>
 
-## 8. Ask a follow-up or change priorities
+</div>
 
-In the same chat's question box, paste this follow-up and click **Send**:
+<p class="guide-caption">1. New chat. 2. Create project. 3. Search saved work. 4. Report Format, Search Criterion and Connections.</p>
 
-```text
-For the candidates above, compare the evidence for low leakage and
-room-temperature phase stability. Which measurements are missing, and which
-candidates should I investigate first?
-```
+Paste this into the prompt box:
 
-The newest report becomes the main view. Click **Earlier questions**, then
-**View saved report**, to revisit a previous question and its saved result.
+> I need an oxide for a thin-film capacitor. Favor a high dielectric constant,
+> but also compare band gap and room-temperature stability.
 
-For direct control over weights, open **Search Criterion** in the sidebar,
-create and save a ranking profile, then choose that profile from the ranking
-control below your next prompt. Run another question to apply it. Existing
-reports are not recalculated when you edit a profile.
-[Step-by-step ranking controls](user-guide.md#choose-criteria-and-change-their-influence)
+Leave **Infer from prompt** selected and **Find reference structures** checked.
+Check the model, then click **Send**, or press **Command + Enter** on Mac and
+**Ctrl + Enter** on Windows/Linux.
 
-To group your work, click **Create project** in the sidebar and fill in the
-project form. You can move an existing chat using its three-dot menu and
-**Move chat**. [Projects and saved history](projects.md)
+<div class="guide-shot" markdown="1">
 
-## 9. Download your report
+[![Prompt composer with ranking, model, reference-structure and Send controls.](assets/screenshots/composer.jpg)](assets/screenshots/composer.jpg)
 
-1. Beside the **Summary**, **Technical View** and **Sources** tabs, check the
-   sections to include. Keep **Sources** checked to include the reference list.
-   At least one section must be selected.
-2. Open the format dropdown at the right of that row. Choose **PDF** for a
-   shareable document, **Word (.docx)** for an editable document, **Plain text**
-   for text, or **JSON** for structured data.
-3. Click **Download**. Open the file from your browser's downloads or the OS
-   Downloads folder when using the desktop app.
-   Structure CIF files are downloaded separately from their structure panels.
+<svg viewBox="0 0 2200 1600" aria-hidden="true" focusable="false">
+<rect x="716" y="926" width="1150" height="173" rx="12" />
+<circle cx="740" cy="911" r="30" /><text x="740" y="911">1</text>
+<rect x="728" y="1112" width="260" height="76" rx="12" />
+<circle cx="752" cy="1097" r="30" /><text x="752" y="1097">2</text>
+<rect x="995" y="1112" width="636" height="76" rx="12" />
+<circle cx="1019" cy="1097" r="30" /><text x="1019" y="1097">3</text>
+<rect x="1723" y="1112" width="146" height="77" rx="12" />
+<circle cx="1747" cy="1097" r="30" /><text x="1747" y="1097">4</text>
+</svg>
 
-The checkboxes control the download, not which report tabs you can view. Changing
-**Report Format** in the sidebar changes presentation, not evidence or rankings.
+</div>
 
-To save the whole conversation instead, use **Chat PDF** near the top of the
-chat. It includes all saved questions, replies and report revisions with their
-sources, including earlier questions that are collapsed on screen.
+<p class="guide-caption">1. Write the research question. 2. Choose automatic or saved criteria. 3. Check model and reference-structure lookup. 4. Send after connecting.</p>
 
-## 10. Stop and come back later
-
-Closing the window leaves Labcat running. To stop it, return to a terminal in
-your `labcat` folder and run:
-
-=== "Mac / Linux"
-
-    ```sh
-    ./labcat.sh stop
-    ```
-
-=== "Windows PowerShell"
-
-    ```powershell
-    .\labcat.cmd stop
-    ```
-
-This preserves saved chats and projects. Next time, start Docker and repeat the
-[open command](#3-open-the-application). If you need the current local address,
-run `./labcat.sh status` or `.\labcat.cmd status` from the same folder.
-
-Credentials are session-only by default. To remember a model API key, open
-**Connections → Advanced credential options**, create a vault password, select
-**Encrypted credential vault**, then click **Save and test connections**. Leave
-the API-key field blank to remember an available key without typing it again.
-To remember a ChatGPT sign-in, choose encrypted storage before signing in or
-reconnecting. For Materials Project, choose **Remember key securely between
-sessions** in its own card, then **Save and verify**.
-
-After the Labcat server restarts, click **Unlock saved credentials**, enter your
-vault password, then click **Unlock credentials**. Do this once; saved keys can
-be reused without entering each one again. The API-key fields stay blank because
-Labcat never sends saved key values back to the browser. Provider sign-ins may
-still expire and need reconnecting.
-
-To change a known vault password, open **Advanced credential options → Change
-vault password**, enter the current password and the new password twice, then
-click **Change vault password**. If you forgot it, choose **Forgot password?
-Reset vault**, check the confirmation box, and click **Reset vault and clear
-credentials**. Reset clears the vault password and all vault-managed encrypted
-and session-only credentials, including API keys and ChatGPT sign-ins. You must
-reconnect those credentials; your projects, chats and reports remain. Native
-Claude Code sessions are separate: use **End Claude Code session** or restart
-the worker container to end them.
-
-You can keep the vault locked and continue with **This server session**. For
-ChatGPT, click **Reconnect ChatGPT** and sign in again; you do not need to sign
-out or reset the vault first. Use **Account → Connect another account…** for a
-separate connection. **End session** disconnects the fresh sign-in while the
-older saved sign-in stays encrypted and locked.
-
-For an API provider, paste the same or another model key and click **Save API
-key**. On the Materials Project card, choose **Use a key for this session**, paste
-the key, and click **Save and verify**. Saved encrypted credentials remain
-unchanged; session credentials last only until the server stops. Labcat does not
-persist credentials as plain text.
-
-Continue with [more example questions](examples.md), the
-[workspace user guide](user-guide.md), or
-[startup troubleshooting](deployment.md#troubleshooting).
+If Labcat asks for clarification, reply in the same chat. Continue with the illustrated
+[user guide](user-guide.md) to read, compare and export results, or try the
+[examples](examples.md).

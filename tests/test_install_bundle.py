@@ -8,6 +8,7 @@ import re
 import stat
 import zipfile
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
 import pytest
 
@@ -68,6 +69,80 @@ def test_bundle_has_exact_allowlist_checksum_and_executable_launchers(bundle_inp
     assert checksum.read_text(encoding="utf-8") == (
         f"{hashlib.sha256(output.read_bytes()).hexdigest()}  {output.name}\n"
     )
+
+
+def test_bundle_keeps_published_guide_links_and_images(bundle_inputs):
+    root, archive = bundle_inputs
+    source = SCRIPT.parents[1]
+    guides = (
+        "README.md",
+        "docs/index.md",
+        "docs/first-run.md",
+        "docs/installation.md",
+        "docs/user-guide.md",
+        "docs/examples.md",
+        "docs/resources.md",
+        "docs/development.md",
+    )
+    # Use the real guides: a new relative page or image must travel with them.
+    for name in guides:
+        destination = root / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text((source / name).read_text(), encoding="utf-8")
+    output, _ = bundle_builder.build_install_bundle(archive, project_root=root)
+    with zipfile.ZipFile(output) as bundle:
+        names = set(bundle.namelist())
+        image_links = 0
+        for name in guides:
+            content = (root / name).read_text(encoding="utf-8")
+            assert bundle.read(f"{archive.stem}/{name}").decode() == content
+            targets = re.findall(r"\]\(([^)\s]+)\)", content)
+            targets += re.findall(r'<img[^>]+src="([^"]+)"', content)
+            for target in targets:
+                parsed = urlsplit(target)
+                if parsed.scheme or parsed.netloc or not parsed.path:
+                    continue
+                referenced = (root / name).parent / unquote(parsed.path)
+                relative = referenced.resolve().relative_to(root.resolve())
+                assert f"{archive.stem}/{relative.as_posix()}" in names, (
+                    name,
+                    target,
+                )
+                image_links += relative.suffix in {".jpg", ".png"}
+        assert image_links > 0
+        assert f"{archive.stem}/docs/stylesheets/labcat.css" in names
+        assert f"{archive.stem}/mkdocs.yml" in names
+        assert f"{archive.stem}/requirements/docs.txt" in names
+
+
+def test_bundle_does_not_collect_unreviewed_documentation_assets(bundle_inputs):
+    root, archive = bundle_inputs
+    private_capture = b"UNREVIEWED_SCREENSHOT_MUST_NOT_BE_BUNDLED"
+    for name in (
+        "docs/assets/screenshots/private-session.png",
+        "docs/assets/screenshots/setup-sign-in-original.png",
+        "docs/assets/screenshots/nested/private.png",
+        "docs/assets/private-notes.txt",
+    ):
+        path = root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(private_capture)
+    output, _ = bundle_builder.build_install_bundle(archive, project_root=root)
+    with zipfile.ZipFile(output) as bundle:
+        for name in bundle.namelist():
+            assert private_capture not in bundle.read(name)
+
+
+@pytest.mark.parametrize(
+    "missing", ["docs/resources.md", "docs/assets/screenshots/setup-sign-in.jpg"]
+)
+def test_bundle_requires_guides_and_approved_images(bundle_inputs, missing):
+    root, archive = bundle_inputs
+    (root / missing).unlink()
+    with pytest.raises(
+        bundle_builder.BundleError, match=re.escape(str(root / missing))
+    ):
+        bundle_builder.build_install_bundle(archive, project_root=root)
 
 
 @pytest.mark.parametrize(
