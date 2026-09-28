@@ -1,8 +1,13 @@
 # Download only the official pinned native shell; Docker provides the backend.
 [CmdletBinding()]
-param([string]$SourceRoot = (Split-Path -Parent $PSScriptRoot))
+param([string]$SourceRoot)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+# Windows PowerShell initializes script paths after parameter defaults are evaluated.
+if (-not $PSBoundParameters.ContainsKey('SourceRoot')) {
+    $SourceRoot = Split-Path -Parent $PSScriptRoot
+}
 
 function Assert-PlainPath {
     param([string]$Path, [bool]$Directory)

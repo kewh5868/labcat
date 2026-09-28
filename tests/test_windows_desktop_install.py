@@ -38,6 +38,7 @@ def installer(tmp_path):
             import json
             import os
             import sys
+            import time
             from pathlib import Path
 
             command, *args = sys.argv[1:]
@@ -51,8 +52,9 @@ def installer(tmp_path):
                                                'x86_64-pc-windows-msvc'))
                 sys.exit(0)
             if command == 'vswhere':
-                print(os.environ['LABCAT_TEST_VS'])
-                sys.exit(0)
+                print(os.environ['LABCAT_TEST_VS'], flush=True)
+                time.sleep(float(os.environ.get('LABCAT_TEST_VS_DELAY', '0')))
+                sys.exit(int(os.environ.get('LABCAT_TEST_VS_EXIT', '0')))
             with open(os.environ['LABCAT_TEST_BUILD_CALLS'], 'a') as log:
                 log.write(json.dumps(args) + '\\n')
             if args[0] == os.environ.get('LABCAT_TEST_BUILD_FAILURE'):
@@ -96,7 +98,8 @@ def installer(tmp_path):
     harness.write_text(
         """param(
     [string]$Installer, [string]$SourceRoot, [string]$Destination,
-    [switch]$CheckOnly, [switch]$PrebuiltOnly, [switch]$BuildSource
+    [switch]$CheckOnly, [switch]$PrebuiltOnly, [switch]$BuildSource,
+    [switch]$UseDefaultSource
 )
 function Get-ItemProperty {
     param([string]$LiteralPath, [string]$Name, [string]$ErrorAction)
@@ -107,8 +110,15 @@ function Get-ItemProperty {
         return [pscustomobject]@{ KitsRoot10 = $env:LABCAT_TEST_SDK }
     }
 }
-& $Installer -SourceRoot $SourceRoot -Destination $Destination -NoShortcut `
-    -CheckOnly:$CheckOnly -PrebuiltOnly:$PrebuiltOnly -BuildSource:$BuildSource
+$parameters = @{
+    Destination = $Destination
+    NoShortcut = $true
+    CheckOnly = $CheckOnly
+    PrebuiltOnly = $PrebuiltOnly
+    BuildSource = $BuildSource
+}
+if (-not $UseDefaultSource) { $parameters.SourceRoot = $SourceRoot }
+& $Installer @parameters
 """,
         encoding="utf-8",
     )
@@ -122,6 +132,7 @@ function Get-ItemProperty {
         check_only=False,
         prebuilt_only=False,
         build_source=False,
+        default_source=False,
     ):
         if bundled:
             binary = source / "desktop-bin" / "Labcat.exe"
@@ -140,7 +151,20 @@ function Get-ItemProperty {
                 (desktop / name).write_text("test fixture\n")
         if override:
             (source / "compose.local.yaml").write_text(override)
-        env = os.environ.copy()
+        # Windows environment names are case-insensitive; isolate every fixture
+        # override from inherited aliases such as PROGRAMFILES(X86) or Path.
+        overridden = {
+            "os",
+            "path",
+            "programfiles(x86)",
+            "cargo_build_target",
+            "cargo_target_dir",
+        }
+        env = {
+            key: value
+            for key, value in os.environ.items()
+            if key.casefold() not in overridden
+        }
         env.update(
             {
                 "OS": "Windows_NT",
@@ -153,11 +177,14 @@ function Get-ItemProperty {
                 "ProgramFiles(x86)": str(tmp_path / "Program Files fixture"),
             }
         )
-        env.pop("CARGO_BUILD_TARGET", None)
-        env.pop("CARGO_TARGET_DIR", None)
         if failure:
             env["LABCAT_TEST_BUILD_FAILURE"] = failure
         env.update(env_updates or {})
+        installer_script = ROOT / "scripts" / "install_desktop.ps1"
+        if default_source:
+            installer_script = source / "scripts" / "install_desktop.ps1"
+            installer_script.parent.mkdir(exist_ok=True)
+            shutil.copyfile(ROOT / "scripts" / "install_desktop.ps1", installer_script)
         return subprocess.run(
             [
                 POWERSHELL,
@@ -167,7 +194,7 @@ function Get-ItemProperty {
                 "-File",
                 str(harness),
                 "-Installer",
-                str(ROOT / "scripts" / "install_desktop.ps1"),
+                str(installer_script),
                 "-SourceRoot",
                 str(source),
                 "-Destination",
@@ -175,6 +202,7 @@ function Get-ItemProperty {
                 *(["-CheckOnly"] if check_only else []),
                 *(["-PrebuiltOnly"] if prebuilt_only else []),
                 *(["-BuildSource"] if build_source else []),
+                *(["-UseDefaultSource"] if default_source else []),
             ],
             capture_output=True,
             text=True,
@@ -200,7 +228,7 @@ def test_bundle_installs_fixed_resources_only_without_building(installer):
     (installer.source / ".env").write_text("private-test-fixture")
     (installer.source / "workspace.credentials.enc.json").write_text("private")
     result = installer()
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 0, result.stdout + result.stderr
     assert (installer.destination / "Labcat.exe").read_bytes() == b"native-test-fixture"
     assert set(
         path.relative_to(installer.destination).as_posix()
@@ -219,7 +247,7 @@ def test_bundle_installs_fixed_resources_only_without_building(installer):
 
 def test_source_install_builds_locked_native_shell_then_installs(installer):
     result = installer(bundled=False)
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 0, result.stdout + result.stderr
     calls = installer.calls()
     assert calls == [
         [
@@ -254,7 +282,7 @@ def test_build_failure_cannot_leave_partial_install(installer, failure):
 def test_local_compose_preserves_original_directory_without_private_files(installer):
     override = "services:\n  labcat:\n    volumes: ['./local-data:/data']\n"
     result = installer(override=override)
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 0, result.stdout + result.stderr
     launcher = installer.destination / "launcher"
     assert (launcher / "compose.local.yaml").read_text() == override
     assert (launcher / ".labcat-project-directory").read_text() == str(
@@ -267,7 +295,7 @@ def test_reinstall_preserves_existing_original_directory(installer, tmp_path):
     original.mkdir()
     (installer.source / ".labcat-project-directory").write_text(str(original) + "\n")
     result = installer(override="services: {}\n")
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 0, result.stdout + result.stderr
     assert (
         installer.destination / "launcher" / ".labcat-project-directory"
     ).read_text() == str(original) + "\n"
@@ -336,7 +364,7 @@ def test_original_project_marker_is_preserved_without_override(installer, tmp_pa
     original.mkdir()
     (installer.source / ".labcat-project-directory").write_text(str(original) + "\n")
     result = installer()
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 0, result.stdout + result.stderr
     launcher = installer.destination / "launcher"
     assert (launcher / ".labcat-project-directory").read_text() == str(original) + "\n"
     assert not (launcher / "compose.local.yaml").exists()
@@ -373,7 +401,7 @@ def test_windows_check_reports_all_missing_prerequisites_before_build(installer)
 
 def test_windows_check_lists_versions_and_does_not_build_or_install(installer):
     result = installer(bundled=False, check_only=True)
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 0, result.stdout + result.stderr
     for label in (
         "node 24.9.0",
         "cargo 1.88.0",
@@ -426,7 +454,7 @@ def test_windows_prebuilt_check_only_requires_webview_runtime(installer):
     for file in installer.fake_bin.iterdir():
         file.unlink()
     result = installer(check_only=True, env_updates={"LABCAT_TEST_SDK": "missing"})
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 0, result.stdout + result.stderr
     assert "prebuilt native app" in result.stdout
     assert installer.calls() == []
     assert not installer.destination.parent.exists()
@@ -465,5 +493,34 @@ def test_windows_incompatible_installer_modes_rejected(installer):
     result = installer(prebuilt_only=True, build_source=True)
     assert result.returncode != 0
     assert "Choose only one" in result.stderr
+    assert installer.calls() == []
+    assert not installer.destination.exists()
+
+
+def test_omitted_source_uses_installers_own_checkout(installer):
+    result = installer(default_source=True, prebuilt_only=True, check_only=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "prebuilt native app" in result.stdout
+    assert "Nothing was built or installed" in result.stdout
+    assert installer.calls() == []
+    assert not installer.destination.exists()
+
+
+@pytest.mark.parametrize("locator_exit", [0, 17])
+def test_windows_check_waits_for_native_locator_exit(installer, locator_exit):
+    result = installer(
+        bundled=False,
+        check_only=True,
+        env_updates={
+            "LABCAT_TEST_VS_DELAY": "0.3",
+            "LABCAT_TEST_VS_EXIT": str(locator_exit),
+        },
+    )
+    if locator_exit == 0:
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert "[met] Visual Studio C++ Build Tools" in result.stdout
+    else:
+        assert result.returncode != 0
+        assert "[missing] Visual Studio C++ Build Tools" in result.stdout
     assert installer.calls() == []
     assert not installer.destination.exists()

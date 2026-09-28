@@ -2,7 +2,7 @@
 # Docker continues to hold the application workspace; no credentials are copied.
 [CmdletBinding()]
 param(
-    [string]$SourceRoot = (Split-Path -Parent $PSScriptRoot),
+    [string]$SourceRoot,
     [string]$Destination = (Join-Path $env:LOCALAPPDATA 'Programs\Labcat'),
     [switch]$NoShortcut,
     [switch]$CheckOnly,
@@ -12,6 +12,11 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+# Windows PowerShell initializes script paths after parameter defaults are evaluated.
+if (-not $PSBoundParameters.ContainsKey('SourceRoot')) {
+    $SourceRoot = Split-Path -Parent $PSScriptRoot
+}
 
 function Assert-RegularFile {
     param([string]$Path)
@@ -136,8 +141,13 @@ if ($needsBuild) {
     }
     if ($vswhere -and (Test-Path -LiteralPath $vswhere -PathType Leaf)) {
         try {
-            $visualStudio = (& $vswhere -latest -products '*' -requiresAny -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 Microsoft.VisualStudio.Component.VC.Tools.ARM64 -property installationPath 2>$null | Select-Object -First 1)
-            if ($LASTEXITCODE -ne 0 -or $null -eq $visualStudio) { $visualStudio = '' }
+            # Drain native output before inspecting the exit code. Select-Object
+            # in this pipeline can stop the process before LASTEXITCODE is set.
+            $locations = @(& $vswhere -latest -products '*' -requiresAny -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 Microsoft.VisualStudio.Component.VC.Tools.ARM64 -property installationPath 2>$null)
+            $locatorExitCode = $LASTEXITCODE
+            if ($locatorExitCode -eq 0 -and $locations.Count -gt 0) {
+                $visualStudio = [string]$locations[0]
+            }
         }
         catch { $visualStudio = '' }
     }
