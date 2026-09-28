@@ -71,7 +71,8 @@ def test_bundle_has_exact_allowlist_checksum_and_executable_launchers(bundle_inp
     )
 
 
-def test_bundle_keeps_published_guide_links_and_images(bundle_inputs):
+@pytest.mark.parametrize("newline", ["\n", "\r\n"], ids=["lf", "crlf"])
+def test_bundle_keeps_published_guide_links_and_images(bundle_inputs, newline):
     root, archive = bundle_inputs
     source = SCRIPT.parents[1]
     guides = (
@@ -88,14 +89,16 @@ def test_bundle_keeps_published_guide_links_and_images(bundle_inputs):
     for name in guides:
         destination = root / name
         destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_text((source / name).read_text(), encoding="utf-8")
+        content = (source / name).read_text(encoding="utf-8")
+        destination.write_bytes(content.replace("\n", newline).encode("utf-8"))
     output, _ = bundle_builder.build_install_bundle(archive, project_root=root)
     with zipfile.ZipFile(output) as bundle:
         names = set(bundle.namelist())
         image_links = 0
         for name in guides:
-            content = (root / name).read_text(encoding="utf-8")
-            assert bundle.read(f"{archive.stem}/{name}").decode() == content
+            expected = (root / name).read_bytes()
+            assert bundle.read(f"{archive.stem}/{name}") == expected
+            content = expected.decode("utf-8")
             targets = re.findall(r"\]\(([^)\s]+)\)", content)
             targets += re.findall(r'<img[^>]+src="([^"]+)"', content)
             for target in targets:
