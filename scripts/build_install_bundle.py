@@ -19,6 +19,9 @@ HOST_FILES = (
     "compose.yaml",
     "scripts/install_desktop.sh",
     "scripts/install_desktop.ps1",
+    "scripts/download_desktop.sh",
+    "scripts/download_desktop.ps1",
+    "scripts/desktop-release.tsv",
     "README.md",
     "LICENSE.rst",
     "mkdocs.yml",
@@ -77,7 +80,12 @@ HOST_FILES = (
     "desktop/README.md",
     "desktop/icons/128x128.png",
 )
-EXECUTABLE_FILES = {"labcat.sh", "Start Labcat.command", "scripts/install_desktop.sh"}
+EXECUTABLE_FILES = {
+    "labcat.sh",
+    "Start Labcat.command",
+    "scripts/install_desktop.sh",
+    "scripts/download_desktop.sh",
+}
 DESKTOP_LAUNCHER_FILES = ("labcat.sh", "labcat.ps1", "compose.yaml")
 ARCHIVE_NAME = re.compile(
     r"labcat-(?P<version>[A-Za-z0-9][A-Za-z0-9.+_-]*)"

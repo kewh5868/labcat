@@ -40,7 +40,19 @@ def installer(tmp_path):
             import sys
             from pathlib import Path
 
-            args = sys.argv[1:]
+            command, *args = sys.argv[1:]
+            if args == ['--version']:
+                versions = {'node': '24.9.0', 'npm': '11.6.0',
+                            'cargo': '1.88.0', 'rustc': '1.88.0'}
+                print(os.environ.get(command.upper() + '_VERSION', versions[command]))
+                sys.exit(0)
+            if command == 'rustc' and args == ['-vV']:
+                print('host: ' + os.environ.get('LABCAT_TEST_RUST_HOST',
+                                               'x86_64-pc-windows-msvc'))
+                sys.exit(0)
+            if command == 'vswhere':
+                print(os.environ['LABCAT_TEST_VS'])
+                sys.exit(0)
             with open(os.environ['LABCAT_TEST_BUILD_CALLS'], 'a') as log:
                 log.write(json.dumps(args) + '\\n')
             if args[0] == os.environ.get('LABCAT_TEST_BUILD_FAILURE'):
@@ -53,22 +65,64 @@ def installer(tmp_path):
             """),
         encoding="utf-8",
     )
-    for command in ("node", "npm", "cargo"):
+    for command in ("node", "npm", "cargo", "rustc", "vswhere"):
         if os.name == "nt":
             (fake_bin / (command + ".cmd")).write_text(
-                f'@"{sys.executable}" "{build_script}" %*\n', encoding="utf-8"
+                f'@"{sys.executable}" "{build_script}" {command} %*\n', encoding="utf-8"
             )
         else:
             path = fake_bin / command
             path.write_text(
-                f"#!{sys.executable}\n"
+                f"#!{sys.executable}\nimport sys\nsys.argv.insert(1, {command!r})\n"
                 f"exec(compile(open({str(build_script)!r}).read(), "
                 f"{str(build_script)!r}, 'exec'))\n",
                 encoding="utf-8",
             )
             path.chmod(0o755)
 
-    def run(*, bundled=True, failure=None, override=None, env_updates=None):
+    visual_studio = tmp_path / "Visual Studio fixture"
+    windows_sdk = tmp_path / "Windows SDK fixture"
+    for file in (
+        visual_studio / "VC/Tools/MSVC/14.44/bin/Hostx64/x64/cl.exe",
+        visual_studio / "VC/Tools/MSVC/14.44/bin/Hostx64/x64/link.exe",
+        windows_sdk / "Include/10.0.26100.0/um/Windows.h",
+        windows_sdk / "Include/10.0.26100.0/ucrt/stdio.h",
+        windows_sdk / "Lib/10.0.26100.0/um/x64/kernel32.lib",
+        windows_sdk / "Lib/10.0.26100.0/ucrt/x64/ucrt.lib",
+    ):
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text("inert prerequisite fixture")
+    harness = tmp_path / "run-installer.ps1"
+    harness.write_text(
+        """param(
+    [string]$Installer, [string]$SourceRoot, [string]$Destination,
+    [switch]$CheckOnly, [switch]$PrebuiltOnly, [switch]$BuildSource
+)
+function Get-ItemProperty {
+    param([string]$LiteralPath, [string]$Name, [string]$ErrorAction)
+    if ($Name -eq 'pv' -and $env:LABCAT_TEST_WEBVIEW -ne 'missing') {
+        return [pscustomobject]@{ pv = $env:LABCAT_TEST_WEBVIEW }
+    }
+    if ($Name -eq 'KitsRoot10' -and $env:LABCAT_TEST_SDK -ne 'missing') {
+        return [pscustomobject]@{ KitsRoot10 = $env:LABCAT_TEST_SDK }
+    }
+}
+& $Installer -SourceRoot $SourceRoot -Destination $Destination -NoShortcut `
+    -CheckOnly:$CheckOnly -PrebuiltOnly:$PrebuiltOnly -BuildSource:$BuildSource
+""",
+        encoding="utf-8",
+    )
+
+    def run(
+        *,
+        bundled=True,
+        failure=None,
+        override=None,
+        env_updates=None,
+        check_only=False,
+        prebuilt_only=False,
+        build_source=False,
+    ):
         if bundled:
             binary = source / "desktop-bin" / "Labcat.exe"
             binary.parent.mkdir(exist_ok=True)
@@ -93,6 +147,10 @@ def installer(tmp_path):
                 "PATH": str(fake_bin),
                 "LABCAT_TEST_SOURCE": str(source),
                 "LABCAT_TEST_BUILD_CALLS": str(calls),
+                "LABCAT_TEST_VS": str(visual_studio),
+                "LABCAT_TEST_SDK": str(windows_sdk),
+                "LABCAT_TEST_WEBVIEW": "140.0.3485.54",
+                "ProgramFiles(x86)": str(tmp_path / "Program Files fixture"),
             }
         )
         env.pop("CARGO_BUILD_TARGET", None)
@@ -107,12 +165,16 @@ def installer(tmp_path):
                 "-NoProfile",
                 "-NonInteractive",
                 "-File",
+                str(harness),
+                "-Installer",
                 str(ROOT / "scripts" / "install_desktop.ps1"),
                 "-SourceRoot",
                 str(source),
                 "-Destination",
                 str(destination),
-                "-NoShortcut",
+                *(["-CheckOnly"] if check_only else []),
+                *(["-PrebuiltOnly"] if prebuilt_only else []),
+                *(["-BuildSource"] if build_source else []),
             ],
             capture_output=True,
             text=True,
@@ -124,6 +186,8 @@ def installer(tmp_path):
     run.source = source
     run.destination = destination
     run.fake_bin = fake_bin
+    run.visual_studio = visual_studio
+    run.windows_sdk = windows_sdk
     run.calls = lambda: (
         [json.loads(line) for line in calls.read_text().splitlines()]
         if calls.exists()
@@ -233,7 +297,7 @@ def test_cross_target_settings_are_rejected_before_build(installer):
         bundled=False, env_updates={"CARGO_BUILD_TARGET": "wrong-target"}
     )
     assert result.returncode != 0
-    assert "Unset CARGO_BUILD_TARGET" in result.stderr
+    assert "Unset CARGO_BUILD_TARGET" in result.stdout
     assert installer.calls() == []
     assert not installer.destination.exists()
 
@@ -243,7 +307,7 @@ def test_missing_native_build_prerequisite_has_actionable_failure(installer):
         path.unlink()
     result = installer(bundled=False)
     assert result.returncode != 0
-    assert "Building the Windows desktop shell requires" in result.stderr
+    assert "[missing] cargo not available" in result.stdout
     assert "-Browser" in result.stderr
     assert not installer.destination.exists()
 
@@ -276,3 +340,130 @@ def test_original_project_marker_is_preserved_without_override(installer, tmp_pa
     launcher = installer.destination / "launcher"
     assert (launcher / ".labcat-project-directory").read_text() == str(original) + "\n"
     assert not (launcher / "compose.local.yaml").exists()
+
+
+def test_windows_check_reports_all_missing_prerequisites_before_build(installer):
+    for file in installer.fake_bin.iterdir():
+        file.unlink()
+    result = installer(
+        bundled=False,
+        check_only=True,
+        env_updates={
+            "LABCAT_TEST_WEBVIEW": "missing",
+            "LABCAT_TEST_SDK": "missing",
+            "PRIVATE_CREDENTIAL_CANARY": "must-not-be-printed",
+        },
+    )
+    assert result.returncode != 0
+    for label in (
+        "node not available",
+        "npm not available",
+        "cargo not available",
+        "rustc not available",
+        "Microsoft Edge WebView2 Runtime",
+        "MSVC Rust host",
+        "Visual Studio C++ Build Tools",
+        "Windows 10/11 SDK",
+    ):
+        assert f"[missing] {label}" in result.stdout
+    assert "must-not-be-printed" not in result.stdout + result.stderr
+    assert installer.calls() == []
+    assert not installer.destination.parent.exists()
+
+
+def test_windows_check_lists_versions_and_does_not_build_or_install(installer):
+    result = installer(bundled=False, check_only=True)
+    assert result.returncode == 0, result.stderr
+    for label in (
+        "node 24.9.0",
+        "cargo 1.88.0",
+        "rustc 1.88.0",
+        "Microsoft Edge WebView2 Runtime 140.0.3485.54",
+        "Visual Studio C++ Build Tools",
+        "Windows 10/11 SDK",
+    ):
+        assert f"[met] {label}" in result.stdout
+    assert "Nothing was built or installed" in result.stdout
+    assert installer.calls() == []
+    assert not installer.destination.parent.exists()
+
+
+def test_windows_version_and_toolchain_mismatches_are_aggregated(installer):
+    result = installer(
+        bundled=False,
+        check_only=True,
+        env_updates={
+            "NODE_VERSION": "22.19.0",
+            "RUSTC_VERSION": "1.85.0",
+            "CARGO_VERSION": "1.87.0",
+            "LABCAT_TEST_RUST_HOST": "x86_64-pc-windows-gnu",
+        },
+    )
+    assert result.returncode != 0
+    for label in ("node 22.19.0", "cargo 1.87.0", "rustc 1.85.0", "MSVC Rust host"):
+        assert f"[missing] {label}" in result.stdout
+    assert installer.calls() == []
+    assert not installer.destination.exists()
+
+
+@pytest.mark.parametrize("component", ["compiler", "sdk"])
+def test_windows_checks_real_component_files_not_just_registration(
+    installer, component
+):
+    if component == "compiler":
+        next(installer.visual_studio.rglob("link.exe")).unlink()
+        label = "Visual Studio C++ Build Tools"
+    else:
+        next(installer.windows_sdk.rglob("kernel32.lib")).unlink()
+        label = "Windows 10/11 SDK"
+    result = installer(bundled=False, check_only=True)
+    assert result.returncode != 0
+    assert f"[missing] {label}" in result.stdout
+    assert installer.calls() == []
+
+
+def test_windows_prebuilt_check_only_requires_webview_runtime(installer):
+    for file in installer.fake_bin.iterdir():
+        file.unlink()
+    result = installer(check_only=True, env_updates={"LABCAT_TEST_SDK": "missing"})
+    assert result.returncode == 0, result.stderr
+    assert "prebuilt native app" in result.stdout
+    assert installer.calls() == []
+    assert not installer.destination.parent.exists()
+
+
+@pytest.mark.parametrize("version", ["missing", "0.0.0.0", "not-a-version"])
+def test_windows_prebuilt_requires_a_valid_webview_runtime(installer, version):
+    result = installer(check_only=True, env_updates={"LABCAT_TEST_WEBVIEW": version})
+    assert result.returncode != 0
+    assert "[missing] Microsoft Edge WebView2 Runtime" in result.stdout
+    assert "install the Microsoft WebView2 Evergreen Runtime" in result.stdout
+    assert installer.calls() == []
+    assert not installer.destination.exists()
+
+
+def test_windows_prebuilt_only_never_falls_back_to_source(installer):
+    result = installer(bundled=False, prebuilt_only=True)
+    assert result.returncode != 0
+    assert "No source build was started" in result.stderr
+    assert installer.calls() == []
+    assert not installer.destination.exists()
+
+
+def test_windows_source_mode_checks_requirements_even_with_prebuilt(installer):
+    for path in installer.fake_bin.glob("cargo*"):
+        path.unlink()
+    result = installer(build_source=True, check_only=True)
+    assert result.returncode != 0
+    assert "[missing] cargo not available" in result.stdout
+    assert "prebuilt native app;" not in result.stdout
+    assert installer.calls() == []
+    assert not installer.destination.exists()
+
+
+def test_windows_incompatible_installer_modes_rejected(installer):
+    result = installer(prebuilt_only=True, build_source=True)
+    assert result.returncode != 0
+    assert "Choose only one" in result.stderr
+    assert installer.calls() == []
+    assert not installer.destination.exists()

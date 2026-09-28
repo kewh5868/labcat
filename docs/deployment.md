@@ -65,29 +65,46 @@ prefix the archive path with `dist/`. Then start the UI:
 | Windows PowerShell | `.\labcat.cmd`                          | `.\labcat.cmd stop` | `.\labcat.cmd status`       |
 | Linux              | `./labcat.sh`                           | `./labcat.sh stop`  | `./labcat.sh status`        |
 
-First interactive launch offers **Desktop (1, default Enter)** or **Browser (2)**.
-The installation remembers the choice. `--choose` on Mac/Linux or `-Choose` on
-Windows prompts again; `--desktop` / `-Desktop` and `--browser` / `-Browser` select
-and remember a mode directly. A first noninteractive launch requires an explicit
-mode unless a choice was already saved. Lifecycle, CLI and no-window commands
-remain noninteractive.
+First interactive launch offers three modes:
 
-Desktop setup installs a supplied matching native app from `desktop-bin/`, or
-builds from a source checkout using Node 24, Rust/Cargo and OS build tools.
-Image-only bundles contain no native source or executable: choose Browser or
-obtain source/a matching native bundle. The repository does not provide a public
-prebuilt desktop download. Native install destinations and build prerequisites
-are listed in the [installation guide](installation.md#desktop-prerequisites).
-Desktop build failures remain errors until you fix them or explicitly choose Browser.
+1. **Native Labcat app (Docker backend, default Enter):** install/open the prebuilt native
+   Labcat app and start its Docker backend. No Node, Rust or compiler is needed.
+2. **Browser:** open the Docker application in the normal default browser.
+3. **Build desktop application from source:** build and install the same native
+   shell on this machine after checking its build prerequisites.
 
-**No installed Chrome browser is required for Desktop.** The native app uses
-WKWebView on macOS, WebView2 Runtime on Windows, or WebKitGTK 4.1 on Linux.
-See [Tauri's webview requirements](https://v2.tauri.app/reference/webview-versions/).
-A supplied native build avoids host Python, Node, Git and compiler dependencies;
-Docker and the OS webview remain required. No platform signing or notarization
-is implied by a local development bundle. Opening the installed native app
-starts/reuses the backend and shows startup progress or errors in its window.
-The Mac `.command` entry point shows launcher progress in Terminal.
+The installation remembers its successful choice. Existing saved preferences
+are retained; `--choose` on Mac/Linux or `-Choose` on Windows prompts again.
+`--docker` / `-Docker`, `--browser` / `-Browser`, and `--desktop` / `-Desktop`
+select and remember a mode directly. A first noninteractive launch defaults to
+Docker application mode. Lifecycle, CLI and no-window commands remain
+noninteractive.
+
+**All modes use the Docker image.** The default installs a native binary
+matching the host, application version and CPU; it never silently builds from
+source. The launcher downloads the official release artifact whose version and
+checksum are pinned in the checkout, verifies it and installs it automatically.
+A supplied matching `desktop-bin/` bundle is also supported. Native download
+targets are macOS Apple Silicon/Intel, Windows x64 and Linux x64. Linux ARM64
+uses Browser or an explicit source build. See
+[official releases](https://github.com/kewh5868/labcat/releases) for released
+artifacts. If a required download is unavailable or invalid, the launcher
+reports the failure; choose Browser or explicitly build from source.
+
+The source route requires Node 24 with npm, Rust/Cargo 1.88 or newer and OS build
+tools. The installer reports met and missing prerequisites before building; it
+does not install system dependencies. See the
+[system and native requirements](installation.md#desktop-prerequisites).
+Native build failures remain errors until you resolve them or choose another mode.
+
+Both native routes use WKWebView on macOS, WebView2 Runtime on Windows, or
+WebKitGTK 4.1 on Linux. See
+[Tauri's webview requirements](https://v2.tauri.app/reference/webview-versions/).
+A prebuilt native shell avoids host build dependencies, but Docker and the OS
+webview remain required. No platform signing or notarization is implied by a
+local development bundle. Opening the installed native app starts/reuses the
+backend and shows startup progress or errors in its window. The Mac `.command`
+entry point shows launcher progress in Terminal.
 
 The launcher checks Docker, waits for the container's health check, discovers
 its local address, and opens the window. It uses one stable Compose project
@@ -105,6 +122,28 @@ and any referenced files in place. The installed override and
 `.labcat-project-directory` and `.labcat-install-source` location markers are
 private deployment files; do not distribute an installed app containing them. The local `.labcat-launch-mode` preference is also
 excluded from Git, images, source distributions and public install bundles.
+
+To reopen either native installation, start Docker and open **Labcat** from
+your applications menu. From the original installation folder, use:
+
+| Reopen mode                         | Mac / Linux             | Windows PowerShell      |
+| ----------------------------------- | ----------------------- | ----------------------- |
+| Prebuilt native application         | `./labcat.sh --docker`  | `.\labcat.cmd -Docker`  |
+| Browser                             | `./labcat.sh --browser` | `.\labcat.cmd -Browser` |
+| Source-installed native application | `./labcat.sh --desktop` | `.\labcat.cmd -Desktop` |
+| Remembered mode                     | `./labcat.sh`           | `.\labcat.cmd`          |
+
+No image or native rebuild is needed for ordinary launches. Source mode reuses
+its installed shell; rebuild after relevant application updates. Use `--choose`
+/ `-Choose` to switch modes. Stop with `./labcat.sh stop` or `.\labcat.cmd stop`,
+then run the appropriate open command to restart. Start Docker first if its
+engine is stopped. Stopping preserves workspace data, but a backend restart
+ends session-only sign-ins.
+
+Docker Desktop shows the complete `labcat` Compose application. The launcher
+or installed native icon starts its app, worker and proxy together, then opens
+the current local URL. Starting only the app container does not start the
+complete research system.
 
 Closing a UI window does not stop the service. For no window, use
 `./labcat.sh start --no-open` or `labcat.cmd start -NoOpen`.
@@ -315,11 +354,12 @@ and database compatibility before rollback.
   bypassing execution policy. If your site blocks local scripts, ask site IT to
   approve/sign the launcher. The direct Compose route below remains available.
 - **Native app prerequisites:** install the required host tools before a source
-  build, or explicitly select Browser with `--browser` / `-Browser`. A missing
-  webview also requires Browser or headless mode. Native release builds need per-OS testing
+  build, or select Docker application with `--docker` / `-Docker` or Browser
+  with `--browser` / `-Browser`. A missing native webview requires
+  Browser or headless mode. Native release builds need per-OS testing
   and normal code-signing/notarization before broad distribution; local
   development builds do not establish that release gate.
-- **Remote Docker context:** switch to your local Docker context. These desktop
+- **Remote Docker context:** switch to your local Docker context. These local
   launchers refuse remote endpoints because their loopback address is not this
   machine.
 - **Headless Linux/VM:** use the printed address on that host, or an SSH tunnel

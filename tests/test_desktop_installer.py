@@ -31,6 +31,17 @@ def installer(tmp_path):
         "name = Path(sys.argv[0]).name\n"
         "with open(os.environ['CALL_LOG'], 'a') as f:\n"
         "    f.write(json.dumps([name, *sys.argv[1:]]) + '\\n')\n"
+        "if name in os.environ.get('MISSING_TOOLS', '').split(','): sys.exit(1)\n"
+        "if '--version' in sys.argv:\n"
+        "    versions = {'node': '24.9.0', 'npm': '11.6.0', "
+        "'cargo': '1.88.0', 'rustc': '1.88.0'}\n"
+        "    print(os.environ.get(name.upper() + '_VERSION', "
+        "versions.get(name, '1.0.0')))\n"
+        "    sys.exit(0)\n"
+        "if name == 'pkg-config' and len(sys.argv) > 2:\n"
+        "    if sys.argv[2] in os.environ.get('MISSING_LIBRARIES', '').split(','): "
+        "sys.exit(1)\n"
+        "if name == 'ldd': print(os.environ.get('LDD_OUTPUT', ''))\n"
         "if name == 'uname': print(os.environ.get('TEST_PLATFORM', 'Darwin'))\n"
         "if name == 'codesign': sys.exit(int(os.environ.get('SIGN_EXIT', '0')))\n"
         "if name == 'mv':\n"
@@ -51,8 +62,11 @@ def installer(tmp_path):
         "cargo",
         "rustc",
         "xcode-select",
+        "xcrun",
         "cc",
+        "c++",
         "pkg-config",
+        "ldd",
         "mv",
     ):
         path = tools / name
@@ -88,9 +102,9 @@ def installer(tmp_path):
         binary.chmod(0o755)
         return binary
 
-    def run(**overrides):
+    def run(*args, **overrides):
         result = subprocess.run(
-            ["sh", str(source / "scripts/install_desktop.sh")],
+            ["sh", str(source / "scripts/install_desktop.sh"), *args],
             cwd=tmp_path,
             env={**env, **overrides},
             capture_output=True,
@@ -217,8 +231,8 @@ def test_source_build_rejects_target_override_instead_of_installing_stale_output
     run.native(built=True)
     result, calls = run(**{key: "custom"})
     assert result.returncode != 0
-    assert "Unset CARGO_BUILD_TARGET and CARGO_TARGET_DIR" in result.stderr
-    assert not any(call[0] == "npm" for call in calls)
+    assert "Unset CARGO_BUILD_TARGET and CARGO_TARGET_DIR" in result.stdout
+    assert not any(call[:2] == ["npm", "ci"] for call in calls)
     assert not (run.destination / "Labcat.app").exists()
 
 
@@ -305,3 +319,155 @@ def test_invalid_existing_deployment_setting_does_not_install(installer, tmp_pat
     assert result.returncode != 0
     assert "deployment directory setting is invalid" in result.stderr
     assert not (run.destination / "Labcat.app").exists()
+
+
+@pytest.mark.parametrize("platform", ["Darwin", "Linux"])
+def test_check_only_reports_missing_prerequisites_together_without_building(
+    installer, platform
+):
+    run, source = installer
+    result, calls = run(
+        "--check",
+        TEST_PLATFORM=platform,
+        MISSING_TOOLS="node,npm,cargo,rustc,xcode-select,xcrun,cc,c++,pkg-config",
+        PRIVATE_CREDENTIAL_CANARY="must-not-be-printed",
+    )
+    assert result.returncode != 0
+    for tool in ("node", "npm", "cargo", "rustc"):
+        assert f"[missing] {tool} not available" in result.stdout
+    if platform == "Darwin":
+        for label in ("Xcode Command Line Tools", "Apple C/C++ compiler", "macOS SDK"):
+            assert f"[missing] {label}" in result.stdout
+    else:
+        for label in (
+            "cc;",
+            "c++;",
+            "pkg-config;",
+            "webkit2gtk-4.1",
+            "gtk+-3.0",
+            "librsvg-2.0",
+            "libsoup-3.0",
+        ):
+            assert f"[missing] {label}" in result.stdout
+    assert "must-not-be-printed" not in result.stdout + result.stderr
+    assert not any(call[:2] in (["npm", "ci"], ["npm", "run"]) for call in calls)
+    assert not run.destination.exists()
+
+
+@pytest.mark.parametrize("platform", ["Darwin", "Linux"])
+def test_check_only_lists_versions_and_does_not_install(installer, platform):
+    run, source = installer
+    run.native(platform, built=True)
+    for name in ("package-lock.json", "Cargo.lock", "tauri.conf.json"):
+        (source / "desktop" / name).write_text("{}\n")
+    result, calls = run("--check", TEST_PLATFORM=platform)
+    assert result.returncode == 0, result.stderr
+    assert "[met] node 24.9.0" in result.stdout
+    assert "[met] rustc 1.88.0" in result.stdout
+    assert "Nothing was built or installed" in result.stdout
+    assert not any(call[:2] in (["npm", "ci"], ["npm", "run"]) for call in calls)
+    assert not run.destination.exists()
+
+
+def test_version_mismatch_is_reported_with_every_missing_tool(installer):
+    run, _ = installer
+    result, calls = run(
+        "--check",
+        NODE_VERSION="22.19.0",
+        CARGO_VERSION="1.85.0",
+        RUSTC_VERSION="1.87.0",
+    )
+    assert result.returncode != 0
+    for tool, version in (
+        ("node", "22.19.0"),
+        ("cargo", "1.85.0"),
+        ("rustc", "1.87.0"),
+    ):
+        assert f"[missing] {tool} {version}" in result.stdout
+    assert "Node.js 24" in result.stdout
+    assert "1.88 or newer" in result.stdout
+    assert not any(call[:2] == ["npm", "ci"] for call in calls)
+
+
+def test_each_linux_development_library_is_checked(installer):
+    run, _ = installer
+    result, _ = run(
+        "--check", TEST_PLATFORM="Linux", MISSING_LIBRARIES="webkit2gtk-4.1,libsoup-3.0"
+    )
+    assert result.returncode != 0
+    assert "[missing] webkit2gtk-4.1" in result.stdout
+    assert "[missing] libsoup-3.0" in result.stdout
+    assert "[met] gtk+-3.0" in result.stdout
+    assert "[met] librsvg-2.0" in result.stdout
+
+
+@pytest.mark.parametrize("platform", ["Darwin", "Linux"])
+def test_prebuilt_check_skips_all_source_build_requirements(installer, platform):
+    run, _ = installer
+    run.native(platform)
+    result, calls = run(
+        "--check",
+        TEST_PLATFORM=platform,
+        MISSING_TOOLS="node,npm,cargo,rustc,xcrun,cc,c++,pkg-config",
+    )
+    assert result.returncode == 0, result.stderr
+    assert "prebuilt native app" in result.stdout
+    assert "[missing]" not in result.stdout
+    assert not any(
+        call[0] in ("node", "npm", "cargo", "rustc", "xcrun", "pkg-config")
+        for call in calls
+    )
+    assert not run.destination.exists()
+
+
+@pytest.mark.parametrize("platform", ["Darwin", "Linux"])
+def test_prebuilt_only_never_falls_back_to_source_build(installer, platform):
+    run, _ = installer
+    run.native(platform, built=True)
+    result, calls = run("--prebuilt-only", TEST_PLATFORM=platform)
+    assert result.returncode != 0
+    assert "No source build was started" in result.stderr
+    assert not any(call[0] in ("node", "npm", "cargo", "rustc") for call in calls)
+    assert not run.destination.exists()
+
+
+@pytest.mark.parametrize("platform", ["Darwin", "Linux"])
+def test_explicit_source_checks_prerequisites_even_with_prebuilt_app(
+    installer, platform
+):
+    run, _ = installer
+    run.native(platform)
+    result, calls = run(
+        "--build-source", "--check", TEST_PLATFORM=platform, MISSING_TOOLS="cargo"
+    )
+    assert result.returncode != 0
+    assert "[missing] cargo not available" in result.stdout
+    assert "prebuilt native app;" not in result.stdout
+    assert not any(call[:2] == ["npm", "ci"] for call in calls)
+    assert not run.destination.exists()
+
+
+def test_incompatible_installer_modes_are_rejected(installer):
+    run, _ = installer
+    result, calls = run("--prebuilt-only", "--build-source")
+    assert result.returncode != 0
+    assert "Choose only one" in result.stderr
+    assert calls == []
+
+
+def test_linux_prebuilt_reports_missing_runtime_library_without_build_tools(installer):
+    run, _ = installer
+    run.native("Linux")
+    result, calls = run(
+        "--check",
+        "--prebuilt-only",
+        TEST_PLATFORM="Linux",
+        LDD_OUTPUT=(
+            "libwebkit2gtk-4.1.so.0 => not found\n"
+            "libgtk-3.so.0 => /usr/lib/libgtk-3.so.0"
+        ),
+    )
+    assert result.returncode != 0
+    assert "[missing] libwebkit2gtk-4.1.so.0 runtime library" in result.stdout
+    assert not any(call[0] in ("node", "npm", "cargo", "rustc") for call in calls)
+    assert not run.destination.exists()

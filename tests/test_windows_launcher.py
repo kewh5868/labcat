@@ -34,6 +34,7 @@ def launcher(tmp_path):
             param(
                 [Parameter(Position = 0)] [string]$Action = 'start',
                 [switch]$NoOpen,
+                [switch]$Docker,
                 [switch]$Browser,
                 [switch]$Desktop,
                 [switch]$Choose,
@@ -55,6 +56,7 @@ def launcher(tmp_path):
             $launcherParameters = @{
                 Action = $Action
                 NoOpen = $NoOpen
+                Docker = $Docker
                 Browser = $Browser
                 Desktop = $Desktop
                 Choose = $Choose
@@ -210,7 +212,8 @@ def launcher(tmp_path):
                 if open_window
                 and auto_mode
                 and not any(
-                    arg in {"-Browser", "-Desktop", "-Choose"} for arg in arguments
+                    arg in {"-Docker", "-Browser", "-Desktop", "-Choose"}
+                    for arg in arguments
                 )
                 else []
             ),
@@ -619,12 +622,34 @@ def test_headless_research_callback_fallback_preserves_stdout(launcher):
     assert launcher.openings() == []
 
 
-def test_unattended_first_start_requires_an_explicit_mode(launcher):
-    result, calls = launcher(open_window=True, auto_mode=False)
+def test_unattended_first_start_defaults_to_prebuilt_docker_app(launcher):
+    result, calls = launcher(open_window=True, auto_mode=False, native=True)
+    assert result.returncode == 0, result.stderr
+    assert any("up" in call for call in calls)
+    opened = launcher.openings()[0]
+    assert Path(opened["path"]).name == "Labcat.exe"
+    assert opened["arguments"] == ["--url", "http://127.0.0.1:54321/"]
+    assert (launcher.install / ".labcat-launch-mode").read_text() == "docker\n"
+
+
+def test_docker_invalid_prebuilt_never_builds_or_opens_browser(launcher):
+    prebuilt = launcher.install / "desktop-bin/Labcat.exe"
+    prebuilt.parent.mkdir()
+    prebuilt.write_text("fixture", encoding="utf-8")
+    installer = launcher.install / "scripts" / "install_desktop.ps1"
+    installer.parent.mkdir()
+    installer.write_text(
+        "param([string]$SourceRoot, [string]$Destination, "
+        "[switch]$PrebuiltOnly, [switch]$BuildSource)\n"
+        'if (-not $PrebuiltOnly -or $BuildSource) { throw "unsafe build option" }\n'
+        'throw "prebuilt fixture missing"\n'
+    )
+    result, calls = launcher("-Docker", open_window=True)
     assert result.returncode != 0
-    assert "Choose a launch mode" in result.stderr
+    assert "prebuilt fixture missing" in result.stderr
     assert not any("up" in call for call in calls)
     assert launcher.openings() == []
+    assert not (launcher.install / ".labcat-launch-mode").exists()
 
 
 def test_desktop_failure_does_not_silently_open_browser_or_save_choice(launcher):
@@ -636,7 +661,7 @@ def test_desktop_failure_does_not_silently_open_browser_or_save_choice(launcher)
     assert not (launcher.install / ".labcat-launch-mode").exists()
 
 
-@pytest.mark.parametrize("mode", ["desktop", "browser"])
+@pytest.mark.parametrize("mode", ["docker", "desktop", "browser"])
 def test_successful_choice_is_saved_and_reused(launcher, mode):
     result, _ = launcher("-" + mode.title(), open_window=True, native=True)
     assert result.returncode == 0, result.stderr
@@ -646,7 +671,9 @@ def test_successful_choice_is_saved_and_reused(launcher, mode):
     assert len(launcher.openings()) == 2
     path = launcher.openings()[-1]["path"]
     assert (
-        path.endswith("Labcat.exe") if mode == "desktop" else path.startswith("http://")
+        path.endswith("Labcat.exe")
+        if mode in {"desktop", "docker"}
+        else path.startswith("http://")
     )
 
 
@@ -715,7 +742,8 @@ def test_invalid_original_project_directory_stops_before_docker(launcher, path):
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX pseudo-terminal harness")
 @pytest.mark.parametrize(
-    ("answer", "expected"), [("", "desktop"), ("1", "desktop"), ("2", "browser")]
+    ("answer", "expected"),
+    [("", "docker"), ("1", "docker"), ("2", "browser"), ("3", "desktop")],
 )
 def test_first_interactive_choice_and_default_are_remembered(
     launcher, answer, expected
@@ -724,13 +752,13 @@ def test_first_interactive_choice_and_default_are_remembered(
         open_window=True, native=True, auto_mode=False, interactive_answer=answer
     )
     assert result.returncode == 0, result.stderr
-    assert "Install and open the desktop application (default)" in result.stdout
+    assert "Open the native Labcat app (Docker backend, default)" in result.stdout
     assert (launcher.install / ".labcat-launch-mode").read_text() == expected + "\n"
     assert len(launcher.openings()) == 1
     path = launcher.openings()[0]["path"]
     assert (
         path.endswith("Labcat.exe")
-        if expected == "desktop"
+        if expected in {"desktop", "docker"}
         else path.startswith("http://")
     )
 
@@ -750,7 +778,9 @@ def test_first_desktop_choice_calls_installer_then_uses_fixed_executable(launche
     installer = launcher.install / "scripts" / "install_desktop.ps1"
     installer.parent.mkdir()
     installer.write_text(
-        "param([string]$SourceRoot, [string]$Destination)\n"
+        "param([string]$SourceRoot, [string]$Destination, "
+        "[switch]$PrebuiltOnly, [switch]$BuildSource)\n"
+        'if (-not $BuildSource -or $PrebuiltOnly) { throw "wrong source options" }\n'
         "[IO.Directory]::CreateDirectory($Destination) | Out-Null\n"
         "[IO.File]::WriteAllText((Join-Path $Destination 'Labcat.exe'), 'fixture')\n"
     )
@@ -821,3 +851,39 @@ def test_unreadable_installed_resource_fails_closed_without_hash_cmdlet(launcher
     assert not any("up" in call for call in calls)
     assert launcher.openings() == []
     assert not (launcher.install / ".labcat-launch-mode").exists()
+
+
+def test_default_docker_downloads_prebuilt_before_installing_without_build(launcher):
+    scripts = launcher.install / "scripts"
+    scripts.mkdir()
+    (scripts / "download_desktop.ps1").write_text(
+        "$root = Split-Path -Parent $PSScriptRoot\n"
+        '$folder = Join-Path $root "desktop-bin"\n'
+        "[IO.Directory]::CreateDirectory($folder) | Out-Null\n"
+        '[IO.File]::WriteAllText((Join-Path $folder "Labcat.exe"), "fixture")\n'
+        '[IO.File]::WriteAllText((Join-Path $root "download-called"), "downloaded")\n'
+    )
+    (scripts / "install_desktop.ps1").write_text(
+        "param([string]$SourceRoot, [string]$Destination, "
+        "[switch]$PrebuiltOnly, [switch]$BuildSource)\n"
+        'if (-not $PrebuiltOnly -or $BuildSource) { throw "unsafe build option" }\n'
+        "[IO.Directory]::CreateDirectory($Destination) | Out-Null\n"
+        'Copy-Item (Join-Path $SourceRoot "desktop-bin/Labcat.exe") $Destination\n'
+    )
+    result, calls = launcher("-Docker", open_window=True)
+    assert result.returncode == 0, result.stderr
+    assert (launcher.install / "download-called").read_text() == "downloaded"
+    assert any("up" in call for call in calls)
+    assert Path(launcher.openings()[0]["path"]).name == "Labcat.exe"
+
+
+def test_default_download_failure_never_builds_starts_or_opens(launcher):
+    scripts = launcher.install / "scripts"
+    scripts.mkdir()
+    (scripts / "download_desktop.ps1").write_text("exit 4\n")
+    (scripts / "install_desktop.ps1").write_text("throw 'must not run'\n")
+    result, calls = launcher("-Docker", open_window=True)
+    assert result.returncode != 0
+    assert "No source build was started" in result.stderr
+    assert not any("up" in call for call in calls)
+    assert launcher.openings() == []

@@ -21,14 +21,17 @@ else
         case "$labcat_arg" in
             start|stop|status|logs) labcat_action=$labcat_arg ;;
             --no-open) labcat_open=no ;;
+            --docker) labcat_mode=docker ;;
             --browser) labcat_mode=browser ;;
             --desktop) labcat_mode=desktop ;;
             --choose) labcat_choose=yes ;;
             -h|--help)
-                echo 'Usage: ./labcat.sh [start|stop|status|logs] [--desktop|--browser|--choose|--no-open]'
+                echo 'Usage: ./labcat.sh [start|stop|status|logs] [--docker|--browser|--desktop|--choose|--no-open]'
                 echo '       ./labcat.sh cli [--offline] [application arguments, e.g. status --format json]'
-                echo 'First interactive start offers the desktop app (default) or browser and remembers your choice.'
-                echo '--desktop installs the native app if needed; --browser opens the browser; --choose asks again.'
+                echo 'First start offers Docker app (default), browser, or native desktop and remembers your choice.'
+                echo '--docker installs/opens the prebuilt native Docker app; no host Node or Rust is required.'
+                echo '--browser opens a browser tab; --desktop builds the native shell from source when needed.'
+                echo 'Run ./labcat.sh again to reopen your choice, or use --choose to select another mode.'
                 echo '--no-open starts only the backend, without choosing or installing a desktop app.'
                 echo 'CLI research uses the running application account. Complete model setup first.'
                 echo '--offline disables container networking; authenticated research requires network access.'
@@ -74,14 +77,19 @@ choose_mode() {
     fi
     if [ "$labcat_choose" = no ] && [ -z "$labcat_mode" ] && [ -f "$labcat_mode_file" ] && [ ! -L "$labcat_mode_file" ]; then
         labcat_saved_mode=$(cat "$labcat_mode_file")
-        case "$labcat_saved_mode" in desktop|browser) labcat_mode=$labcat_saved_mode ;; esac
+        case "$labcat_saved_mode" in docker|desktop|browser) labcat_mode=$labcat_saved_mode ;; *) fail 'The saved launch preference is invalid. Run ./labcat.sh --choose.' ;; esac
     fi
     if [ "$labcat_choose" = yes ] || [ -z "$labcat_mode" ]; then
-        [ -t 0 ] || fail 'Choose how to open Labcat: run ./labcat.sh --desktop or ./labcat.sh --browser (or --no-open for only the backend).'
-        printf '%s\n' 'How would you like to use Labcat?' '  1) Install/open the desktop app (default)' '  2) Open in your browser'
-        printf 'Choose [1/2, Enter for desktop]: '
+        if [ ! -t 0 ]; then
+            [ "$labcat_choose" = no ] || fail 'Choose a launch mode in a terminal, or pass --docker, --browser or --desktop.'
+            labcat_mode=docker
+            return
+        fi
+        printf '%s\n' 'How would you like to use Labcat?' '  1) Open the native Labcat app (Docker backend, default)' '  2) Open in your browser' '  3) Build/open the native desktop application from source'
+        printf '%s\n' 'All modes use Docker. Option 1 uses the prebuilt native app; no Node or Rust needed.' 'Option 3 checks the required native build tools before building from source.'
+        printf 'Choose [1/2/3, Enter for Docker]: '
         IFS= read -r labcat_answer || fail 'No launch choice was supplied.'
-        case "$labcat_answer" in ''|1) labcat_mode=desktop ;; 2) labcat_mode=browser ;; *) fail 'Choose 1 for desktop or 2 for browser, or pass --desktop/--browser.' ;; esac
+        case "$labcat_answer" in ''|1) labcat_mode=docker ;; 2) labcat_mode=browser ;; 3) labcat_mode=desktop ;; *) fail 'Choose 1 for Docker, 2 for browser or 3 for native desktop.' ;; esac
     fi
 }
 
@@ -138,7 +146,20 @@ prepare_desktop() {
     fi
     if [ "$labcat_reinstall" = yes ]; then
         [ -f "$labcat_dir/scripts/install_desktop.sh" ] || fail 'The desktop installer is missing. Use a complete Labcat checkout/install bundle, or choose --browser.'
-        sh "$labcat_dir/scripts/install_desktop.sh" || fail 'Desktop installation failed. Your previous application is unchanged. Resolve the reported prerequisites or explicitly use --browser.'
+        if [ "$labcat_mode" = docker ]; then
+            if [ "$(uname -s)" = Darwin ]; then
+                labcat_prebuilt_executable="$labcat_dir/desktop-bin/Labcat.app/Contents/MacOS/labcat-desktop"
+            else
+                labcat_prebuilt_executable="$labcat_dir/desktop-bin/labcat-desktop"
+            fi
+            if [ ! -x "$labcat_prebuilt_executable" ]; then
+                [ -f "$labcat_dir/scripts/download_desktop.sh" ] && [ ! -L "$labcat_dir/scripts/download_desktop.sh" ] || fail 'The prebuilt app downloader is missing. Use a complete official checkout/bundle, or explicitly choose --browser.'
+                sh "$labcat_dir/scripts/download_desktop.sh" || fail 'The prebuilt native app download failed. No source build was started. Follow the download error, or explicitly choose --browser or --desktop.'
+            fi
+            sh "$labcat_dir/scripts/install_desktop.sh" --prebuilt-only || fail 'The prebuilt Docker application could not be installed. Your previous application is unchanged. Use a supported official desktop download, choose --desktop to build from source, or explicitly use --browser.'
+        else
+            sh "$labcat_dir/scripts/install_desktop.sh" --build-source || fail 'Desktop source installation failed. Your previous application is unchanged. Resolve the reported prerequisites, choose --docker for the prebuilt app, or explicitly use --browser.'
+        fi
         [ -x "$labcat_native_executable" ] || fail 'Desktop installation did not create the native application.'
     fi
 }
@@ -215,7 +236,7 @@ read_url() {
 }
 
 open_window() {
-    if [ "$labcat_mode" = desktop ]; then
+    if [ "$labcat_mode" = desktop ] || [ "$labcat_mode" = docker ]; then
         case "$(uname -s)" in
             Darwin) open -n -a "$labcat_native" --args --url "$labcat_url" || fail 'The desktop app could not open. Reinstall it with sh scripts/install_desktop.sh, or choose --browser.' ;;
             Linux) nohup "$labcat_native" --url "$labcat_url" >/dev/null 2>&1 & ;;
@@ -239,14 +260,15 @@ case "$labcat_action" in
     start)
         if [ "$labcat_open" = yes ]; then
             choose_mode
-            if [ "$labcat_mode" = desktop ]; then prepare_desktop; fi
+            if [ "$labcat_mode" = desktop ] || [ "$labcat_mode" = docker ]; then prepare_desktop; fi
         fi
         echo 'Starting Labcat; waiting for the application to be ready...'
         if ! start_service; then
             fail 'Startup failed. Load the supplied image archive with docker load --input <archive.tar>, or inspect ./labcat.sh logs. No UI window was opened.'
         fi
         read_url
-        echo 'Closing the window leaves the service running. Stop it with: ./labcat.sh stop'
+        echo 'Run ./labcat.sh again to reopen the application. Closing the window leaves Docker running.'
+        echo 'Stop the application with: ./labcat.sh stop'
         if [ "$labcat_open" = yes ]; then open_window; save_mode; fi
         ;;
     stop) compose stop ;;

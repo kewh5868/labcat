@@ -1,9 +1,9 @@
 # Native desktop shell
 
 This Tauri v2 application displays the Docker-served React interface in the
-operating system's webview. It does not require Chrome or launch a browser app
-window. Docker remains the backend runtime; the CLI and ordinary browser modes
-remain separate host-launcher options.
+operating system's webview. Docker remains the backend runtime. The default
+launcher option installs a prebuilt native shell; the source-build option
+compiles this same shell locally. Browser and CLI modes use the same backend.
 
 The application is named Labcat. Native bundles use `Labcat.app` on macOS,
 `labcat-desktop` as the executable name, and `org.labcat.desktop` as the
@@ -19,28 +19,55 @@ See [source coverage](../docs/scientific-sources.md) for its scientific limits.
 
 Build the Docker image from the repository, or load a verified supplied image
 archive, then start Docker. From the repository or install-bundle folder, run
-`./labcat.sh` on Mac/Linux or `.\labcat.cmd` in Windows PowerShell. On first launch,
-press Enter for Desktop (option 1), or choose Browser (option 2). The launcher
-remembers your selection; `--choose` / `-Choose` opens the chooser again.
-`--desktop` / `-Desktop` and `--browser` / `-Browser` select and remember a mode
-directly. Native setup uses a supplied `desktop-bin/` app when available, otherwise
-builds the source with the prerequisites below; a source checkout does not
-include a prebuilt native app. Browser mode does not require native build tools.
+`./labcat.sh` on Mac/Linux or `.\labcat.cmd` in Windows PowerShell. The chooser
+offers **Native Labcat app with Docker (1, default Enter)**, **Browser (2)** and
+**Build desktop application from source (3)**. All use the same Docker image.
+Options 1 and 3 open this same native application.
+
+Option 1 installs a matching prebuilt shell without host Node, Rust or compiler
+tools. The launcher downloads a native shell from the official release using
+the version and checksum pinned in the checkout, verifies it, and installs it
+for your user. A supplied matching `desktop-bin/` bundle is also supported.
+Prebuilt targets are macOS Apple Silicon/Intel, Windows x64 and Linux x64;
+Linux ARM64 uses Browser or an explicit source build. If the matching download
+is unavailable or fails verification, the launcher reports the problem and
+suggests Browser or an explicit source build; it does not silently compile or
+change modes.
+
+To build from source, choose **3**, or run `./labcat.sh --desktop` /
+`.\labcat.cmd -Desktop`. The launcher remembers successful selections, including
+existing preferences; `--choose` / `-Choose` opens the chooser again.
+`--docker` / `-Docker` selects the prebuilt native route, and `--browser` /
+`-Browser` opens a browser. The source installation checks and reports all
+prerequisites before compiling. Docker and Browser modes do not need build tools.
 
 Desktop setup installs for the current user: `~/Applications/Labcat.app` on macOS,
 `%LOCALAPPDATA%\Programs\Labcat\Labcat.exe` with a Start menu shortcut on Windows,
 or `${XDG_DATA_HOME:-$HOME/.local/share}/labcat/desktop` with an application menu
 entry on Linux. No administrator elevation or system dependency installation is
 performed. Keep the original folder for updates and launcher commands. After
-updating source or a supplied native bundle, run `sh scripts/install_desktop.sh`
-or `.\scripts\install_desktop.ps1` from that folder to replace the installed
-shell and refresh its launcher configuration. Ordinary launches reuse the
-installed app; rebuilding Docker alone does not update it.
+updating the native source, run `sh scripts/install_desktop.sh --build-source`
+or `powershell -NoProfile -File .\scripts\install_desktop.ps1 -BuildSource`
+from that folder to rebuild the shell and refresh its launcher configuration.
+For supplied prebuilt updates, use the matching release/bundle instructions.
+Ordinary launches reuse the installed app; rebuilding Docker alone does not
+update it.
+
+To reopen either native installation, start Docker and open **Labcat** from
+`~/Applications` on macOS, the Windows Start menu or the Linux application menu.
+From the installation folder, `./labcat.sh --docker` / `.\labcat.cmd -Docker`
+reopens the default app, and `./labcat.sh --desktop` / `.\labcat.cmd -Desktop`
+reuses the source-installed app without recompiling it. `./labcat.sh` /
+`.\labcat.cmd` uses the saved mode. Browser users reopen with `--browser` /
+`-Browser`; the launcher's current URL is more reliable than a saved bookmark.
 
 Opening the installed native application starts or reuses the local
 backend using its installed host launcher. A loading view appears immediately;
 startup, status verification, and UI loading share a bounded deadline. Errors
 remain visible in the native window. Closing the window leaves Docker running.
+Stop with `./labcat.sh stop` or `.\labcat.cmd stop`; saved work is preserved.
+Restart by opening the app again. If Docker itself has stopped, start its engine
+first. See [all mode and lifecycle commands](../docs/installation.md#stop-reopen-or-troubleshoot).
 
 To attach to an already running backend without starting Docker resources:
 
@@ -84,16 +111,25 @@ API access. Ordinary browser use retains the browser's own zoom controls.
 
 ## Build
 
-Use a Rust toolchain, Node 24, and the operating-system build prerequisites from
+Use Rust/Cargo 1.88 or newer, Node 24 with npm, and the operating-system build
+prerequisites from
 [Tauri's official guide](https://v2.tauri.app/start/prerequisites/). macOS uses
 the system WebKit webview. Windows uses the WebView2 runtime; the NSIS installer
 can offer its bootstrapper if needed. Linux requires the WebKitGTK runtime.
-Neither a separate Chrome installation nor a Chrome user profile is needed.
-The first-run source installer checks for npm and Cargo plus the platform build
-tools: Xcode Command Line Tools on macOS; Visual Studio C++ Build Tools and a
-Windows SDK on Windows; or a compiler, `pkg-config` and WebKitGTK 4.1/GTK 3/libsoup 3/
-librsvg development packages on Linux. Install these prerequisites yourself before
-choosing Desktop. The browser choice needs only Docker and a browser.
+The first-run source installer reports Node/npm and Rust/Cargo availability
+and versions, plus the platform build prerequisites: Xcode Command Line Tools on
+macOS; Visual Studio C++ Build Tools, a Windows SDK, an MSVC Rust toolchain and
+WebView2 on Windows; or a compiler, `pkg-config` and WebKitGTK 4.1/GTK 3/libsoup 3/
+librsvg development packages on Linux. Missing or incompatible prerequisites
+stop the source installation before compiling. Install them yourself, then
+retry. The Docker application and Browser choices need only the common
+[installation requirements](../docs/installation.md#requirements-for-every-mode).
+
+To inspect the prerequisite report without installing, run
+`sh scripts/install_desktop.sh --build-source --check` from the repository root on Mac/Linux,
+or `powershell -NoProfile -File .\scripts\install_desktop.ps1 -BuildSource -CheckOnly` on Windows.
+A supplied native binary skips build-tool checks; required webview runtime
+checks still apply. Passing prerequisites does not guarantee build success.
 
 The automatic source build uses the committed npm and Cargo lockfiles. It builds
 a macOS app bundle or the Windows/Linux native binary and then installs fixed

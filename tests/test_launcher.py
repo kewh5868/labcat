@@ -441,14 +441,73 @@ def test_headless_research_uses_callback_fallback_without_polluting_stdout(launc
     assert not opened.exists()
 
 
-def test_noninteractive_first_launch_requires_explicit_choice(launcher):
+@pytest.mark.parametrize("choice", [None, "", "1"])
+def test_first_launch_defaults_to_prebuilt_docker_app(launcher, choice):
     run, install, opened = launcher
-    result, calls = run()
+    app = run.installed()
+    result, calls = run(input_choice=choice)
+    assert result.returncode == 0, result.stderr
+    assert any("up" in call for call in calls)
+    assert json.loads(opened.read_text().splitlines()[-1]) == [
+        "-n",
+        "-a",
+        str(app),
+        "--args",
+        "--url",
+        "http://127.0.0.1:49155/",
+    ]
+    assert (install / ".labcat-launch-mode").read_text() == "docker\n"
+
+
+def test_docker_mode_reuses_installed_native_without_browser(launcher):
+    run, install, opened = launcher
+    app = run.installed()
+    for args in [("--docker",), ()]:
+        result, calls = run(*args)
+        assert result.returncode == 0, result.stderr
+        assert json.loads(opened.read_text().splitlines()[-1]) == [
+            "-n",
+            "-a",
+            str(app),
+            "--args",
+            "--url",
+            "http://127.0.0.1:49155/",
+        ]
+        assert any("up" in call for call in calls)
+    assert (install / ".labcat-launch-mode").read_text() == "docker\n"
+
+
+def test_docker_missing_prebuilt_never_builds_or_falls_back_to_browser(launcher):
+    run, install, opened = launcher
+    scripts = install / "scripts"
+    scripts.mkdir()
+    marker = install / "installer-options"
+    prebuilt = install / "desktop-bin/Labcat.app/Contents/MacOS/labcat-desktop"
+    prebuilt.parent.mkdir(parents=True)
+    prebuilt.write_text("fixture")
+    prebuilt.chmod(0o755)
+    (scripts / "install_desktop.sh").write_text(
+        "#!/bin/sh\n"
+        'printf "%s\\n" "$@" > "$(dirname "$0")/../installer-options"\n'
+        "exit 1\n"
+    )
+    result, calls = run("--docker")
     assert result.returncode != 0
-    assert "--desktop" in result.stderr and "--browser" in result.stderr
+    assert marker.read_text() == "--prebuilt-only\n"
+    assert "prebuilt Docker application could not be installed" in result.stderr
     assert not any("up" in call for call in calls)
     assert not opened.exists()
     assert not (install / ".labcat-launch-mode").exists()
+
+
+def test_choose_requires_interactive_input(launcher):
+    run, install, opened = launcher
+    (install / ".labcat-launch-mode").write_text("browser\n")
+    result, calls = run("--choose")
+    assert result.returncode != 0
+    assert "Choose a launch mode" in result.stderr
+    assert not any("up" in call for call in calls)
+    assert not opened.exists()
 
 
 def test_interactive_browser_choice_is_remembered_and_can_be_changed(launcher):
@@ -464,19 +523,20 @@ def test_interactive_browser_choice_is_remembered_and_can_be_changed(launcher):
     assert (install / ".labcat-launch-mode").read_text() == "browser\n"
 
 
-def test_interactive_default_installs_desktop_and_never_opens_browser(launcher):
+def test_interactive_third_choice_installs_desktop_and_never_opens_browser(launcher):
     run, install, opened = launcher
     scripts = install / "scripts"
     scripts.mkdir()
     (scripts / "install_desktop.sh").write_text(
         "#!/bin/sh\n"
+        '[ "$1" = --build-source ] || exit 9\n'
         'mkdir -p "$LABCAT_DESKTOP_INSTALL_DIR/Labcat.app/Contents/MacOS"\n'
         'printf "#!/bin/sh\\nexit 0\\n" > '
         '"$LABCAT_DESKTOP_INSTALL_DIR/Labcat.app/Contents/MacOS/labcat-desktop"\n'
         'chmod +x "$LABCAT_DESKTOP_INSTALL_DIR/Labcat.app/Contents/MacOS/'
         'labcat-desktop"\n'
     )
-    result, _ = run(input_choice="")
+    result, _ = run(input_choice="3")
     assert result.returncode == 0, result.stderr
     assert (install / ".labcat-launch-mode").read_text() == "desktop\n"
     assert json.loads(opened.read_text().splitlines()[-1])[:2] == ["-n", "-a"]
@@ -492,7 +552,7 @@ def test_desktop_install_failure_does_not_start_or_fall_back(launcher):
     (scripts / "install_desktop.sh").write_text("#!/bin/sh\nexit 1\n")
     result, calls = run("--desktop")
     assert result.returncode != 0
-    assert "Desktop installation failed" in result.stderr
+    assert "Desktop source installation failed" in result.stderr
     assert not any("up" in call for call in calls)
     assert not opened.exists()
     assert not (install / ".labcat-launch-mode").exists()
@@ -616,4 +676,44 @@ def test_headless_and_lifecycle_actions_ignore_mode_and_installation(launcher):
     ):
         result, _ = run(*arguments)
         assert result.returncode == 0, result.stderr
+    assert not opened.exists()
+
+
+def test_default_docker_downloads_prebuilt_before_installing_without_build(launcher):
+    run, install, opened = launcher
+    scripts = install / "scripts"
+    scripts.mkdir()
+    (scripts / "download_desktop.sh").write_text(
+        "#!/bin/sh\n"
+        'root=$(dirname "$0")/..\n'
+        'mkdir -p "$root/desktop-bin/Labcat.app/Contents/MacOS"\n'
+        'printf "#!/bin/sh\\nexit 0\\n" > '
+        '"$root/desktop-bin/Labcat.app/Contents/MacOS/labcat-desktop"\n'
+        'chmod +x "$root/desktop-bin/Labcat.app/Contents/MacOS/labcat-desktop"\n'
+        'echo downloaded > "$root/download-called"\n'
+    )
+    (scripts / "install_desktop.sh").write_text(
+        "#!/bin/sh\n"
+        '[ "$1" = --prebuilt-only ] || exit 9\n'
+        'mkdir -p "$LABCAT_DESKTOP_INSTALL_DIR"\n'
+        'cp -R "$(dirname "$0")/../desktop-bin/Labcat.app" '
+        '"$LABCAT_DESKTOP_INSTALL_DIR/"\n'
+    )
+    result, calls = run("--docker")
+    assert result.returncode == 0, result.stderr
+    assert (install / "download-called").read_text() == "downloaded\n"
+    assert any("up" in call for call in calls)
+    assert json.loads(opened.read_text().splitlines()[-1])[:2] == ["-n", "-a"]
+
+
+def test_default_download_failure_never_builds_starts_or_opens(launcher):
+    run, install, opened = launcher
+    scripts = install / "scripts"
+    scripts.mkdir()
+    (scripts / "download_desktop.sh").write_text("#!/bin/sh\nexit 4\n")
+    (scripts / "install_desktop.sh").write_text("#!/bin/sh\nexit 9\n")
+    result, calls = run("--docker")
+    assert result.returncode != 0
+    assert "No source build was started" in result.stderr
+    assert not any("up" in call for call in calls)
     assert not opened.exists()

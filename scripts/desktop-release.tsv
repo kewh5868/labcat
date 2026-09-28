@@ -1,0 +1,5 @@
+# target	tag	asset	sha256
+aarch64-apple-darwin	native-v0.1.0-1	Labcat-aarch64-apple-darwin.tar.gz	d1069ec20162c2d3bd1b83bd9fe9ce27ccd50b3fafa80a45b1291fa68ad3d162
+x86_64-apple-darwin	native-v0.1.0-1	Labcat-x86_64-apple-darwin.tar.gz	94b097feaf055200fbac353b30507123ba1de9c1c4d89f4af8964d5e08a2be68
+x86_64-pc-windows-msvc	native-v0.1.0-1	Labcat-x86_64-pc-windows-msvc.zip	45e168080c99a3a8412879310c8cd3d3ad6a646ce577773cf78005889a5ee8bb
+x86_64-unknown-linux-gnu	native-v0.1.0-1	Labcat-x86_64-unknown-linux-gnu.tar.gz	9403fb12b4ac2fc00b4f173bb34a1afb9650dd17537609f9334791cfa99b6145

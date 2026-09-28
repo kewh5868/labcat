@@ -5,6 +5,7 @@ param(
     [ValidateSet('start', 'stop', 'status', 'logs', 'cli', 'help')]
     [string]$Action = 'start',
     [switch]$NoOpen,
+    [switch]$Docker,
     [switch]$Browser,
     [switch]$Desktop,
     [switch]$Choose,
@@ -116,6 +117,7 @@ function Get-LabcatUrl {
 
 function Get-LabcatLaunchMode {
     $modeFile = Join-Path $PSScriptRoot '.labcat-launch-mode'
+    if ($Docker) { return 'docker' }
     if ($Desktop) { return 'desktop' }
     if ($Browser) { return 'browser' }
     if (-not $Choose -and (Test-Path -LiteralPath $modeFile -PathType Leaf)) {
@@ -124,22 +126,26 @@ function Get-LabcatLaunchMode {
             throw 'The launch preference must be a regular file. Remove it and choose again.'
         }
         $saved = [IO.File]::ReadAllText($modeFile).Trim()
-        if ($saved -ceq 'desktop' -or $saved -ceq 'browser') { return $saved }
+        if ($saved -ceq 'docker' -or $saved -ceq 'desktop' -or $saved -ceq 'browser') { return $saved }
         throw 'The saved launch preference is invalid. Run labcat.cmd start -Choose.'
     }
     if ([Console]::IsInputRedirected -or [Environment]::GetCommandLineArgs() -contains '-NonInteractive') {
-        throw 'Choose a launch mode: labcat.cmd start -Desktop or labcat.cmd start -Browser. Use -NoOpen for a headless start.'
+        if ($Choose) { throw 'Choose a launch mode in a terminal, or pass -Docker, -Browser or -Desktop.' }
+        return 'docker'
     }
     Write-Host 'How would you like to use Labcat?'
-    Write-Host '  1. Install and open the desktop application (default)'
+    Write-Host '  1. Open the native Labcat app (Docker backend, default)'
     Write-Host '  2. Open in your browser'
-    Write-Host 'Desktop uses Docker and, when building from source, needs the documented native build tools.'
-    $choice = Read-Host 'Choose 1 or 2 [1]'
+    Write-Host '  3. Build and open the native desktop application from source'
+    Write-Host 'All modes use Docker. Option 1 uses the prebuilt native app; no Node or Rust needed.'
+    Write-Host 'Option 3 checks the required native build tools before building from source.'
+    $choice = Read-Host 'Choose 1, 2 or 3 [1]'
     switch ($choice.Trim()) {
-        '' { return 'desktop' }
-        '1' { return 'desktop' }
+        '' { return 'docker' }
+        '1' { return 'docker' }
         '2' { return 'browser' }
-        default { throw 'No mode was selected. Run labcat.cmd start -Choose and enter 1 or 2.' }
+        '3' { return 'desktop' }
+        default { throw 'No mode was selected. Run labcat.cmd start -Choose and enter 1, 2 or 3.' }
     }
 }
 
@@ -191,6 +197,7 @@ function Test-LabcatInstalledShell {
 }
 
 function Get-LabcatDesktopExecutable {
+    param([string]$Mode)
     if ([string]::IsNullOrEmpty($env:LOCALAPPDATA) -or -not [IO.Path]::IsPathRooted($env:LOCALAPPDATA)) {
         throw 'The per-user application directory is unavailable. Check LOCALAPPDATA or choose -Browser.'
     }
@@ -201,7 +208,27 @@ function Get-LabcatDesktopExecutable {
     if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) {
         throw 'The desktop installer is missing. Extract the complete download or use a complete source checkout; choose -Browser for browser use.'
     }
-    & $installer -SourceRoot $PSScriptRoot -Destination $destination | Out-Host
+    if ($Mode -ceq 'docker') {
+        $prebuilt = Join-Path $PSScriptRoot 'desktop-bin\Labcat.exe'
+        if (-not (Test-Path -LiteralPath $prebuilt -PathType Leaf)) {
+            $downloader = Join-Path $PSScriptRoot 'scripts\download_desktop.ps1'
+            if (-not (Test-Path -LiteralPath $downloader -PathType Leaf)) {
+                throw 'The prebuilt app downloader is missing. Use a complete official checkout/bundle, or explicitly choose -Browser.'
+            }
+            if ((Get-Item -Force -LiteralPath $downloader).Attributes -band [IO.FileAttributes]::ReparsePoint) {
+                throw 'The prebuilt app downloader must be a regular file, not a link. Use a complete official checkout/bundle.'
+            }
+            $shellExecutable = [Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+            & $shellExecutable -NoLogo -NoProfile -NonInteractive -File $downloader | Out-Host
+            if ($LASTEXITCODE -ne 0) {
+                throw 'The prebuilt native app download failed. No source build was started. Follow the download error, or explicitly choose -Browser or -Desktop.'
+            }
+        }
+        & $installer -SourceRoot $PSScriptRoot -Destination $destination -PrebuiltOnly | Out-Host
+    }
+    else {
+        & $installer -SourceRoot $PSScriptRoot -Destination $destination -BuildSource | Out-Host
+    }
     if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
         throw 'Desktop installation did not produce Labcat.exe. Check the installer error or choose -Browser.'
     }
@@ -211,7 +238,7 @@ function Get-LabcatDesktopExecutable {
 function Open-LabcatWindow {
     param([string]$Url, [string]$Mode, [string]$DesktopExecutable)
 
-    if ($Mode -ceq 'desktop') {
+    if ($Mode -ceq 'desktop' -or $Mode -ceq 'docker') {
         try {
             Start-Process -FilePath $DesktopExecutable -ArgumentList @('--url', $Url) | Out-Null
             return
@@ -242,15 +269,17 @@ function Save-LabcatLaunchMode {
 
 try {
     if ($Action -eq 'help') {
-        Write-Host 'Usage: labcat.cmd [start|stop|status|logs] [-Desktop|-Browser|-Choose|-NoOpen]'
-        Write-Host 'First start offers desktop installation or browser use; the successful choice is remembered.'
+        Write-Host 'Usage: labcat.cmd [start|stop|status|logs] [-Docker|-Browser|-Desktop|-Choose|-NoOpen]'
+        Write-Host 'First start offers Docker app (default), browser, or native desktop; your choice is remembered.'
+        Write-Host 'Run labcat.cmd again to reopen it. -Choose asks again; -NoOpen starts only the Docker backend.'
+        Write-Host '-Docker uses the prebuilt native app without Node/Rust; -Desktop checks prerequisites and builds from source if needed.'
         Write-Host '       labcat.cmd cli [--offline] [application arguments, e.g. status --format json]'
         Write-Host 'CLI research uses the running application account. Complete model setup first.'
         Write-Host '--offline disables container networking; authenticated research requires network access.'
         exit 0
     }
-    if (([int]$Desktop.IsPresent + [int]$Browser.IsPresent + [int]$Choose.IsPresent) -gt 1) {
-        throw 'Choose only one of -Desktop, -Browser or -Choose.'
+    if (([int]$Docker.IsPresent + [int]$Desktop.IsPresent + [int]$Browser.IsPresent + [int]$Choose.IsPresent) -gt 1) {
+        throw 'Choose only one of -Docker, -Browser, -Desktop or -Choose.'
     }
     if ($Action -ne 'cli' -and $CliArguments.Count -gt 0) {
         throw 'Extra arguments are supported only after cli. Use start, stop, status, logs, or cli followed by command-line arguments.'
@@ -344,7 +373,7 @@ try {
             $desktopExecutable = $null
             if (-not $NoOpen) {
                 $launchMode = Get-LabcatLaunchMode
-                if ($launchMode -ceq 'desktop') { $desktopExecutable = Get-LabcatDesktopExecutable }
+                if ($launchMode -ceq 'desktop' -or $launchMode -ceq 'docker') { $desktopExecutable = Get-LabcatDesktopExecutable $launchMode }
             }
             Start-LabcatService
             $appUrl = Get-LabcatUrl

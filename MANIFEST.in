@@ -22,6 +22,7 @@ recursive-include config *.toml
 recursive-include requirements *.txt *.lock
 recursive-include scripts *.py
 include scripts/install_desktop.sh scripts/install_desktop.ps1
+include scripts/download_desktop.sh scripts/download_desktop.ps1 scripts/desktop-release.tsv
 include scripts/materials_prompt_matrix.json scripts/holdout_prompts.json
 include requirements/build.in
 include Dockerfile compose.yaml .dockerignore

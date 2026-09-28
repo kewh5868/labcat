@@ -23,8 +23,8 @@ structures.
 
 ## Explore the guide
 
-- [Install & setup](first-run.md): an illustrated walkthrough for Docker, desktop
-  or browser, and model connections.
+- [Install & setup](first-run.md): open the prebuilt Labcat app with Docker,
+  choose Browser or a native source build, and connect a model.
 - [Use Labcat](user-guide.md): screenshots for chats, ranking priorities,
   reports, structures and downloads.
 - [Examples](examples.md): scientific questions and expected responses to
@@ -32,6 +32,12 @@ structures.
 - [Sources & methods](resources.md): connected repositories, API keys and
   evidence interpretation.
 - [Developer notes](development.md): work on the source and run checks.
+
+All launch modes use Docker. The default uses a prebuilt native app without
+host Python, Node or Rust. Browser mode also needs no build tools; only the
+optional native source build needs [desktop prerequisites](installation.md#desktop-prerequisites).
+Check [available native bundles](installation.md#prebuilt-native-availability)
+and [how to reopen each mode](installation.md#stop-reopen-or-troubleshoot).
 
 The workspace runs locally. Research uses your connected model provider and
 public sources; available evidence and structures vary by topic.

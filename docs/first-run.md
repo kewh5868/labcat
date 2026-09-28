@@ -1,7 +1,7 @@
 # Install & setup
 
-Run Labcat on your computer with Docker, then use either its desktop application
-or your browser.
+Run Labcat on your computer with Docker. The default uses a prebuilt native
+Labcat application, so you do not compile the desktop shell yourself.
 
 ## 1. Prepare your computer
 
@@ -20,9 +20,11 @@ docker info
 docker compose version
 ```
 
-For the desktop application, also install the
-[desktop prerequisites](installation.md#desktop-prerequisites).
-Browser mode needs no host Python, Node or Rust.
+The default native app and Browser mode need no host Python, Node or
+Rust. Only building the native application from source (option 3) needs
+[desktop build prerequisites](installation.md#desktop-prerequisites). See
+[all system requirements](installation.md#requirements-for-every-mode) before
+building.
 
 ## 2. Download and build
 
@@ -44,13 +46,40 @@ From the same folder:
 | ------------- | ------------------ |
 | `./labcat.sh` | `.\labcat.cmd`     |
 
-Press **Enter** for **Desktop**, or choose **2** for **Browser**. Desktop builds
-and installs a native app for your user; Browser opens your default browser.
-The launcher remembers this choice. To choose again, use `./labcat.sh --choose`
-or `.\labcat.cmd -Choose`.
+Choose a launch mode:
 
+1. **Native Labcat app (Docker backend, default):** press **Enter** to install/open the prebuilt
+   native Labcat app and start its Docker backend. No Node, Rust or compiler is
+   needed. The launcher downloads and verifies the pinned native shell for your
+   supported platform; see [prebuilt availability](installation.md#prebuilt-native-availability).
+2. **Browser:** open Labcat in your normal default browser.
+3. **Build desktop application from source:** compile and install the same native
+   app locally. A prerequisite report first shows which build requirements are
+   met or missing. Resolve missing items or select another launch mode.
+
+All three use the Docker image built in step 2. The launcher remembers your
+choice. To choose again, use `./labcat.sh --choose` or `.\labcat.cmd -Choose`.
+If the native download is unavailable or unsupported on your platform, the
+launcher explains the problem; choose Browser or explicitly build from source.
 The workspace opens with a setup dialog. Keep Docker running during setup and
 research; ordinary launches do not need a rebuild.
+
+### Open Labcat again
+
+Start Docker first. For either native option, open **Labcat** from your
+applications menu. To reopen from this folder, use `./labcat.sh` or
+`.\labcat.cmd` for the remembered mode, or choose explicitly:
+
+| Mode                        | Mac / Linux             | Windows PowerShell      |
+| --------------------------- | ----------------------- | ----------------------- |
+| Prebuilt native app         | `./labcat.sh --docker`  | `.\labcat.cmd -Docker`  |
+| Browser                     | `./labcat.sh --browser` | `.\labcat.cmd -Browser` |
+| Source-installed native app | `./labcat.sh --desktop` | `.\labcat.cmd -Desktop` |
+
+The source-installed app is reused; it is not compiled on every launch.
+Closing a window leaves the containers running. To stop them without deleting
+saved work, use `./labcat.sh stop` or `.\labcat.cmd stop`. Restart by running
+the same open command again. See [reopen and status details](installation.md#stop-reopen-or-troubleshoot).
 
 ## 4. Connect your model
 

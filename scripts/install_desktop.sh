@@ -6,16 +6,23 @@ PATH="$PATH:$HOME/.cargo/bin:/usr/local/bin:/opt/homebrew/bin"
 export PATH
 labcat_source=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 fail() { echo "Labcat desktop: $*" >&2; exit 1; }
-case "${1:-}" in
-    '') ;;
-    -h|--help)
-        echo 'Usage: sh scripts/install_desktop.sh'
-        echo 'Installs Labcat for the current user. Uses desktop-bin when supplied; otherwise builds with Node/npm, Rust/Cargo and native OS development tools.'
-        echo 'No system dependencies are installed automatically. Start Docker before opening Labcat.'
-        exit 0 ;;
-    *) fail 'Unknown argument. Run --help for installation usage.' ;;
-esac
-[ "$#" -le 1 ] || fail 'Unexpected installer arguments.'
+labcat_check_only=no
+labcat_install_mode=auto
+for labcat_argument in "$@"; do
+    case "$labcat_argument" in
+        --check) labcat_check_only=yes ;;
+        --prebuilt-only|--build-source)
+            [ "$labcat_install_mode" = auto ] || fail 'Choose only one of --prebuilt-only and --build-source.'
+            labcat_install_mode=$labcat_argument ;;
+        -h|--help)
+            echo 'Usage: sh scripts/install_desktop.sh [--prebuilt-only|--build-source] [--check]'
+            echo 'Installs Labcat for the current user. --prebuilt-only requires desktop-bin and never compiles; --build-source explicitly builds the native app.'
+            echo '--check reports all required prerequisites without building or installing.'
+            echo 'No system dependencies are installed automatically. Start Docker before opening Labcat.'
+            exit 0 ;;
+        *) fail 'Unknown argument. Run --help for installation usage.' ;;
+    esac
+done
 case "$HOME" in /*) ;; *) fail 'HOME must be an absolute path.' ;; esac
 case "$labcat_source$HOME${XDG_DATA_HOME:-}${LABCAT_DESKTOP_INSTALL_DIR:-}" in *'
 '*) fail 'Installation paths cannot contain newlines.' ;; esac
@@ -42,7 +49,6 @@ case "$labcat_platform" in
         labcat_destination="$labcat_parent/Labcat.app"
         labcat_prebuilt="$labcat_source/desktop-bin/Labcat.app"
         labcat_built="$labcat_source/desktop/target/release/bundle/macos/Labcat.app"
-        command -v codesign >/dev/null 2>&1 || fail 'macOS code signing tools are required to verify the installed app.'
         ;;
     Linux)
         labcat_data="${XDG_DATA_HOME:-$HOME/.local/share}"
@@ -72,21 +78,123 @@ if [ "$labcat_platform" = Darwin ]; then
 else
     labcat_executable=$labcat_native
 fi
-if [ ! -x "$labcat_executable" ]; then
-    [ -z "${CARGO_BUILD_TARGET:-}${CARGO_TARGET_DIR:-}" ] || fail 'Unset CARGO_BUILD_TARGET and CARGO_TARGET_DIR for this native source installation, so the installed build matches this machine.'
-    for labcat_tool in node npm cargo rustc; do
-        command -v "$labcat_tool" >/dev/null 2>&1 || fail "A source installation requires $labcat_tool. Install the documented desktop prerequisites, or explicitly start with ./labcat.sh --browser."
-    done
+# Report every missing prerequisite before downloading dependencies or changing an app.
+labcat_missing=0
+labcat_need_build=no
+if [ "$labcat_install_mode" = --build-source ] || [ ! -x "$labcat_executable" ]; then labcat_need_build=yes; fi
+if [ "$labcat_install_mode" = --prebuilt-only ] && [ "$labcat_need_build" = yes ]; then
+    fail 'No matching prebuilt native app is available in desktop-bin. Obtain the matching Labcat desktop bundle, choose --browser, or explicitly choose --desktop to build from source. No source build was started.'
+fi
+labcat_met() { printf '  [met] %s\n' "$*"; }
+labcat_miss() { printf '  [missing] %s\n' "$*"; labcat_missing=$((labcat_missing + 1)); }
+labcat_version() {
+    # Extract only numeric version text; never echo arbitrary tool output or environment.
+    "$@" 2>/dev/null | sed -n 's/^[^0-9]*\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\).*$/\1/p' | head -n 1
+}
+labcat_tool_version() {
+    labcat_name=$1
+    labcat_required_version=$2
+    labcat_hint=$3
+    labcat_found=$(labcat_version "$labcat_name" --version)
+    labcat_good=no
+    case "$labcat_required_version:$labcat_found" in
+        24:24.*) labcat_good=yes ;;
+        any:?*) labcat_good=yes ;;
+        1.88:?*)
+            labcat_major=${labcat_found%%.*}
+            labcat_rest=${labcat_found#*.}
+            labcat_minor=${labcat_rest%%.*}
+            if [ "$labcat_major" -gt 1 ] || { [ "$labcat_major" -eq 1 ] && [ "$labcat_minor" -ge 88 ]; }; then labcat_good=yes; fi ;;
+    esac
+    if [ "$labcat_good" = yes ]; then
+        labcat_met "$labcat_name $labcat_found"
+    else
+        labcat_miss "$labcat_name ${labcat_found:-not available}; $labcat_hint"
+    fi
+}
+echo 'Labcat native desktop prerequisites (Docker still provides the backend):'
+if [ "$labcat_platform" = Darwin ]; then
+    if command -v codesign >/dev/null 2>&1; then
+        labcat_met 'macOS code signing tools'
+    else
+        labcat_miss 'macOS code signing tools; install Xcode Command Line Tools: xcode-select --install'
+    fi
+fi
+if [ "$labcat_need_build" = yes ]; then
+    labcat_tool_version node 24 'install Node.js 24 LTS and restart your terminal'
+    labcat_tool_version npm any 'install npm with Node.js 24'
+    labcat_tool_version cargo 1.88 'install Rust/Cargo 1.88 or newer with rustup'
+    labcat_tool_version rustc 1.88 'install Rust 1.88 or newer with rustup'
+    if [ -n "${CARGO_BUILD_TARGET:-}${CARGO_TARGET_DIR:-}" ]; then
+        labcat_miss 'Unset CARGO_BUILD_TARGET and CARGO_TARGET_DIR for this native source installation'
+    else
+        labcat_met 'native build target (no cross-compilation overrides)'
+    fi
     for labcat_required in desktop/package-lock.json desktop/Cargo.lock desktop/tauri.conf.json; do
-        [ -f "$labcat_source/$labcat_required" ] || fail 'This bundle has no native app or complete desktop sources. Use a matching native bundle or --browser.'
+        if [ -f "$labcat_source/$labcat_required" ] && [ ! -L "$labcat_source/$labcat_required" ]; then
+            labcat_met "source file $labcat_required"
+        else
+            labcat_miss "source file $labcat_required; use a complete checkout or matching native bundle"
+        fi
     done
     case "$labcat_platform" in
         Darwin)
-            command -v xcode-select >/dev/null 2>&1 && xcode-select -p >/dev/null 2>&1 || fail 'Install the Xcode Command Line Tools with xcode-select --install, then retry.' ;;
+            if command -v xcode-select >/dev/null 2>&1 && xcode-select -p >/dev/null 2>&1; then
+                labcat_met 'Xcode Command Line Tools selected'
+            else
+                labcat_miss 'Xcode Command Line Tools; run xcode-select --install'
+            fi
+            if command -v xcrun >/dev/null 2>&1 && xcrun --find clang >/dev/null 2>&1 && xcrun clang --version >/dev/null 2>&1; then
+                labcat_met 'Apple C/C++ compiler'
+            else
+                labcat_miss 'Apple C/C++ compiler; complete Xcode Command Line Tools installation'
+            fi
+            if command -v xcrun >/dev/null 2>&1 && xcrun --sdk macosx --show-sdk-version >/dev/null 2>&1; then
+                labcat_met 'macOS SDK'
+            else
+                labcat_miss 'macOS SDK; install/select Xcode Command Line Tools'
+            fi ;;
         Linux)
-            command -v cc >/dev/null 2>&1 && command -v pkg-config >/dev/null 2>&1 || fail 'A source installation needs a C compiler and pkg-config. See the Linux desktop prerequisites.'
-            pkg-config --exists webkit2gtk-4.1 gtk+-3.0 librsvg-2.0 libsoup-3.0 || fail 'Install the WebKitGTK 4.1, GTK 3, librsvg and libsoup 3 development packages listed in the desktop installation guide.' ;;
+            for labcat_tool in cc c++ pkg-config; do
+                if command -v "$labcat_tool" >/dev/null 2>&1 && "$labcat_tool" --version >/dev/null 2>&1; then
+                    labcat_met "$labcat_tool"
+                else
+                    labcat_miss "$labcat_tool; install your distribution C/C++ build tools and pkg-config"
+                fi
+            done
+            for labcat_library in webkit2gtk-4.1 gtk+-3.0 librsvg-2.0 libsoup-3.0; do
+                if command -v pkg-config >/dev/null 2>&1 && pkg-config --exists "$labcat_library"; then
+                    labcat_met "$labcat_library development library"
+                else
+                    labcat_miss "$labcat_library development library; install its distribution development package"
+                fi
+            done ;;
     esac
+else
+    labcat_met 'prebuilt native app; Node/npm, Rust/Cargo and native build tools are not needed'
+    if [ "$labcat_platform" = Linux ]; then
+        if command -v ldd >/dev/null 2>&1 && labcat_runtime_libraries=$(LC_ALL=C ldd "$labcat_executable" 2>/dev/null); then
+            labcat_absent_libraries=$(printf '%s\n' "$labcat_runtime_libraries" | sed -n 's/^[[:space:]]*\([A-Za-z0-9._+-]*\)[[:space:]]*=>[[:space:]]*not found.*$/\1/p')
+            if [ -z "$labcat_absent_libraries" ]; then
+                labcat_met 'Linux native app shared libraries'
+            else
+                for labcat_library in $labcat_absent_libraries; do
+                    labcat_miss "$labcat_library runtime library; install its distribution runtime package"
+                done
+            fi
+        else
+            labcat_miss 'Linux native app runtime library check; install ldd and a matching Linux desktop bundle, with WebKitGTK 4.1/GTK 3 runtime libraries'
+        fi
+    fi
+fi
+if [ "$labcat_missing" -ne 0 ]; then
+    fail "$labcat_missing prerequisite(s) missing. Install the items listed above and retry. See https://kewh5868.github.io/labcat/installation/#desktop-prerequisites. You can use ./labcat.sh --docker or --browser without native build tools."
+fi
+if [ "$labcat_check_only" = yes ]; then
+    echo 'Desktop prerequisite check passed. Nothing was built or installed.'
+    exit 0
+fi
+if [ "$labcat_need_build" = yes ]; then
     echo 'Building the native Labcat app with the checked-in dependency locks...'
     npm ci --prefix "$labcat_source/desktop" --ignore-scripts || fail 'Installing locked desktop build dependencies failed; the existing application was not changed.'
     if [ "$labcat_platform" = Darwin ]; then

@@ -19,11 +19,14 @@ structures.
 
 [![Package checks](https://github.com/kewh5868/labcat/actions/workflows/ci.yml/badge.svg)](https://github.com/kewh5868/labcat/actions/workflows/ci.yml)
 
-## Choose desktop or browser
+## Run with Docker
 
-Install and start [Docker Desktop](https://docs.docker.com/desktop/) on Mac or
-Windows, or [Docker Engine with Compose](https://docs.docker.com/engine/install/)
-on Linux. Windows must use Linux containers.
+Install [Git](https://git-scm.com/downloads) and start
+[Docker Desktop](https://docs.docker.com/desktop/) on Mac or Windows, or
+[Docker Engine with Compose](https://docs.docker.com/engine/install/) on Linux.
+Use a local Docker engine; Windows must use Linux containers. Internet access
+and a current web browser are required. No host Python, Node or Rust is needed
+for the default native Labcat app.
 
 ```sh
 git clone https://github.com/kewh5868/labcat.git
@@ -37,12 +40,30 @@ Then open the app:
 | ------------- | ------------------ |
 | `./labcat.sh` | `.\labcat.cmd`     |
 
-On first launch, press **Enter** for **Desktop**, or choose **2** for **Browser**.
-The launcher remembers your choice. Desktop installs a native app for your user;
-from source it needs **Node 24, Rust/Cargo and OS build prerequisites**.
-[Prepare desktop prerequisites](https://kewh5868.github.io/labcat/installation/#desktop-prerequisites).
-Browser mode needs no host Python, Node or Rust. Both modes use Docker.
-Use `--choose` on Mac/Linux or `-Choose` on Windows to choose again.
+On first launch, choose how to open Labcat:
+
+1. **Native Labcat app (Docker backend) — default:** press **Enter** to install/open the
+   prebuilt native Labcat app and start its Docker backend. No host Node, Rust
+   or compiler is needed. The launcher downloads the verified shell for supported
+   platforms; see [requirements and availability](https://kewh5868.github.io/labcat/installation/).
+2. **Browser:** open the same Docker application in your normal browser.
+3. **Build desktop application from source:** build and install the same native
+   app locally. This option needs Node 24 with npm, Rust/Cargo 1.88 or newer and
+   OS build tools. A prerequisite report lists what is met or missing first.
+
+**All three choices use the Docker image built above.** Options 1 and 3 open the
+same native application; only how the native shell is installed differs. The
+launcher remembers your choice. Use `--choose` on Mac/Linux or `-Choose` on
+Windows to choose again.
+
+**Open it again:** start Docker, then open **Labcat** from your applications menu
+for either native option. From the `labcat` folder, `./labcat.sh` or
+`.\labcat.cmd` reuses your remembered mode. To explicitly reopen the default
+app use `--docker` / `-Docker`, Browser uses `--browser` / `-Browser`, and the
+source-installed app uses `--desktop` / `-Desktop`. Ordinary launches reuse the
+installed app and image; no rebuild is needed. Closing a window leaves Docker
+running. Use `./labcat.sh stop` or `.\labcat.cmd stop` to stop Labcat while
+keeping saved work. [Reopen and restart instructions](https://kewh5868.github.io/labcat/installation/#stop-reopen-or-troubleshoot).
 
 Connect a model provider in first-time setup, select a model, and save and test
 the connection. Start a **New chat** and ask your materials question.

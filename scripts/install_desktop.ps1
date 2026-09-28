@@ -4,7 +4,10 @@
 param(
     [string]$SourceRoot = (Split-Path -Parent $PSScriptRoot),
     [string]$Destination = (Join-Path $env:LOCALAPPDATA 'Programs\Labcat'),
-    [switch]$NoShortcut
+    [switch]$NoShortcut,
+    [switch]$CheckOnly,
+    [switch]$PrebuiltOnly,
+    [switch]$BuildSource
 )
 
 Set-StrictMode -Version Latest
@@ -39,8 +42,7 @@ if ($Destination -eq [IO.Path]::GetPathRoot($Destination) -or $Destination -eq $
 }
 Assert-PlainDirectory $SourceRoot
 $destinationParent = Split-Path -Parent $Destination
-[IO.Directory]::CreateDirectory($destinationParent) | Out-Null
-Assert-PlainDirectory $destinationParent
+if (Test-Path -LiteralPath $destinationParent) { Assert-PlainDirectory $destinationParent }
 $installMarker = '.labcat-desktop-install'
 $installIdentity = 'labcat-desktop-v1'
 if (Test-Path -LiteralPath $Destination) {
@@ -57,26 +59,119 @@ if (Test-Path -LiteralPath $Destination) {
 $launcherFiles = @('labcat.ps1', 'labcat.cmd', 'compose.yaml')
 foreach ($name in $launcherFiles) { Assert-RegularFile (Join-Path $SourceRoot $name) }
 
-$native = Join-Path $SourceRoot 'desktop-bin\Labcat.exe'
-if (Test-Path -LiteralPath $native) {
-    Assert-RegularFile $native
+function Show-Prerequisite {
+    param([bool]$Met, [string]$Label, [string]$Fix)
+    if ($Met) { Write-Host "  [met] $Label" }
+    else {
+        Write-Host "  [missing] $Label; $Fix"
+        $script:missingPrerequisites += 1
+    }
 }
-else {
+
+function Get-ToolVersion {
+    param([string]$Name)
+    $tool = Get-Command $Name -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($null -eq $tool) { return $null }
+    try {
+        $raw = (& $tool.Source --version 2>$null | Out-String)
+        if ($LASTEXITCODE -eq 0 -and $raw -match '^\D*(\d+\.\d+\.\d+)') {
+            return [version]$Matches[1]
+        }
+    }
+    catch { }
+    return $null
+}
+
+$native = Join-Path $SourceRoot 'desktop-bin\Labcat.exe'
+if ($PrebuiltOnly -and $BuildSource) { throw 'Choose only one of -PrebuiltOnly and -BuildSource.' }
+$needsBuild = $BuildSource -or -not (Test-Path -LiteralPath $native)
+if ($PrebuiltOnly -and $needsBuild) {
+    throw 'No matching prebuilt native app is available in desktop-bin. Obtain the matching Labcat desktop bundle, choose -Browser, or explicitly choose -Desktop to build from source. No source build was started.'
+}
+if (-not $needsBuild) { Assert-RegularFile $native }
+$script:missingPrerequisites = 0
+Write-Host 'Labcat native desktop prerequisites (Docker still provides the backend):'
+# Microsoft documents these per-machine/per-user Evergreen Runtime registrations.
+$webViewVersion = $null
+foreach ($root in @('HKLM:\SOFTWARE\WOW6432Node', 'HKLM:\SOFTWARE', 'HKCU:\SOFTWARE')) {
+    $registration = Get-ItemProperty -LiteralPath ($root + '\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}') -Name pv -ErrorAction SilentlyContinue
+    if ($null -ne $registration -and $registration.pv -match '^\d+\.\d+\.\d+\.\d+$' -and [version]$registration.pv -gt [version]'0.0.0.0') {
+        $webViewVersion = [version]$registration.pv
+        break
+    }
+}
+Show-Prerequisite ($null -ne $webViewVersion) "Microsoft Edge WebView2 Runtime $webViewVersion" 'install the Microsoft WebView2 Evergreen Runtime'
+if ($needsBuild) {
+    foreach ($spec in @(@('node', '24'), @('npm', 'any'), @('cargo', '1.88'), @('rustc', '1.88'))) {
+        $toolVersion = Get-ToolVersion $spec[0]
+        $met = $null -ne $toolVersion
+        if ($met -and $spec[1] -eq '24') { $met = $toolVersion.Major -eq 24 }
+        if ($met -and $spec[1] -eq '1.88') { $met = $toolVersion -ge [version]'1.88.0' }
+        $fix = if ($spec[0] -in @('node', 'npm')) { 'install Node.js 24 LTS with npm and restart your terminal' } else { 'install Rust/Cargo 1.88 or newer with the MSVC toolchain using rustup' }
+        Show-Prerequisite $met ($spec[0] + ' ' + $(if ($null -eq $toolVersion) { 'not available' } else { $toolVersion })) $fix
+    }
+    Show-Prerequisite ([string]::IsNullOrEmpty($env:CARGO_BUILD_TARGET) -and [string]::IsNullOrEmpty($env:CARGO_TARGET_DIR)) 'native build target' 'Unset CARGO_BUILD_TARGET and CARGO_TARGET_DIR for this native desktop install'
     $desktopSource = Join-Path $SourceRoot 'desktop'
     foreach ($name in @('package.json', 'package-lock.json', 'Cargo.toml', 'Cargo.lock', 'tauri.conf.json')) {
-        if (-not (Test-Path -LiteralPath (Join-Path $desktopSource $name) -PathType Leaf)) {
-            throw 'This download has no native Windows shell or complete desktop source. Obtain a Windows desktop bundle or choose -Browser.'
+        $file = Join-Path $desktopSource $name
+        $exists = Test-Path -LiteralPath $file -PathType Leaf
+        if ($exists) { Assert-RegularFile $file }
+        Show-Prerequisite $exists "source file desktop/$name" 'use a complete checkout or matching Windows native bundle'
+    }
+    $rustHost = ''
+    if ($null -ne (Get-Command rustc -CommandType Application -ErrorAction SilentlyContinue)) {
+        try {
+            $hostReport = (& rustc -vV 2>$null | Out-String)
+            if ($LASTEXITCODE -eq 0 -and $hostReport -match '(?m)^host: ((x86_64|aarch64|i686)-pc-windows-msvc)\s*$') { $rustHost = $Matches[1] }
         }
-        Assert-RegularFile (Join-Path $desktopSource $name)
+        catch { }
     }
-    foreach ($command in @('node', 'npm', 'cargo')) {
-        if ($null -eq (Get-Command $command -CommandType Application -ErrorAction SilentlyContinue)) {
-            throw 'Building the Windows desktop shell requires Node.js/npm, Rust/Cargo and Visual Studio C++ Build Tools with the Windows SDK. Install the documented prerequisites, restart the terminal and retry, or choose -Browser.'
+    Show-Prerequisite (-not [string]::IsNullOrEmpty($rustHost)) "MSVC Rust host $rustHost" 'run rustup default stable-msvc, then restart your terminal'
+    $architecture = if ($rustHost.StartsWith('aarch64')) { 'arm64' } elseif ($rustHost.StartsWith('i686')) { 'x86' } else { 'x64' }
+    $visualStudio = ''
+    $vswhere = if ([string]::IsNullOrEmpty(${env:ProgramFiles(x86)})) { '' } else { Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe' }
+    if (-not $vswhere -or -not (Test-Path -LiteralPath $vswhere -PathType Leaf)) {
+        $vswhereCommand = Get-Command vswhere -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+        $vswhere = if ($null -eq $vswhereCommand) { '' } else { $vswhereCommand.Source }
+    }
+    if ($vswhere -and (Test-Path -LiteralPath $vswhere -PathType Leaf)) {
+        try {
+            $visualStudio = (& $vswhere -latest -products '*' -requiresAny -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 Microsoft.VisualStudio.Component.VC.Tools.ARM64 -property installationPath 2>$null | Select-Object -First 1)
+            if ($LASTEXITCODE -ne 0 -or $null -eq $visualStudio) { $visualStudio = '' }
         }
+        catch { $visualStudio = '' }
     }
-    if (-not [string]::IsNullOrEmpty($env:CARGO_BUILD_TARGET) -or -not [string]::IsNullOrEmpty($env:CARGO_TARGET_DIR)) {
-        throw 'Unset CARGO_BUILD_TARGET and CARGO_TARGET_DIR for this native desktop install, or provide a matching desktop-bin\Labcat.exe.'
+    $compiler = @()
+    if ($visualStudio -and (Test-Path -LiteralPath $visualStudio -PathType Container)) {
+        $compiler = @(Get-ChildItem -Path (Join-Path $visualStudio "VC/Tools/MSVC/*/bin/Host*/$architecture/cl.exe") -File -ErrorAction SilentlyContinue | Where-Object { Test-Path -LiteralPath (Join-Path $_.DirectoryName 'link.exe') -PathType Leaf })
     }
+    Show-Prerequisite ($compiler.Count -gt 0) "Visual Studio C++ Build Tools ($architecture compiler and linker)" 'install the Desktop development with C++ workload in Visual Studio Build Tools'
+    $sdk = $null
+    foreach ($key in @('HKLM:\SOFTWARE\Microsoft\Windows Kits\Installed Roots', 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows Kits\Installed Roots')) {
+        $registration = Get-ItemProperty -LiteralPath $key -Name KitsRoot10 -ErrorAction SilentlyContinue
+        if ($null -ne $registration -and -not [string]::IsNullOrEmpty($registration.KitsRoot10)) { $sdk = $registration.KitsRoot10; break }
+    }
+    $sdkVersions = @()
+    if ($sdk -and (Test-Path -LiteralPath $sdk -PathType Container)) {
+        $sdkVersions = @(Get-ChildItem -LiteralPath (Join-Path $sdk 'Include') -Directory -ErrorAction SilentlyContinue | Where-Object {
+            (Test-Path -LiteralPath (Join-Path $_.FullName 'um/Windows.h') -PathType Leaf) -and
+            (Test-Path -LiteralPath (Join-Path $_.FullName 'ucrt/stdio.h') -PathType Leaf) -and
+            (Test-Path -LiteralPath (Join-Path $sdk "Lib/$($_.Name)/um/$architecture/kernel32.lib") -PathType Leaf) -and
+            (Test-Path -LiteralPath (Join-Path $sdk "Lib/$($_.Name)/ucrt/$architecture/ucrt.lib") -PathType Leaf)
+        })
+    }
+    Show-Prerequisite ($sdkVersions.Count -gt 0) "Windows 10/11 SDK ($architecture headers and libraries)" 'add a Windows SDK in the Visual Studio Installer'
+}
+else {
+    Write-Host '  [met] prebuilt native app; Node/npm, Rust/Cargo and native build tools are not needed'
+}
+if ($script:missingPrerequisites -gt 0) {
+    throw "$script:missingPrerequisites prerequisite(s) missing. Install the items listed above and retry. See https://kewh5868.github.io/labcat/installation/#desktop-prerequisites. You can choose -Docker or -Browser without native build tools."
+}
+if ($CheckOnly) { Write-Host 'Desktop prerequisite check passed. Nothing was built or installed.'; return }
+[IO.Directory]::CreateDirectory($destinationParent) | Out-Null
+Assert-PlainDirectory $destinationParent
+if ($needsBuild) {
     Write-Host 'Building the native Windows shell. Docker provides the backend; WebView2 must be available on Windows.'
     & npm ci --prefix $desktopSource --no-audit --no-fund | Out-Host
     if ($LASTEXITCODE -ne 0) { throw 'Desktop dependency setup failed. Nothing was installed; check npm output and retry.' }
