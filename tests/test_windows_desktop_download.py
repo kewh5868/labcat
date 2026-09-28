@@ -89,17 +89,21 @@ def downloader(tmp_path):
             if manifest_text is not None
             else f"{TARGET}\tnative-v0.1.0-1\t{ASSET}\t{digest}\n"
         )
+        # Omit an absent WOW64 value. An empty PROCESSOR_ARCHITEW6432 in a
+        # Windows child environment can blank PROCESSOR_ARCHITECTURE as well.
+        environment = {
+            key: value
+            for key, value in os.environ.items()
+            if key.casefold()
+            not in {"processor_architecture", "processor_architew6432"}
+        }
+        environment.update(OS="Windows_NT", PROCESSOR_ARCHITECTURE="AMD64")
+        environment.update(env or {})
         return subprocess.run(
             [POWERSHELL, "-NoProfile", "-NonInteractive", "-File", str(script)],
             capture_output=True,
             text=True,
-            env={
-                **os.environ,
-                "OS": "Windows_NT",
-                "PROCESSOR_ARCHITECTURE": "AMD64",
-                "PROCESSOR_ARCHITEW6432": "",
-                **(env or {}),
-            },
+            env=environment,
             timeout=30,
             check=False,
         )
@@ -207,8 +211,18 @@ def test_large_download_is_rejected_before_body_read(downloader):
     assert not list(downloader.source.glob(".labcat-desktop-download-*"))
 
 
-def test_unsupported_architecture_does_not_download_an_unrelated_binary(downloader):
-    result = downloader(env={"PROCESSOR_ARCHITECTURE": "ARM64"})
+@pytest.mark.parametrize(
+    "architecture",
+    [
+        {"PROCESSOR_ARCHITECTURE": "ARM64"},
+        {"PROCESSOR_ARCHITECTURE": "x86"},
+        {"PROCESSOR_ARCHITECTURE": "AMD64", "PROCESSOR_ARCHITEW6432": "ARM64"},
+    ],
+)
+def test_unsupported_architecture_does_not_download_an_unrelated_binary(
+    downloader, architecture
+):
+    result = downloader(env=architecture)
     assert result.returncode != 0
     assert "matching native Windows bundle is not available" in result.stderr
     assert downloader.requests == []
@@ -263,3 +277,12 @@ def test_framework_digest_works_with_an_invalid_inherited_module_path(downloader
     assert result.returncode == 0, result.stderr
     assert downloader.native.read_bytes() == b"native-fixture"
     assert "Get-FileHash" not in (ROOT / "scripts/download_desktop.ps1").read_text()
+
+
+def test_32_bit_process_on_x64_windows_downloads_native_x64_binary(downloader):
+    result = downloader(
+        env={"PROCESSOR_ARCHITECTURE": "x86", "PROCESSOR_ARCHITEW6432": "AMD64"}
+    )
+    assert result.returncode == 0, result.stderr
+    assert downloader.native.read_bytes() == b"native-fixture"
+    assert downloader.requests == [f"/native-v0.1.0-1/{ASSET}"]

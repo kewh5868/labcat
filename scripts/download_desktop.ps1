@@ -72,6 +72,7 @@ $response = $null
 $incoming = $null
 $outgoing = $null
 $archive = $null
+$archiveStream = $null
 try {
     Add-Type -AssemblyName System.Net.Http
     Add-Type -AssemblyName System.IO.Compression
@@ -107,7 +108,9 @@ try {
     $outgoing.Dispose(); $outgoing = $null
     $incoming.Dispose(); $incoming = $null
     if ($total -eq 0 -or (Get-NativeArchiveDigest $download) -cne $record[3]) { throw 'Native download checksum verification failed. Nothing was installed.' }
-    $archive = [IO.Compression.ZipArchive]::new([IO.File]::OpenRead($download), [IO.Compression.ZipArchiveMode]::Read)
+    # Keep the stream owned even if an invalid ZIP makes construction fail.
+    $archiveStream = [IO.File]::OpenRead($download)
+    $archive = [IO.Compression.ZipArchive]::new($archiveStream, [IO.Compression.ZipArchiveMode]::Read, $true)
     if ($archive.Entries.Count -ne 1) { throw 'The native archive must contain exactly one Labcat.exe file.' }
     $entry = $archive.Entries[0]
     $fileKind = ($entry.ExternalAttributes -shr 16) -band 61440
@@ -125,6 +128,7 @@ try {
     $outgoing.Dispose(); $outgoing = $null
     $incoming.Dispose(); $incoming = $null
     $archive.Dispose(); $archive = $null
+    $archiveStream.Dispose(); $archiveStream = $null
     if (-not (Test-Path -LiteralPath $destination)) { [IO.Directory]::CreateDirectory($destination) | Out-Null }
     Assert-PlainPath $destination $true
     # File.Move is atomic within this checkout and refuses to replace an existing app.
@@ -132,7 +136,7 @@ try {
     Write-Host 'Verified Labcat native shell downloaded. No Node, Rust or compiler was used.'
 }
 finally {
-    foreach ($resource in @($outgoing, $incoming, $archive, $response, $client, $handler)) {
+    foreach ($resource in @($outgoing, $incoming, $archive, $archiveStream, $response, $client, $handler)) {
         if ($null -ne $resource) { $resource.Dispose() }
     }
     if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
