@@ -5,7 +5,7 @@ description = "Native OS-webview shell for the local Labcat application"
 authors = ["Keith White"]
 license = "BSD-3-Clause"
 edition = "2021"
-rust-version = "1.85"
+rust-version = "1.88"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

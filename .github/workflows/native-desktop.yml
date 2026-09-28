@@ -11,19 +11,26 @@ jobs:
         include:
           - os: macos-14
             target: aarch64-apple-darwin
+            native: release/bundle/macos/Labcat.app
             bundles: app
           - os: macos-15-intel
             target: x86_64-apple-darwin
+            native: release/bundle/macos/Labcat.app
             bundles: app
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            bundles: nsis
+            native: release/labcat-desktop.exe
+            bundles: none
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
-            bundles: deb,appimage
+            native: release/labcat-desktop
+            bundles: none
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
@@ -49,21 +56,36 @@ jobs:
         run: |
           cargo fmt --check
           cargo test --locked
-      - name: Build native artifact without publishing
-        working-directory: desktop
-        run: npm run build -- --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} -- --locked
-      - name: Preserve macOS application bundle permissions
+      - name: Build native macOS application
         if: runner.os == 'macOS'
         working-directory: desktop
+        run: npm run build -- --target ${{ matrix.target }} --bundles app -- --locked
+      - name: Build native Windows or Linux executable
+        if: runner.os != 'macOS'
+        working-directory: desktop
+        run: npm run build -- --target ${{ matrix.target }} --no-bundle -- --locked
+      - name: Package only the clean native shell with a checksum
+        shell: python
         run: |
-          ditto -c -k --sequesterRsrc --keepParent "target/${{ matrix.target }}/release/bundle/macos/Labcat.app" "target/Labcat-${{ matrix.target }}.zip"
+          import pathlib
+          import shutil
+          import subprocess
+          import sys
+
+          target = "${{ matrix.target }}"
+          source = pathlib.Path("desktop/target") / target / "${{ matrix.native }}"
+          if sys.platform == "win32":
+              clean = pathlib.Path("desktop/target/Labcat.exe")
+              shutil.copyfile(source, clean)
+              source = clean
+          subprocess.run([
+              sys.executable, "scripts/build_desktop_release.py",
+              "--target", target, "--app", str(source.resolve()),
+              "--output", "desktop/release-assets",
+          ], check=True)
       - uses: actions/upload-artifact@v4
         with:
           name: labcat-native-${{ matrix.target }}
-          path: |
-            desktop/target/Labcat-*.zip
-            desktop/target/${{ matrix.target }}/release/bundle/nsis/*.exe
-            desktop/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage
-            desktop/target/${{ matrix.target }}/release/bundle/deb/*.deb
+          path: desktop/release-assets/*
           if-no-files-found: error
           retention-days: 14
