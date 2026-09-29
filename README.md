@@ -56,14 +56,51 @@ same native application; only how the native shell is installed differs. The
 launcher remembers your choice. Use `--choose` on Mac/Linux or `-Choose` on
 Windows to choose again.
 
-**Open it again:** start Docker, then open **Labcat** from your applications menu
-for either native option. From the `labcat` folder, `./labcat.sh` or
-`.\labcat.cmd` reuses your remembered mode. To explicitly reopen the default
-app use `--docker` / `-Docker`, Browser uses `--browser` / `-Browser`, and the
-source-installed app uses `--desktop` / `-Desktop`. Ordinary launches reuse the
-installed app and image; no rebuild is needed. Closing a window leaves Docker
-running. Use `./labcat.sh stop` or `.\labcat.cmd stop` to stop Labcat while
-keeping saved work. [Reopen and restart instructions](https://kewh5868.github.io/labcat/installation/#stop-reopen-or-troubleshoot).
+### Reopen Labcat
+
+**Docker Desktop's Play button starts the backend containers; it does not open
+the Labcat application window.** Use the Labcat launcher to reopen the window.
+
+1. Start **Docker Desktop** and wait until its engine is running. On Linux,
+   make sure your Docker Engine is running.
+2. Open **Terminal** on Mac/Linux or **PowerShell** on Windows.
+3. Go to the folder where you installed or cloned Labcat, then run the commands
+   below to open the **native Labcat app (option 1)**. Replace the example path
+   with your actual Labcat folder path.
+
+**Mac / Linux**
+
+```sh
+cd "/path/to/labcat"
+./labcat.sh --docker
+```
+
+**Windows PowerShell**
+
+```powershell
+cd "C:\path\to\labcat"
+.\labcat.cmd -Docker
+```
+
+The launcher starts the required Docker services if needed and opens the native
+window. You do not need to clone or build the image again for an ordinary restart.
+After the native app is installed, you can also open **Labcat** from your
+applications menu while Docker is running.
+
+For other launch modes, run these commands from the same Labcat folder:
+
+| What to open                | Mac / Linux             | Windows PowerShell      |
+| --------------------------- | ----------------------- | ----------------------- |
+| Browser (option 2)          | `./labcat.sh --browser` | `.\labcat.cmd -Browser` |
+| Source-built app (option 3) | `./labcat.sh --desktop` | `.\labcat.cmd -Desktop` |
+| Your previously chosen mode | `./labcat.sh`           | `.\labcat.cmd`          |
+
+Closing the window leaves Docker running. To stop Labcat's backend while keeping
+saved work, run `./labcat.sh stop` or `.\labcat.cmd stop`. Use the reopening
+commands above when you are ready to return.
+[More restart and troubleshooting help](https://kewh5868.github.io/labcat/installation/#stop-reopen-or-troubleshoot).
+
+### First-time model setup
 
 Connect a model provider in first-time setup, select a model, and save and test
 the connection. Start a **New chat** and ask your materials question.
